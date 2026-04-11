@@ -5,7 +5,11 @@ const logger = require('../utils/logger');
 const connectedUsers = new Map();
 const userRooms = new Map();
 
+let ioInstance = null;
+
 const setupSocket = (io) => {
+  ioInstance = io;
+  
   io.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth.token;
@@ -150,24 +154,32 @@ const setupSocket = (io) => {
     });
   });
 
-  const broadcastToClass = (classId, event, data) => {
-    io.to(`class:${classId}`).emit(event, data);
-  };
-
-  const broadcastToRole = (role, event, data) => {
-    io.to(`role:${role}`).emit(event, data);
-  };
-
-  const broadcastToUser = (userId, event, data) => {
-    io.to(`user:${userId}`).emit(event, data);
-  };
-
-  return {
-    broadcastToClass,
-    broadcastToRole,
-    broadcastToUser,
-    connectedUsers
-  };
+  return io;
 };
 
-module.exports = { setupSocket, connectedUsers };
+// Export broadcast functions that use the io instance
+const broadcastToClass = (classId, event, data) => {
+  if (ioInstance) {
+    ioInstance.to(`class:${classId}`).emit(event, data);
+  }
+};
+
+const broadcastToRole = (role, event, data) => {
+  if (ioInstance) {
+    ioInstance.to(`role:${role}`).emit(event, data);
+  }
+};
+
+const broadcastToUser = (userId, event, data) => {
+  if (ioInstance) {
+    ioInstance.to(`user:${userId}`).emit(event, data);
+  }
+};
+
+module.exports = { 
+  setupSocket, 
+  connectedUsers,
+  broadcastToClass,
+  broadcastToRole,
+  broadcastToUser
+};

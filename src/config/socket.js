@@ -4,8 +4,32 @@ const logger = require('../utils/logger');
 
 const connectedUsers = new Map();
 const userRooms = new Map();
-
 let ioInstance = null;
+
+// Broadcast functions that will be exported
+const broadcastToClass = (classId, event, data) => {
+  if (ioInstance) {
+    ioInstance.to(`class:${classId}`).emit(event, data);
+  } else {
+    logger.warn('Socket.IO not initialized, cannot broadcast to class');
+  }
+};
+
+const broadcastToRole = (role, event, data) => {
+  if (ioInstance) {
+    ioInstance.to(`role:${role}`).emit(event, data);
+  } else {
+    logger.warn('Socket.IO not initialized, cannot broadcast to role');
+  }
+};
+
+const broadcastToUser = (userId, event, data) => {
+  if (ioInstance) {
+    ioInstance.to(`user:${userId}`).emit(event, data);
+  } else {
+    logger.warn('Socket.IO not initialized, cannot broadcast to user');
+  }
+};
 
 const setupSocket = (io) => {
   ioInstance = io;
@@ -155,25 +179,6 @@ const setupSocket = (io) => {
   });
 
   return io;
-};
-
-// Export broadcast functions that use the io instance
-const broadcastToClass = (classId, event, data) => {
-  if (ioInstance) {
-    ioInstance.to(`class:${classId}`).emit(event, data);
-  }
-};
-
-const broadcastToRole = (role, event, data) => {
-  if (ioInstance) {
-    ioInstance.to(`role:${role}`).emit(event, data);
-  }
-};
-
-const broadcastToUser = (userId, event, data) => {
-  if (ioInstance) {
-    ioInstance.to(`user:${userId}`).emit(event, data);
-  }
 };
 
 module.exports = { 

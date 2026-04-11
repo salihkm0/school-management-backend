@@ -11,7 +11,7 @@ const SubjectSchema = new mongoose.Schema(
     code: {
       type: String,
       required: [true, "Subject code is required"],
-      unique: true, // This is enough
+      unique: true, 
       uppercase: true,
       trim: true,
     },

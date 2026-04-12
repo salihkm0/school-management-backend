@@ -17,7 +17,7 @@ const validate = (validations) => {
 };
 
 const idParam = param('id').isMongoId().withMessage('Invalid ID format');
-const classIdParam = param('classId').isMongoId().withMessage('Invalid ID format');
+
 
 const paginationQuery = [
   query('page').optional().isInt({ min: 1 }).toInt(),
@@ -94,6 +94,5 @@ module.exports = {
   classValidation,
   examValidation,
   markValidation,
-  dutyValidation,
-  classIdParam
+  dutyValidation
 };

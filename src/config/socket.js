@@ -14,47 +14,17 @@ const HEARTBEAT_INTERVAL = 30000; // 30 seconds
 const HEARTBEAT_TIMEOUT = 35000; // 35 seconds
 const MAX_RECONNECT_ATTEMPTS = 10;
 
-// Broadcast functions that will be exported
-const broadcastToClass = (classId, event, data) => {
-  if (ioInstance) {
-    ioInstance.to(`class:${classId}`).emit(event, data);
-    logger.info(`Broadcast to class ${classId}: ${event}`);
-  } else {
-    logger.warn("Socket.IO not initialized, cannot broadcast to class");
-  }
-};
-
-const broadcastToRole = (role, event, data) => {
-  if (ioInstance) {
-    ioInstance.to(`role:${role}`).emit(event, data);
-    logger.info(`Broadcast to role ${role}: ${event}`);
-  } else {
-    logger.warn("Socket.IO not initialized, cannot broadcast to role");
-  }
-};
-
-const broadcastToUser = (userId, event, data) => {
-  if (ioInstance) {
-    console.log(`📡 Broadcasting to user ${userId}: ${event}`);
-    console.log(`Data:`, JSON.stringify(data, null, 2));
-    
-    // Emit to both rooms for redundancy
-    ioInstance.to(`user:${userId}`).emit(event, data);
-    ioInstance.to(`user:${userId}:notifications`).emit(event, data);
-    
-    logger.info(`Broadcast to user ${userId}: ${event}`);
-  } else {
-    logger.warn("Socket.IO not initialized, cannot broadcast to user");
-  }
-};
-
-const getConnectedUsers = () => {
-  return Array.from(connectedUsers.keys());
-};
-
-const isUserConnected = (userId) => {
-  return connectedUsers.has(userId);
-};
+// Helper function to calculate grade
+function getGrade(percentage) {
+  if (percentage >= 90) return 'A+';
+  if (percentage >= 80) return 'A';
+  if (percentage >= 70) return 'B+';
+  if (percentage >= 60) return 'B';
+  if (percentage >= 50) return 'C+';
+  if (percentage >= 40) return 'C';
+  if (percentage >= 33) return 'D';
+  return 'F';
+}
 
 // Helper function to send pending notifications
 async function sendPendingNotifications(socket, userId) {
@@ -145,8 +115,56 @@ const setupHeartbeat = (socket, userId) => {
   socket.lastHeartbeat = Date.now();
 };
 
+// Broadcast functions that will be exported (defined after ioInstance is set)
+const broadcastToClass = (classId, event, data) => {
+  if (ioInstance) {
+    ioInstance.to(`class:${classId}`).emit(event, data);
+    logger.info(`Broadcast to class ${classId}: ${event}`);
+  } else {
+    logger.warn("Socket.IO not initialized, cannot broadcast to class");
+  }
+};
+
+const broadcastToRole = (role, event, data) => {
+  if (ioInstance) {
+    ioInstance.to(`role:${role}`).emit(event, data);
+    logger.info(`Broadcast to role ${role}: ${event}`);
+  } else {
+    logger.warn("Socket.IO not initialized, cannot broadcast to role");
+  }
+};
+
+const broadcastToUser = (userId, event, data) => {
+  console.log(`📡 broadcastToUser called for user ${userId}, event: ${event}`);
+  console.log(`ioInstance exists: ${!!ioInstance}`);
+  
+  if (ioInstance) {
+    console.log(`📡 Broadcasting to user ${userId}: ${event}`);
+    console.log(`Data:`, JSON.stringify(data, null, 2));
+    
+    // Emit to both rooms for redundancy
+    ioInstance.to(`user:${userId}`).emit(event, data);
+    ioInstance.to(`user:${userId}:notifications`).emit(event, data);
+    
+    logger.info(`Broadcast to user ${userId}: ${event}`);
+  } else {
+    console.error(`❌ Socket.IO not initialized, cannot broadcast to user ${userId}`);
+    logger.warn("Socket.IO not initialized, cannot broadcast to user");
+  }
+};
+
+const getConnectedUsers = () => {
+  return Array.from(connectedUsers.keys());
+};
+
+const isUserConnected = (userId) => {
+  return connectedUsers.has(userId);
+};
+
 const setupSocket = (io) => {
   ioInstance = io;
+  
+  console.log("✅ Socket.IO instance set in setupSocket");
 
   // Authentication middleware
   io.use(async (socket, next) => {
@@ -653,18 +671,6 @@ const setupSocket = (io) => {
 
   return io;
 };
-
-// Helper function to calculate grade
-function getGrade(percentage) {
-  if (percentage >= 90) return 'A+';
-  if (percentage >= 80) return 'A';
-  if (percentage >= 70) return 'B+';
-  if (percentage >= 60) return 'B';
-  if (percentage >= 50) return 'C+';
-  if (percentage >= 40) return 'C';
-  if (percentage >= 33) return 'D';
-  return 'F';
-}
 
 // Cleanup function for server shutdown
 const cleanup = () => {

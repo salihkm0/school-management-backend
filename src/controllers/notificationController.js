@@ -12,6 +12,9 @@ exports.sendToUser = async (req, res) => {
     const { userId } = req.params;
     const { title, message, type, data } = req.body;
     
+    console.log(`📨 Sending notification to user: ${userId}`);
+    console.log(`Notification data:`, { title, message, type, data });
+    
     const notification = await Notification.create({
       userId,
       title,
@@ -24,17 +27,38 @@ exports.sendToUser = async (req, res) => {
     const populatedNotification = await Notification.findById(notification._id)
       .populate('userId', 'name email role');
     
-    // Send real-time notification via Socket.IO
-    broadcastToUser(userId, 'notification', {
+    // Prepare the notification payload
+    const notificationPayload = {
       id: notification._id,
-      title,
-      message,
+      _id: notification._id,
+      userId: userId,
+      title: title,
+      message: message,
       type: type || 'info',
-      data,
+      data: data,
       timestamp: notification.createdAt,
+      createdAt: notification.createdAt,
       read: false,
-      user: populatedNotification.userId
-    });
+      isRead: false,
+      user: populatedNotification.userId ? {
+        id: populatedNotification.userId._id,
+        name: populatedNotification.userId.name,
+        email: populatedNotification.userId.email,
+        role: populatedNotification.userId.role
+      } : null
+    };
+    
+    console.log(`📡 Broadcasting to user room: user:${userId}`);
+    console.log(`Notification payload:`, JSON.stringify(notificationPayload, null, 2));
+    
+    // Send real-time notification via Socket.IO to the user's room
+    broadcastToUser(userId, 'notification', notificationPayload);
+    
+    // Also emit to the user's specific notification room
+    if (ioInstance) {
+      ioInstance.to(`user:${userId}:notifications`).emit('notification', notificationPayload);
+      console.log(`Also emitted to user:${userId}:notifications room`);
+    }
     
     res.status(201).json({ 
       success: true, 
@@ -42,6 +66,7 @@ exports.sendToUser = async (req, res) => {
       notification 
     });
   } catch (error) {
+    console.error('Error sending notification:', error);
     res.status(500).json({ message: error.message });
   }
 };

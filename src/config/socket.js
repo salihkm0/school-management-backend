@@ -35,7 +35,13 @@ const broadcastToRole = (role, event, data) => {
 
 const broadcastToUser = (userId, event, data) => {
   if (ioInstance) {
+    console.log(`📡 Broadcasting to user ${userId}: ${event}`);
+    console.log(`Data:`, JSON.stringify(data, null, 2));
+    
+    // Emit to both rooms for redundancy
     ioInstance.to(`user:${userId}`).emit(event, data);
+    ioInstance.to(`user:${userId}:notifications`).emit(event, data);
+    
     logger.info(`Broadcast to user ${userId}: ${event}`);
   } else {
     logger.warn("Socket.IO not initialized, cannot broadcast to user");
@@ -63,16 +69,23 @@ async function sendPendingNotifications(socket, userId) {
       logger.info(`Sending ${pendingNotifications.length} pending notifications to user ${userId}`);
       
       for (const notification of pendingNotifications) {
-        socket.emit("notification", {
+        const notificationPayload = {
           id: notification._id,
+          _id: notification._id,
+          userId: notification.userId,
           title: notification.title,
           message: notification.message,
           type: notification.type || 'info',
           data: notification.data,
           timestamp: notification.createdAt,
+          createdAt: notification.createdAt,
           read: notification.isRead,
+          isRead: notification.isRead,
           readAt: notification.readAt
-        });
+        };
+        
+        socket.emit("notification", notificationPayload);
+        socket.emit("new_notification", notificationPayload);
         
         // Mark as delivered
         await Notification.findByIdAndUpdate(notification._id, {
@@ -216,6 +229,9 @@ const setupSocket = (io) => {
     // Join user to role-based rooms
     socket.join(`role:${userRole}`);
     socket.join(`user:${userId}`);
+    socket.join(`user:${userId}:notifications`); // IMPORTANT: Join notification room
+    
+    logger.info(`User ${userId} joined rooms: user:${userId} and user:${userId}:notifications`);
     
     // Join role-specific rooms
     if (userRole === "staff") {
@@ -225,9 +241,6 @@ const setupSocket = (io) => {
     } else if (userRole === "admin") {
       socket.join("admin");
     }
-    
-    // Join user's specific notification room
-    socket.join(`user:${userId}:notifications`);
 
     // Send confirmation to client with connection details
     socket.emit("connected", {

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect, authorize } = require('../middleware/auth');
-const { validate, idParam } = require('../middleware/validation');
+const { validate, idParam, classIdParam } = require('../middleware/validation');
 const {
   getAttendance,
   getAttendanceByStudent,
@@ -18,7 +18,7 @@ router.use(protect);
 router.get('/', getAttendance);
 router.get('/summary', getAttendanceSummary);
 router.get('/student/:studentId', validate([idParam]), getAttendanceByStudent);
-router.get('/class/:classId', validate([idParam]), getAttendanceByClass);
+router.get('/class/:classId', validate([classIdParam]), getAttendanceByClass);
 router.post('/', authorize('staff', 'admin'), createAttendance);
 router.post('/bulk', authorize('staff', 'admin'), bulkCreateAttendance);
 router.put('/:id', authorize('staff', 'admin'), validate([idParam]), updateAttendance);

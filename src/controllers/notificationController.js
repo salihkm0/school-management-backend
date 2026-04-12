@@ -1,3 +1,4 @@
+// notificationController.js - Fixed version
 const Notification = require('../models/Notification');
 const User = require('../models/User');
 const Student = require('../models/Student');
@@ -51,14 +52,8 @@ exports.sendToUser = async (req, res) => {
     console.log(`📡 Broadcasting to user room: user:${userId}`);
     console.log(`Notification payload:`, JSON.stringify(notificationPayload, null, 2));
     
-    // Send real-time notification via Socket.IO to the user's room
+    // Use the broadcastToUser function from socket.js (NOT ioInstance directly)
     broadcastToUser(userId, 'notification', notificationPayload);
-    
-    // Also emit to the user's specific notification room
-    if (ioInstance) {
-      ioInstance.to(`user:${userId}:notifications`).emit('notification', notificationPayload);
-      console.log(`Also emitted to user:${userId}:notifications room`);
-    }
     
     res.status(201).json({ 
       success: true, 
@@ -106,12 +101,16 @@ exports.sendToClass = async (req, res) => {
       // Send real-time notification via Socket.IO
       broadcastToUser(userId, 'notification', {
         id: notification._id,
+        _id: notification._id,
+        userId: userId,
         title,
         message,
         type: type || 'info',
         data: { ...data, classId },
         timestamp: notification.createdAt,
-        read: false
+        createdAt: notification.createdAt,
+        read: false,
+        isRead: false
       });
     }
     
@@ -130,6 +129,7 @@ exports.sendToClass = async (req, res) => {
       count: notifications.length 
     });
   } catch (error) {
+    console.error('Error sending class notification:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -158,12 +158,16 @@ exports.sendToRole = async (req, res) => {
       // Send real-time notification via Socket.IO
       broadcastToUser(user._id, 'notification', {
         id: notification._id,
+        _id: notification._id,
+        userId: user._id,
         title,
         message,
         type: type || 'info',
         data,
         timestamp: notification.createdAt,
-        read: false
+        createdAt: notification.createdAt,
+        read: false,
+        isRead: false
       });
     }
     
@@ -182,6 +186,7 @@ exports.sendToRole = async (req, res) => {
       count: notifications.length 
     });
   } catch (error) {
+    console.error('Error sending role notification:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -207,12 +212,16 @@ exports.sendBulk = async (req, res) => {
       // Send real-time notification via Socket.IO
       broadcastToUser(userId, 'notification', {
         id: notification._id,
+        _id: notification._id,
+        userId: userId,
         title,
         message,
         type: type || 'info',
         data,
         timestamp: notification.createdAt,
-        read: false
+        createdAt: notification.createdAt,
+        read: false,
+        isRead: false
       });
     }
     
@@ -222,6 +231,7 @@ exports.sendBulk = async (req, res) => {
       notifications 
     });
   } catch (error) {
+    console.error('Error sending bulk notification:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -256,12 +266,16 @@ exports.sendExamNotification = async (req, res) => {
       
       broadcastToUser(userId, 'notification', {
         id: notification._id,
+        _id: notification._id,
+        userId: userId,
         title: `Exam Update: ${examName}`,
         message,
         type: type || 'info',
         data: { examId, examName, classIds },
         timestamp: notification.createdAt,
-        read: false
+        createdAt: notification.createdAt,
+        read: false,
+        isRead: false
       });
     }
     
@@ -271,6 +285,7 @@ exports.sendExamNotification = async (req, res) => {
       count: notifications.length
     });
   } catch (error) {
+    console.error('Error sending exam notification:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -316,11 +331,15 @@ exports.sendMarksNotification = async (req, res) => {
       
       broadcastToUser(parentId, 'notification', {
         id: notification._id,
+        _id: notification._id,
+        userId: parentId,
         title: `Marks Updated: ${subjectName}`,
         message: `${studentName} scored ${marksObtained}/${maxMarks} (${percentage.toFixed(1)}%) in ${examName}`,
         type: percentage >= 40 ? 'success' : 'warning',
         timestamp: notification.createdAt,
-        read: false
+        createdAt: notification.createdAt,
+        read: false,
+        isRead: false
       });
     }
     
@@ -329,6 +348,7 @@ exports.sendMarksNotification = async (req, res) => {
       message: `Marks notification sent to ${notifications.length} parents`
     });
   } catch (error) {
+    console.error('Error sending marks notification:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -371,11 +391,15 @@ exports.sendAttendanceNotification = async (req, res) => {
       
       broadcastToUser(parentId, 'notification', {
         id: notification._id,
+        _id: notification._id,
+        userId: parentId,
         title: `Attendance Report - ${monthName} ${year}`,
         message: `${studentName} has ${attendancePercentage.toFixed(1)}% attendance`,
         type: attendancePercentage >= 75 ? 'success' : (attendancePercentage >= 60 ? 'warning' : 'error'),
         timestamp: notification.createdAt,
-        read: false
+        createdAt: notification.createdAt,
+        read: false,
+        isRead: false
       });
     }
     
@@ -384,6 +408,7 @@ exports.sendAttendanceNotification = async (req, res) => {
       message: `Attendance notification sent to ${notifications.length} parents`
     });
   } catch (error) {
+    console.error('Error sending attendance notification:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -427,11 +452,15 @@ exports.sendDutyNotification = async (req, res) => {
     
     broadcastToUser(staffId, 'notification', {
       id: notification._id,
+      _id: notification._id,
+      userId: staffId,
       title: `Duty Assignment: ${dutyTypeNames[dutyType] || 'Duty'}`,
       message: `You have been assigned ${dutyTypeNames[dutyType] || 'duty'} for ${className} on ${formattedDate}.`,
       type: 'info',
       timestamp: notification.createdAt,
-      read: false
+      createdAt: notification.createdAt,
+      read: false,
+      isRead: false
     });
     
     res.json({
@@ -440,6 +469,7 @@ exports.sendDutyNotification = async (req, res) => {
       notification
     });
   } catch (error) {
+    console.error('Error sending duty notification:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -477,6 +507,7 @@ exports.getUserNotifications = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Error getting user notifications:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -500,6 +531,7 @@ exports.markAsRead = async (req, res) => {
     
     res.json(notification);
   } catch (error) {
+    console.error('Error marking notification as read:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -516,6 +548,7 @@ exports.markAllAsRead = async (req, res) => {
     
     res.json({ message: 'All notifications marked as read' });
   } catch (error) {
+    console.error('Error marking all as read:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -538,6 +571,7 @@ exports.deleteNotification = async (req, res) => {
     
     res.json({ message: 'Notification deleted successfully' });
   } catch (error) {
+    console.error('Error deleting notification:', error);
     res.status(500).json({ message: error.message });
   }
 };

@@ -59,20 +59,46 @@ const app = express();
 const server = http.createServer(app);
 
 // Socket.IO configuration
+// const io = socketIO(server, {
+//   cors: {
+//     origin: '*',
+//     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+//     credentials: true,
+//     allowedHeaders: ['Authorization', 'Content-Type']
+//   },
+//   transports: ['websocket', 'polling'],
+//   allowEIO3: true,
+//   pingTimeout: 60000,
+//   pingInterval: 25000,
+//   path: '/socket.io/',
+//   allowUpgrades: true,
+//   cookie: false
+// });
+
+
+// Socket.IO configuration - OPTIMIZED FOR RENDER FREE TIER
 const io = socketIO(server, {
   cors: {
-    origin: '*',
+    origin: process.env.CORS_ORIGIN || '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: true,
     allowedHeaders: ['Authorization', 'Content-Type']
   },
-  transports: ['websocket', 'polling'],
+  // IMPORTANT: Use polling first, then upgrade to websocket
+  transports: ['polling', 'websocket'],
   allowEIO3: true,
-  pingTimeout: 60000,
+  pingTimeout: 120000, // Increased for Render's slower responses
   pingInterval: 25000,
   path: '/socket.io/',
   allowUpgrades: true,
-  cookie: false
+  cookie: false,
+  // Render-specific settings
+  maxHttpBufferSize: 1e6, // 1 MB
+  connectTimeout: 45000,
+  // Enable compression
+  perMessageDeflate: {
+    threshold: 1024 // Compress messages > 1KB
+  }
 });
 
 // Connect to MongoDB

@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "School Management System Backend with Socket.IO",
   "main": "server.js",
+
   "scripts": {
     "start": "NODE_ENV=production node server.js",
     "start:render": "NODE_OPTIONS='--max-old-space-size=512' NODE_ENV=production node server.js",
@@ -11,8 +12,8 @@
     "test": "jest",
     "seed": "node src/seed/index.js",
     "seed:dev": "NODE_ENV=development node src/seed/index.js",
-    "postinstall": "npm remove puppeteer phantomjs-prebuilt html-pdf 2>/dev/null || true"
-  },
+    "postinstall": "echo 'Postinstall completed'"
+},
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "compression": "^1.7.4",

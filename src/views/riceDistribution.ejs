@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Distribution of Food Kit/Rice - <%= className %> <%= academicYear %></title>
+
+<style>
+@page {
+    size: A4 portrait;
+    margin: 5mm;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 210mm;
+    font-family: 'Times New Roman', 'Arial', sans-serif;
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.page-container {
+    width: 200mm;
+    min-height: 277mm;
+    margin: 0 auto 0mm auto;
+    padding: 8mm 3mm;
+    border: 1px solid #000;
+    position: relative;
+    page-break-after: always;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+}
+
+.page-container:last-child {
+    page-break-after: auto;
+    margin-bottom: 0;
+}
+
+/* Watermark */
+.watermark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-45deg);
+    font-size: 60px;
+    font-weight: bold;
+    color: rgba(0, 0, 0, 0.04);
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 1;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-family: 'Times New Roman', serif;
+    width: 100%;
+    text-align: center;
+}
+
+.content-layer {
+    position: relative;
+    z-index: 2;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+/* Main content */
+.main-content {
+    flex: 1;
+}
+
+/* Header */
+.header {
+    text-align: center;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #000;
+}
+
+.school-name {
+    font-size: 18px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 3px;
+}
+
+.title {
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+}
+
+.subtitle {
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 3px;
+}
+
+.class-info {
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.page-number {
+    float: right;
+    font-size: 9px;
+    margin-top: 3px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #8e8e8e;
+}
+
+/* Table */
+.table-container {
+    margin-top: 5px;
+    flex: 1;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10px;
+    table-layout: fixed;
+}
+
+th, td {
+    border: 1px solid #000;
+    padding: 5px 3px;
+    text-align: left;
+    vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+th {
+    background: #f0f0f0;
+    font-weight: 900;
+    text-align: center;
+    text-transform: uppercase;
+    font-size: 9px;
+    padding: 6px 3px;
+}
+
+td {
+    background: #fff;
+}
+
+/* Column widths */
+th:nth-child(1), td:nth-child(1) { width: 5%; text-align: center; }
+th:nth-child(2), td:nth-child(2) { width: 8%; text-align: center; }
+th:nth-child(3), td:nth-child(3) { width: 22%; font-weight: 600; padding-left: 5px; }
+th:nth-child(4), td:nth-child(4) { width: 25%; }
+th:nth-child(5), td:nth-child(5) { width: 20%; }
+th:nth-child(6), td:nth-child(6) { width: 20%; }
+
+.text-center { 
+    text-align: center; 
+}
+
+/* Zebra striping */
+tbody tr:nth-child(even) td {
+    background-color: #f9f9f9;
+}
+
+/* Bottom Section */
+.bottom-section {
+    margin-top: auto;
+    padding-top: 10px;
+}
+
+/* Footer */
+.footer {
+    margin-top: 10px;
+    padding-top: 5px;
+    border-top: 1px solid #000;
+    overflow: hidden;
+}
+
+.total-students {
+    float: left;
+    font-weight: 700;
+    font-size: 10px;
+}
+
+.generated-info {
+    float: right;
+    font-size: 8px;
+}
+
+.class-teacher-sign {
+    margin-top: 15px;
+    float: right;
+    width: 200px;
+    text-align: center;
+}
+
+.signature-line {
+    margin-top: 25px;
+    border-top: 1px solid #000;
+    width: 100%;
+}
+
+/* Print optimization */
+@media print {
+    html, body {
+        width: 210mm;
+        margin: 0;
+        padding: 0;
+    }
+    
+    th {
+        background: #f0f0f0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    tbody tr:nth-child(even) td {
+        background-color: #f9f9f9 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .page-container {
+        border: 1px solid #000;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        page-break-after: always;
+    }
+    
+    .watermark {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<%
+const studentsPerPage = 35;
+const totalPages = Math.ceil(students.length / studentsPerPage);
+const displayDistributionType = typeof distributionType !== 'undefined' ? distributionType : 'Food Kit/Rice';
+
+for (let page = 0; page < totalPages; page++) {
+    const startIndex = page * studentsPerPage;
+    const endIndex = Math.min(startIndex + studentsPerPage, students.length);
+    const pageStudents = students.slice(startIndex, endIndex);
+    const isFirstPage = page === 0;
+    const isLastPage = page === totalPages - 1;
+%>
+
+<div class="page-container">
+    
+    <div class="watermark">
+        PPM HSS KOTTUKKARA
+    </div>
+    
+    <div class="content-layer">
+        
+        <div class="main-content">
+            
+            <div class="header">
+                <div class="school-name">PPM HSS KOTTUKKARA</div>
+                <div class="title">Distribution of <%= displayDistributionType %></div>
+                <div class="subtitle">List of students</div>
+                <div class="class-info">(Standard and Division - <%= className %> <%= academicYear %>)</div>
+            </div>
+            
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Sl No</th>
+                            <th>Admn No</th>
+                            <th>Name of Student</th>
+                            <th>Name of Parent</th>
+                            <th>Signature of Parent</th>
+                            <th>Remarks</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% 
+                        pageStudents.forEach(function(student, index) { 
+                            const slNo = startIndex + index + 1;
+                        %>
+                        <tr>
+                            <td class="text-center"><%= slNo %></td>
+                            <td class="text-center"><%= student.admissionNo %></td>
+                            <td><%= student.name %></td>
+                            <td><%= student.parentName %></td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        <% }); %>
+                        
+                        <% 
+                        const remainingRows = studentsPerPage - pageStudents.length;
+                        for (let i = 0; i < remainingRows; i++) {
+                        %>
+                        <!-- <tr>
+                            <td class="text-center">-</td>
+                            <td class="text-center">-</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td></td>
+                            <td></td>
+                        </tr> -->
+                        <% } %>
+                    </tbody>
+                </table>
+            </div>
+            
+        </div>
+        
+        <% if (isLastPage) { %>
+
+        <div class="bottom-section">
+            <div class="class-teacher-sign">
+                <div>Class Teacher</div>
+                <div class="signature-line"></div>
+            </div>
+            <div class="footer">
+                <span class="total-students">Total Students: <%= students.length %></span>
+                <span class="generated-info">Generated on: <%= new Date().toLocaleDateString('en-IN') %></span>
+            </div>
+        </div>
+        <% } else { %>
+        <div class="footer" style="border-top: none;">
+            <!-- <span class="total-students">Continued on next page...</span>
+            <span class="generated-info">Page <%= page + 1 %> of <%= totalPages %></span> -->
+        </div>
+        <% } %>
+        
+        <div class="page-number">Page <%= page + 1 %> of <%= totalPages %></div>
+        
+    </div>
+</div>
+
+<% } %>
+
+</body>
+</html>

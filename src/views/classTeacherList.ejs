@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Class Teacher List - <%= academicYear %></title>
+
+<style>
+@page {
+    size: A4 portrait;
+    margin: 5mm;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 210mm;
+    font-family: "Times New Roman", serif;
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.page-container {
+    width: 200mm;
+    min-height: 277mm;
+    margin: 0 auto 5mm auto;
+    padding: 8mm 5mm;
+    border: 2px solid #000;
+    position: relative;
+    page-break-after: always;
+    box-sizing: border-box;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+}
+
+.page-container:last-child {
+    page-break-after: auto;
+    margin-bottom: 0;
+}
+
+/* Logo Watermark */
+.logo-watermark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.logo-watermark img {
+    width: 120mm;
+    height: 120mm;
+    object-fit: contain;
+    opacity: 0.06;
+}
+
+.content-layer {
+    position: relative;
+    z-index: 2;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+/* Main content */
+.main-content {
+    flex: 1;
+}
+
+/* Header Section */
+.header-section {
+    text-align: center;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 2px solid #000;
+}
+
+.school-logo {
+    width: 20mm;
+    height: 20mm;
+    margin: 0 auto 5px;
+}
+
+.school-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.school-name {
+    font-size: 14px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+}
+
+.arabic-text {
+    font-size: 10px;
+    font-weight: bold;
+    margin-bottom: 3px;
+    color: #333;
+}
+
+.main-title {
+    font-size: 16px;
+    font-weight: 900;
+    text-transform: uppercase;
+    text-decoration: underline;
+    margin: 5px 0;
+}
+
+.page-number {
+    text-align: right;
+    font-size: 9px;
+    margin: 3px 0 5px;
+    font-weight: bold;
+}
+
+/* Class Teacher Grid - Two columns */
+.class-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+    margin-top: 5px;
+}
+
+/* Grid Table */
+.grid-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10px;
+}
+
+.grid-table th,
+.grid-table td {
+    border: 1.5px solid #000;
+    padding: 5px 3px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.grid-table th {
+    background: #f0f0f0;
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: 9px;
+    padding: 5px 3px;
+}
+
+.grid-table td {
+    background: transparent;
+}
+
+/* Column widths */
+.grid-table .sl-col { width: 15%; }
+.grid-table .class-col { width: 35%; }
+.grid-table .teacher-col { width: 50%; }
+
+/* Section Header */
+.section-header {
+    font-size: 11px;
+    font-weight: 900;
+    margin: 10px 0 3px;
+    padding-bottom: 2px;
+    border-bottom: 1px solid #000;
+}
+
+/* Bottom Section */
+.bottom-section {
+    margin-top: auto;
+    padding-top: 15px;
+}
+
+/* Footer */
+.footer {
+    margin-top: 10px;
+    padding-top: 5px;
+    border-top: 1px solid #000;
+    overflow: hidden;
+    font-size: 9px;
+}
+
+.total-classes {
+    float: left;
+    font-weight: 700;
+}
+
+.generated-info {
+    float: right;
+}
+
+/* Print optimization */
+@media print {
+    html, body {
+        width: 210mm;
+        margin: 0;
+        padding: 0;
+    }
+    
+    th {
+        background: #f0f0f0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    td {
+        background: transparent !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .page-container {
+        border: 2px solid #000;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        page-break-after: always;
+    }
+    
+    .logo-watermark img {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<%
+const itemsPerPage = 40;
+const totalPages = Math.ceil(classList.length / itemsPerPage);
+const displayAcademicYear = typeof academicYear !== 'undefined' ? academicYear : '2024-25';
+const schoolLogo = typeof schoolLogoUrl !== 'undefined' ? schoolLogoUrl : 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
+
+// Split into two columns for display
+const leftColumnItems = [];
+const rightColumnItems = [];
+
+for (let page = 0; page < totalPages; page++) {
+    const startIndex = page * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, classList.length);
+    const pageItems = classList.slice(startIndex, endIndex);
+    
+    // Split page items into left and right columns
+    const halfLength = Math.ceil(pageItems.length / 2);
+    const leftItems = pageItems.slice(0, halfLength);
+    const rightItems = pageItems.slice(halfLength);
+%>
+
+<div class="page-container">
+    
+    <!-- Logo Watermark -->
+    <div class="logo-watermark">
+        <img src="<%= schoolLogo %>" alt="Watermark">
+    </div>
+    
+    <div class="content-layer">
+        
+        <div class="main-content">
+            
+            <!-- Header -->
+            <div class="header-section">
+                <div class="school-logo">
+                    <img src="<%= schoolLogo %>" alt="School Logo">
+                </div>
+                <div class="school-name">P.P.M.H.S.S. KOTTUKKARA</div>
+                <!-- <div class="arabic-text">العلم نور &nbsp;&nbsp; العلم نور</div> -->
+                <div class="main-title">Class Teacher List <%= displayAcademicYear %></div>
+            </div>
+            
+            <div class="page-number"><%= page + 1 %> of <%= totalPages %></div>
+            
+            <!-- Two Column Layout -->
+            <div class="class-grid">
+                
+                <!-- Left Column -->
+                <div>
+                    <table class="grid-table">
+                        <thead>
+                            <tr>
+                                <th class="sl-col">Sl No</th>
+                                <th class="class-col">Class</th>
+                                <th class="teacher-col">Class Teacher</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% leftItems.forEach(function(item, index) { 
+                                const slNo = startIndex + index + 1;
+                            %>
+                            <tr>
+                                <td><%= slNo %></td>
+                                <td><%= item.className %></td>
+                                <td><%= item.teacherShortName || item.teacherName || '-' %></td>
+                            </tr>
+                            <% }); %>
+                            
+                            <% for (let i = leftItems.length; i < halfLength; i++) { %>
+                            <tr>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                            </tr>
+                            <% } %>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Right Column -->
+                <div>
+                    <table class="grid-table">
+                        <thead>
+                            <tr>
+                                <th class="sl-col">Sl No</th>
+                                <th class="class-col">Class</th>
+                                <th class="teacher-col">Class Teacher</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% rightItems.forEach(function(item, index) { 
+                                const slNo = startIndex + halfLength + index + 1;
+                            %>
+                            <tr>
+                                <td><%= slNo %></td>
+                                <td><%= item.className %></td>
+                                <td><%= item.teacherShortName || item.teacherName || '-' %></td>
+                            </tr>
+                            <% }); %>
+                            
+                            <% for (let i = rightItems.length; i < halfLength; i++) { %>
+                            <tr>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                            </tr>
+                            <% } %>
+                        </tbody>
+                    </table>
+                </div>
+                
+            </div>
+            
+        </div>
+        
+        <!-- Bottom Section -->
+        <div class="bottom-section">
+            
+            <!-- Footer -->
+            <div class="footer">
+                <span class="total-classes">Total Classes: <%= classList.length %></span>
+                <span class="generated-info">Generated on: <%= new Date().toLocaleDateString('en-IN') %></span>
+            </div>
+            
+        </div>
+        
+    </div>
+</div>
+
+<% } %>
+
+</body>
+</html>

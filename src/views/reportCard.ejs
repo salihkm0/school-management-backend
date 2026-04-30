@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Progress Report - <%= student.name %></title>
+
+<style>
+/* Exact A4 Dimensions */
+@page {
+    size: A4;
+    margin: 0;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 210mm;
+    height: 297mm;
+    font-family: 'Times New Roman', 'Georgia', serif;
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+/* Main Container - Exact A4 */
+.report-card {
+    width: 210mm;
+    height: 297mm;
+    margin: 0 auto;
+    padding: 12mm 10mm;
+    box-sizing: border-box;
+    position: relative;
+    background: #ffffff;
+    border: 2px solid #000;
+}
+
+/* Watermark */
+.watermark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-45deg);
+    font-size: 70px;
+    font-weight: bold;
+    color: rgba(0, 0, 0, 0.055);
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 1;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-family: 'Times New Roman', serif;
+    width: 100%;
+    text-align: center;
+}
+
+/* Content Layer */
+.content-layer {
+    position: relative;
+    z-index: 2;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header Section */
+.school-header {
+    text-align: center;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #000;
+}
+
+.school-name {
+    font-size: 24px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    margin: 0 0 3px 0;
+    color: #000;
+}
+
+.school-address {
+    font-size: 11px;
+    color: #000;
+    margin-bottom: 5px;
+}
+
+.report-title {
+    font-size: 16px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin: 5px 0;
+    color: #000;
+}
+
+.academic-year {
+    font-size: 12px;
+    font-weight: 600;
+    color: #000;
+    text-transform: uppercase;
+}
+
+/* Student Info Row */
+.student-info-row {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 700;
+    font-size: 12px;
+    padding: 8px 5px;
+    margin-bottom: 8px;
+    border: 1px solid #000;
+    background: #fff;
+}
+
+/* Tables */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+    page-break-inside: avoid;
+}
+
+th, td {
+    border: 1.5px solid #000;
+    padding: 6px 4px;
+    font-size: 11px;
+}
+
+/* Marks Table */
+.marks-table {
+    margin: 5px 0;
+    flex-shrink: 0;
+}
+
+.marks-table th {
+    text-align: center;
+    font-weight: 900;
+    background-color: #fff;
+    padding: 6px 3px;
+    border: 1.5px solid #000;
+    font-size: 11px;
+}
+
+.marks-table td {
+    text-align: center;
+    background: #fff;
+    padding: 5px 3px;
+}
+
+.marks-table td:first-child {
+    text-align: left;
+    font-weight: 700;
+    padding-left: 8px;
+}
+
+/* Total Row */
+.total-row {
+    font-weight: 900;
+    background: #fff;
+    border-top: 2px solid #000;
+}
+
+.total-row td {
+    background: #fff;
+    font-weight: 900;
+}
+
+/* Attendance Section */
+.attendance-section {
+    margin: 10px 0;
+    padding: 8px 10px;
+    border: 1.5px solid #000;
+    background: #fff;
+    flex-shrink: 0;
+}
+
+.attendance-row {
+    display: flex;
+    gap: 30px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+/* Signature Section */
+.signature-section {
+    margin-top: 15px;
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    flex-shrink: 0;
+}
+
+.signature-item {
+    flex: 1;
+    text-align: left;
+}
+
+.signature-label {
+    font-size: 11px;
+    font-weight: 700;
+    margin-bottom: 20px;
+}
+
+.signature-line {
+    border-bottom: 1.5px solid #000;
+    width: 100%;
+    margin-top: 5px;
+}
+
+/* Grade Legend */
+.grade-legend {
+    margin-top: 15px;
+    padding: 8px 10px;
+    border: 1.5px solid #000;
+    background: #fff;
+    flex-shrink: 0;
+}
+
+.legend-title {
+    font-size: 11px;
+    font-weight: 900;
+    margin-bottom: 3px;
+}
+
+.legend-text {
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+/* Footer */
+.footer-note {
+    margin-top: auto;
+    padding-top: 10px;
+    text-align: right;
+    font-size: 9px;
+    font-weight: 600;
+    border-top: 1px solid #000;
+}
+
+/* Flex spacer to push footer down */
+.spacer {
+    flex: 1;
+}
+
+/* Print optimization */
+@media print {
+    html, body {
+        width: 210mm;
+        height: 297mm;
+        margin: 0;
+        padding: 0;
+    }
+    
+    .report-card {
+        border: 2px solid #000;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="report-card">
+    
+    <!-- Watermark -->
+    <div class="watermark">
+        PPM HSS KOTTUKKARA
+    </div>
+    
+    <!-- Content Layer -->
+    <div class="content-layer">
+        
+        <!-- SCHOOL HEADER -->
+        <div class="school-header">
+            <div class="school-name">PPM HSS KOTTUKKARA</div>
+            <div class="school-address">Kottukkara, Kondotty, Malappuram, Kerala - 673638</div>
+            <div class="report-title">FIRST TERMINAL EVALUATION - PROGRESS REPORT</div>
+            <div class="academic-year">Academic Year: <%= academicYear || '2025-2026' %></div>
+        </div>
+
+        <!-- STUDENT INFO -->
+        <div class="student-info-row">
+            <span>Class & Division : <%= student.class %></span>
+            <span>Sl No : <%= student.rollNumber || '1' %></span>
+            <span>Admn No : <%= student.admissionNo %></span>
+            <span>Name : <%= student.name %></span>
+        </div>
+
+        <!-- MARKS TABLE -->
+        <table class="marks-table">
+            <thead>
+                <tr>
+                    <th rowspan="2">SUBJECT</th>
+                    <th colspan="2">Max. Score</th>
+                    <th colspan="2">Score Obtained</th>
+                    <th rowspan="2">TOTAL</th>
+                    <th rowspan="2">GRADE</th>
+                </tr>
+                <tr>
+                    <th>CE</th>
+                    <th>TE</th>
+                    <th>CE</th>
+                    <th>TE</th>
+                </tr>
+            </thead>
+            <tbody>
+            <% 
+            let totalCEMax = 0;
+            let totalTEMax = 0;
+            let totalCE = 0;
+            let totalTE = 0;
+
+            const subjectOrder = [
+                'Mal/Ar/Ur', 'Malayalam 2', 'English', 'Hindi', 
+                'Social Science', 'Physics', 'chemistry', 'Biology', 'Maths'
+            ];
+            
+            if (exams && exams.length > 0) {
+                const subjects = exams[0].subjects || [];
+                const sortedSubjects = [];
+                
+                subjectOrder.forEach(name => {
+                    const subject = subjects.find(s => 
+                        s.name === name || 
+                        s.name.toLowerCase() === name.toLowerCase() ||
+                        s.name.includes(name)
+                    );
+                    if (subject) sortedSubjects.push(subject);
+                });
+                
+                subjects.forEach(subject => {
+                    if (!sortedSubjects.includes(subject)) {
+                        sortedSubjects.push(subject);
+                    }
+                });
+                
+                sortedSubjects.forEach(subject => {
+                    const ceMax = subject.ceMax || 0;
+                    const teMax = subject.teMax || 0;
+                    const ce = subject.ceMarks || 0;
+                    const te = subject.teMarks || 0;
+                    const total = ce + te;
+
+                    totalCEMax += ceMax;
+                    totalTEMax += teMax;
+                    totalCE += ce;
+                    totalTE += te;
+            %>
+            <tr>
+                <td><%= subject.name %></td>
+                <td><%= ceMax %></td>
+                <td><%= teMax %></td>
+                <td><%= ce %></td>
+                <td><%= te %></td>
+                <td><%= total %></td>
+                <td><%= subject.grade || '-' %></td>
+            </tr>
+            <% 
+                });
+            } else {
+                const sampleSubjects = [
+                    { name: 'Mal/Ar/Ur', ceMax: 10, teMax: 40, ce: 10, te: 37, grade: 'A+' },
+                    { name: 'Malayalam 2', ceMax: 10, teMax: 40, ce: 10, te: 34, grade: 'A' },
+                    { name: 'English', ceMax: 20, teMax: 80, ce: 20, te: 43, grade: 'B' },
+                    { name: 'Hindi', ceMax: 10, teMax: 40, ce: 9, te: 18, grade: 'C+' },
+                    { name: 'Social Science', ceMax: 20, teMax: 80, ce: 18, te: 57, grade: 'B+' },
+                    { name: 'Physics', ceMax: 10, teMax: 40, ce: 10, te: 28, grade: 'B+' },
+                    { name: 'chemistry', ceMax: 10, teMax: 40, ce: 10, te: 22, grade: 'B' },
+                    { name: 'Biology', ceMax: 10, teMax: 40, ce: 10, te: 25, grade: 'B+' },
+                    { name: 'Maths', ceMax: 20, teMax: 80, ce: 20, te: 41, grade: 'B' }
+                ];
+                
+                sampleSubjects.forEach(subject => {
+                    totalCEMax += subject.ceMax;
+                    totalTEMax += subject.teMax;
+                    totalCE += subject.ce;
+                    totalTE += subject.te;
+            %>
+            <tr>
+                <td><%= subject.name %></td>
+                <td><%= subject.ceMax %></td>
+                <td><%= subject.teMax %></td>
+                <td><%= subject.ce %></td>
+                <td><%= subject.te %></td>
+                <td><%= subject.ce + subject.te %></td>
+                <td><%= subject.grade %></td>
+            </tr>
+            <%  });
+            } %>
+
+            <% 
+            const grandTotal = totalCE + totalTE;
+            const grandMax = totalCEMax + totalTEMax;
+            const percentage = grandMax ? Math.round((grandTotal / grandMax) * 100) : 0;
+            %>
+            <tr class="total-row">
+                <td><strong>TOTAL</strong></td>
+                <td><strong><%= totalCEMax %></strong></td>
+                <td><strong><%= totalTEMax %></strong></td>
+                <td><strong><%= totalCE %></strong></td>
+                <td><strong><%= totalTE %></strong></td>
+                <td><strong><%= grandTotal %></strong></td>
+                <td><strong><%= percentage %>%</strong></td>
+            </tr>
+            </tbody>
+        </table>
+
+        <!-- ATTENDANCE -->
+        <div class="attendance-section">
+            <div class="attendance-row">
+                <span>No of Working Days: <%= attendance.totalDays || '61' %></span>
+                <span>No of Days Present: <%= attendance.presentDays || '61' %></span>
+                <span>Attendance: <%= attendance.totalDays ? Math.round((attendance.presentDays / attendance.totalDays) * 100) : 100 %>%</span>
+            </div>
+        </div>
+
+        <!-- Spacer -->
+        <div class="spacer"></div>
+
+        <!-- SIGNATURES -->
+        <div class="signature-section">
+            <div class="signature-item">
+                <div class="signature-label">Sign. of Class Teacher :</div>
+                <div class="signature-line"></div>
+            </div>
+            <div class="signature-item">
+                <div class="signature-label">Sign. of Parent :</div>
+                <div class="signature-line"></div>
+            </div>
+            <div class="signature-item">
+                <div class="signature-label">Sign. of Head Master :</div>
+                <div class="signature-line"></div>
+            </div>
+        </div>
+
+        <!-- GRADE LEGEND -->
+        <div class="grade-legend">
+            <div class="legend-title">GRADE BOUNDARIES:</div>
+            <div class="legend-text">
+                90% & Above = A+, 80-89% = A, 70-79% = B+, 60-69% = B, 50-59% = C+, 40-49% = C, 30-39% = D+, 20-29% = D, Below 20% = E
+            </div>
+        </div>
+        
+        <!-- FOOTER -->
+        <div class="footer-note">
+            Sl No: <%= student.rollNumber || '1' %> | Admn No: <%= student.admissionNo %> | Generated: <%= new Date().toLocaleDateString('en-IN') %>
+        </div>
+        
+    </div>
+</div>
+
+</body>
+</html>

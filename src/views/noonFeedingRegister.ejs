@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Noon Feeding Attendance Register - <%= className %> <%= academicYear %></title>
+
+<style>
+@page {
+    size: A4 landscape;
+    margin: 3mm;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 297mm;
+    font-family: "Times New Roman", serif;
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.page-container {
+    width: 291mm;
+    min-height: 200mm;
+    margin: 0 auto 3mm auto;
+    padding: 3mm 2mm;
+    border: 2px solid #000;
+    position: relative;
+    page-break-after: always;
+    box-sizing: border-box;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+}
+
+.page-container:last-child {
+    page-break-after: auto;
+    margin-bottom: 0;
+}
+
+/* Watermark */
+.watermark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-45deg);
+    font-size: 80px;
+    font-weight: bold;
+    color: rgba(0, 0, 0, 0.04);
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 1;
+    text-transform: uppercase;
+    letter-spacing: 15px;
+    font-family: 'Times New Roman', serif;
+    width: 100%;
+    text-align: center;
+}
+
+.content-layer {
+    position: relative;
+    z-index: 2;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+/* Main content area - takes available space */
+.main-content {
+    flex: 1;
+}
+
+/* Header Section */
+.header-section {
+    text-align: center;
+    margin-bottom: 5px;
+}
+
+.main-title {
+    font-size: 16px;
+    font-weight: 900;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.school-name {
+    font-size: 18px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 5px;
+}
+
+/* Header Row */
+.header-row {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 3px;
+    font-size: 11px;
+}
+
+.header-row td {
+    border: 1.5px solid #000;
+    padding: 4px 2px;
+    text-align: center;
+    font-weight: bold;
+    vertical-align: middle;
+}
+
+.class-year {
+    text-align: center;
+    font-size: 13px;
+    font-weight: 900;
+    margin: 3px 0;
+}
+
+.page-number {
+    float: right;
+    font-size: 9px;
+    margin-top: 3px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #8e8e8e;
+}
+
+/* Main Table */
+.main-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 7px;
+    margin-top: 3px;
+    table-layout: fixed;
+}
+
+.main-table th,
+.main-table td {
+    border: 1px solid #000;
+    padding: 3px 1px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.main-table th {
+    background: #f0f0f0;
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: 6px;
+    padding: 3px 1px;
+}
+
+.main-table td {
+    background: transparent;
+}
+
+/* Column widths */
+.main-table .class-col { width: 2.5%; }
+.main-table .adm-col { width: 4%; }
+.main-table .sl-col { width: 2%; }
+.main-table .name-col { width: 12.5%; text-align: left; padding-left: 3px; }
+
+/* Meal date columns - 25 columns */
+.main-table .meal-col { width: 1.78%; height: 14px;}
+
+/* Milk date columns - 12 columns */
+.main-table .milk-col { width: 1.78%; height: 14px;}
+
+/* Egg date columns - 7 columns */
+.main-table .egg-col { width: 1.8%; height: 14px;}
+
+/* Total Rows */
+.total-row {
+    font-weight: 900;
+    background: #f0f0f0;
+}
+
+.total-row td {
+    background: #f0f0f0;
+    font-weight: 900;
+}
+
+/* Bottom Section - Fixed to bottom */
+.bottom-section {
+    margin-top: auto;
+    padding-top: 10px;
+}
+
+/* Signature Section */
+.signature-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 5px;
+}
+
+.signature-left {
+    font-size: 10px;
+    font-weight: bold;
+}
+
+.signature-right {
+    font-size: 10px;
+    font-weight: bold;
+    text-align: right;
+}
+
+.signature-line {
+    display: inline-block;
+    width: 150px;
+    border-bottom: 1px solid #000;
+    margin-left: 5px;
+}
+
+/* Footer */
+.footer {
+    padding-top: 3px;
+    border-top: 1px solid #000;
+    overflow: hidden;
+    font-size: 9px;
+}
+
+.total-students {
+    float: left;
+    font-weight: 700;
+}
+
+.generated-info {
+    float: right;
+}
+
+/* Print optimization */
+@media print {
+    html, body {
+        width: 297mm;
+        margin: 0;
+        padding: 0;
+    }
+    
+    th {
+        background: #f0f0f0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .total-row td {
+        background: #f0f0f0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    td {
+        background: transparent !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .page-container {
+        border: 2px solid #000;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        page-break-after: always;
+    }
+    
+    .watermark {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<%
+const girls = students.filter(s => s.gender === 'F' || s.gender === 'G');
+const boys = students.filter(s => s.gender === 'M' || s.gender === 'B');
+
+const girlsPerPage = 40;
+const boysPerPage = 40;
+
+const girlsPages = Math.ceil(girls.length / girlsPerPage);
+const boysPages = Math.ceil(boys.length / boysPerPage);
+
+const displayAcademicYear = typeof academicYear !== 'undefined' ? academicYear : '2025-2026';
+const displayClassName = typeof className !== 'undefined' ? className : '8 A';
+const displayMonth = typeof month !== 'undefined' ? month : new Date().toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+
+// Generate dates (empty headers - no numbers)
+const mealDates = [];
+for (let i = 1; i <= 25; i++) { mealDates.push(''); }
+
+const milkDates = [];
+for (let i = 1; i <= 12; i++) { milkDates.push(''); }
+
+const eggDates = [];
+for (let i = 1; i <= 7; i++) { eggDates.push(''); }
+
+// Total date columns count
+const totalDateColumns = mealDates.length + milkDates.length + eggDates.length;
+
+// ==================== BOYS PAGES FIRST ====================
+for (let page = 0; page < boysPages; page++) {
+    const startIndex = page * boysPerPage;
+    const endIndex = Math.min(startIndex + boysPerPage, boys.length);
+    const pageBoys = boys.slice(startIndex, endIndex);
+    const isLastBoysPage = page === boysPages - 1;
+%>
+
+<div class="page-container">
+    
+    <div class="watermark">
+        PPM HSS KOTTUKKARA
+    </div>
+    
+    <div class="content-layer">
+        
+        <div class="main-content">
+            
+            <div class="header-section">
+                <div class="main-title">Noon Feeding Attendance Register</div>
+                <div class="school-name">PPMHSS KOTTUKKARA</div>
+            </div>
+            
+            <table class="header-row">
+                <tr>
+                    <td colspan="16">For the Month of <%= displayMonth %></td>
+                    <td colspan="18"><%= displayClassName %> <%= displayAcademicYear %></td>
+                    <td colspan="13">BOYS</td>
+                </tr>
+            </table>
+            
+           
+            
+            <table class="main-table">
+                <thead>
+                    <tr>
+                        <th rowspan="2" class="sl-col">Sl<br/>no</th>
+                        <th rowspan="2" class="adm-col">Adm<br/>No</th>
+                        <th rowspan="2" class="name-col">Name</th>
+                        <th colspan="25">Meal Date</th>
+                        <th colspan="12">Milk Date</th>
+                        <th colspan="7">Egg Date</th>
+                    </tr>
+                    <tr>
+                        <% mealDates.forEach(() => { %><th class="meal-col"></th><% }) %>
+                        <% milkDates.forEach(() => { %><th class="milk-col"></th><% }) %>
+                        <% eggDates.forEach(() => { %><th class="egg-col"></th><% }) %>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% pageBoys.forEach(function(student, index) { 
+                        const slNo = startIndex + index + 1;
+                    %>
+                    <tr>
+                        <td><%= slNo %></td>
+                        <td><%= student.admissionNo %></td>
+                        <td style="text-align: left; padding-left: 3px;"><%= student.name %></td>
+                        <% mealDates.forEach(() => { %><td></td><% }) %>
+                        <% milkDates.forEach(() => { %><td></td><% }) %>
+                        <% eggDates.forEach(() => { %><td></td><% }) %>
+                    </tr>
+                    <% }); %>
+                </tbody>
+            </table>
+            
+            <% if (isLastBoysPage) { %>
+            <table class="main-table" style="margin-top: 2px;">
+                <tbody>
+                    <tr class="total-row">
+                        <td colspan="10" style="text-align: right; padding-right: 5px;">Boys Total</td>
+                        <% for (let i = 0; i < totalDateColumns; i++) { %><td></td><% } %>
+                    </tr>
+                </tbody>
+            </table>
+            <% } %>
+            
+        </div>
+        
+        <% if (isLastBoysPage) { %>
+        <div class="bottom-section">
+            <div class="signature-section">
+                <div class="signature-left">
+                    Class Teacher Name and Signature <span class="signature-line"></span>
+                </div>
+                <div class="signature-right">
+                    Head Master <span class="signature-line"></span>
+                </div>
+            </div>
+            <div class="footer">
+                <span class="total-students">Boys: <%= boys.length %></span>
+                <span class="generated-info">Generated: <%= new Date().toLocaleDateString('en-IN') %></span>
+            </div>
+        </div>
+        <% } else { %>
+        <div class="footer">
+            <span class="total-students">Boys: <%= boys.length %></span>
+            <span class="generated-info">Generated: <%= new Date().toLocaleDateString('en-IN') %></span>
+        </div>
+        <% } %>
+        
+    </div>
+     <div class="page-number">Page <%= page + 1 %> of <%= boysPages + girlsPages %></div>
+</div>
+
+<% } %>
+
+<% 
+// ==================== GIRLS PAGES SECOND ====================
+for (let page = 0; page < girlsPages; page++) {
+    const startIndex = page * girlsPerPage;
+    const endIndex = Math.min(startIndex + girlsPerPage, girls.length);
+    const pageGirls = girls.slice(startIndex, endIndex);
+    const isLastGirlsPage = page === girlsPages - 1;
+    const overallPage = boysPages + page + 1;
+%>
+
+<div class="page-container">
+    
+    <div class="watermark">
+        PPM HSS KOTTUKKARA
+    </div>
+    
+    <div class="content-layer">
+        
+        <div class="main-content">
+            
+            <div class="header-section">
+                <div class="main-title">Noon Feeding Attendance Register</div>
+                <div class="school-name">PPMHSS KOTTUKKARA</div>
+            </div>
+            
+            <table class="header-row">
+                <tr>
+                    <td colspan="16">For the Month of <%= displayMonth %></td>
+                    <td colspan="18"><%= displayClassName %> <%= displayAcademicYear %></td>
+                    <td colspan="13">GIRLS</td>
+                </tr>
+            </table>
+            
+            
+            
+            <table class="main-table">
+                <thead>
+                    <tr>
+                        <th rowspan="2" class="sl-col">Sl<br/>no</th>
+                        <th rowspan="2" class="adm-col">Adm<br/>No</th>
+                        <th rowspan="2" class="name-col">Name</th>
+                        <th colspan="25">Meal Date</th>
+                        <th colspan="12">Milk Date</th>
+                        <th colspan="7">Egg Date</th>
+                    </tr>
+                    <tr>
+                        <% mealDates.forEach(() => { %><th class="meal-col"></th><% }) %>
+                        <% milkDates.forEach(() => { %><th class="milk-col"></th><% }) %>
+                        <% eggDates.forEach(() => { %><th class="egg-col"></th><% }) %>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% pageGirls.forEach(function(student, index) { 
+                        const slNo = startIndex + index + 1;
+                    %>
+                    <tr>
+                        <td><%= slNo %></td>
+                        <td><%= student.admissionNo %></td>
+                        <td style="text-align: left; padding-left: 3px;"><%= student.name %></td>
+                        <% mealDates.forEach(() => { %><td></td><% }) %>
+                        <% milkDates.forEach(() => { %><td></td><% }) %>
+                        <% eggDates.forEach(() => { %><td></td><% }) %>
+                    </tr>
+                    <% }); %>
+                </tbody>
+            </table>
+            
+            <% if (isLastGirlsPage) { %>
+            <table class="main-table" style="margin-top: 2px;">
+                <tbody>
+                    <tr class="total-row">
+                        <td colspan="10" style="text-align: right; padding-right: 5px;">Girls Total</td>
+                        <% for (let i = 0; i < totalDateColumns; i++) { %><td></td><% } %>
+                    </tr>
+                </tbody>
+            </table>
+            <% } %>
+            
+        </div>
+        
+        <% if (isLastGirlsPage) { %>
+        <div class="bottom-section">
+            <div class="signature-section">
+                <div class="signature-left">
+                    Class Teacher Name and Signature <span class="signature-line"></span>
+                </div>
+                <div class="signature-right">
+                    Head Master <span class="signature-line"></span>
+                </div>
+            </div>
+            <div class="footer">
+                <span class="total-students">Girls: <%= girls.length %> | Total: <%= students.length %></span>
+                <span class="generated-info">Generated: <%= new Date().toLocaleDateString('en-IN') %></span>
+            </div>
+        </div>
+        <% } else { %>
+        <div class="footer">
+            <span class="total-students">Girls: <%= girls.length %> | Total: <%= students.length %></span>
+            <span class="generated-info">Generated: <%= new Date().toLocaleDateString('en-IN') %></span>
+        </div>
+        <% } %>
+        
+    </div>
+    <div class="page-number">Page <%= overallPage %> of <%= boysPages + girlsPages %></div>
+</div>
+
+<% } %>
+
+</body>
+</html>

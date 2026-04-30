@@ -1,4 +1,3 @@
-// src/models/StaffDuty.js
 const mongoose = require('mongoose');
 
 const DutyRecordSchema = new mongoose.Schema({
@@ -13,7 +12,10 @@ const DutyRecordSchema = new mongoose.Schema({
   },
   startTime: String,
   endTime: String,
-  duration: Number // in hours
+  duration: {
+    type: Number,
+    default: 8
+  }
 }, { _id: false });
 
 const StaffDutySchema = new mongoose.Schema({
@@ -53,8 +55,8 @@ const StaffDutySchema = new mongoose.Schema({
     enum: ['assigned', 'confirmed', 'completed', 'cancelled'],
     default: 'assigned'
   },
-  remarks: String,
   location: String,
+  remarks: String,
   department: String
 }, {
   timestamps: true

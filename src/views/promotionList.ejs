@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Promotion List</title>
+
+<style>
+@page {
+    size: A4 landscape;
+    margin: 3mm;
+}
+
+body {
+    font-family: "Times New Roman", serif;
+    margin: 0;
+    width: 297mm;
+}
+
+/* Page */
+.page {
+    width: 100%;
+    border: 1.5px solid #000;
+    padding: 5mm 6mm;
+    position: relative;
+}
+
+/* Watermark */
+.watermark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0.035;
+}
+
+.watermark img {
+    width: 150mm;
+}
+
+/* Header */
+.header {
+    text-align: center;
+    border-bottom: 1.5px solid #000;
+    padding-bottom: 4px;
+    line-height: 1.2;
+}
+
+.logo {
+    width: 18mm;
+    margin: auto;
+}
+
+.logo img {
+    width: 100%;
+}
+
+.school {
+    font-size: 15px;
+    font-weight: 900;
+}
+
+.arabic {
+    font-size: 10px;
+}
+
+.title {
+    font-size: 16px;
+    font-weight: 900;
+    text-decoration: underline;
+}
+
+/* Page number */
+.page-no {
+    text-align: right;
+    font-size: 8px;
+    margin: 2px 0;
+}
+
+/* Table */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 7.5px;
+}
+
+th, td {
+    border: 0.8px solid #000;
+    text-align: center;
+    padding: 2px;
+    height: 18px;
+}
+
+/* Header cells */
+th {
+    font-weight: 900;
+}
+
+/* Column widths */
+.sl { width: 3%; }
+.adm { width: 6%; }
+.name { width: 16%; text-align: left; padding-left: 4px; }
+.sub { width: 3.8%; }
+.total { width: 5%; }
+.percent { width: 5%; }
+.grade { width: 4%; }
+.rank { width: 4%; }
+.result { width: 6%; }
+.promoted { width: 5%; }
+
+/* Colors */
+.pass { font-weight: bold; }
+.fail { font-weight: bold; }
+
+/* Summary */
+.summary {
+    margin-top: 8px;
+}
+
+.summary table {
+    width: 60%;
+    font-size: 8px;
+}
+
+.summary td {
+    border: 1px solid #000;
+    padding: 4px;
+    font-weight: bold;
+}
+
+/* Footer */
+.footer {
+    margin-top: 8px;
+    font-size: 8px;
+    display: flex;
+    justify-content: space-between;
+}
+</style>
+</head>
+
+<body>
+
+<%
+const studentsPerPage = 25;
+const totalPages = Math.ceil(students.length / studentsPerPage);
+
+let totalPass = 0;
+let totalFail = 0;
+let totalPromoted = 0;
+let totalDetained = 0;
+
+students.forEach(s => {
+    if (s.result === 'PASS') totalPass++; else totalFail++;
+    if (s.promoted === 'YES') totalPromoted++; else totalDetained++;
+});
+
+for (let page = 0; page < totalPages; page++) {
+    const start = page * studentsPerPage;
+    const pageStudents = students.slice(start, start + studentsPerPage);
+    const isLast = page === totalPages - 1;
+%>
+
+<div class="page">
+
+<!-- Watermark -->
+<div class="watermark">
+    <img src="<%= schoolLogoUrl %>">
+</div>
+
+<!-- Header -->
+<div class="header">
+    <div class="logo">
+        <img src="<%= schoolLogoUrl %>">
+    </div>
+    <div class="school">P.P.M.H.S.S. KOTTUKKARA</div>
+    <div class="arabic">العلم نور &nbsp;&nbsp; العلم نور</div>
+    <div class="title">PROMOTION LIST - <%= examName %> <%= academicYear %></div>
+</div>
+
+<div class="page-no">Page <%= page + 1 %> / <%= totalPages %></div>
+
+<table>
+<thead>
+<tr>
+    <th class="sl">Sl</th>
+    <th class="adm">Adm</th>
+    <th class="name">Name</th>
+
+    <% subjects.forEach(s => { %>
+    <th class="sub"><%= s %></th>
+    <% }) %>
+
+    <th class="total">Tot</th>
+    <th class="percent">%</th>
+    <th class="grade">Gr</th>
+    <th class="rank">Rk</th>
+    <th class="result">Res</th>
+    <th class="promoted">Pro</th>
+</tr>
+</thead>
+
+<tbody>
+<% pageStudents.forEach((st, i) => { %>
+<tr>
+    <td><%= start + i + 1 %></td>
+    <td><%= st.admissionNo %></td>
+    <td class="name"><%= st.name %></td>
+
+    <% subjects.forEach(sub => { %>
+    <td><%= st.marks[sub] || '' %></td>
+    <% }) %>
+
+    <td><%= st.total %></td>
+    <td><%= st.percentage %></td>
+    <td><%= st.grade %></td>
+    <td><%= st.rank %></td>
+    <td class="<%= st.result === 'PASS' ? 'pass' : 'fail' %>"><%= st.result %></td>
+    <td class="<%= st.promoted === 'YES' ? 'pass' : 'fail' %>"><%= st.promoted %></td>
+</tr>
+<% }) %>
+
+<% for (let i = pageStudents.length; i < studentsPerPage; i++) { %>
+<tr>
+<td>-</td><td>-</td><td class="name">-</td>
+<% subjects.forEach(()=>{ %><td>-</td><% }) %>
+<td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
+</tr>
+<% } %>
+
+</tbody>
+</table>
+
+<% if (isLast) { %>
+<div class="summary">
+<table>
+<tr>
+<td>Total</td>
+<td>Pass</td>
+<td>Fail</td>
+<td>Pass %</td>
+<td>Promoted</td>
+<td>Detained</td>
+<td>Promotion %</td>
+</tr>
+<tr>
+<td><%= students.length %></td>
+<td><%= totalPass %></td>
+<td><%= totalFail %></td>
+<td><%= ((totalPass/students.length)*100).toFixed(1) %></td>
+<td><%= totalPromoted %></td>
+<td><%= totalDetained %></td>
+<td><%= ((totalPromoted/students.length)*100).toFixed(1) %></td>
+</tr>
+</table>
+</div>
+<% } %>
+
+<div class="footer">
+<div>Total Students: <%= students.length %></div>
+<div>Date: <%= new Date().toLocaleDateString('en-IN') %></div>
+</div>
+
+</div>
+
+<% } %>
+
+</body>
+</html>

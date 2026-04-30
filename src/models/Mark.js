@@ -1,104 +1,223 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const MarkSchema = new mongoose.Schema({
-  studentId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Student',
-    required: true
-  },
-  studentName: {
-    type: String,
-    required: true
-  },
-  examId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Exam',
-    required: true
-  },
-  examName: {
-    type: String,
-    required: true
-  },
+const MARK_STATUS = {
+  DRAFT: "draft",
+  SUBMITTED: "submitted",
+  REVIEWED: "reviewed",
+  PUBLISHED: "published",
+};
+
+const SubjectMarkSchema = new mongoose.Schema({
   subjectId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Subject',
-    required: true
+    ref: "Subject",
+    required: true,
   },
   subjectName: {
     type: String,
-    required: true
+    required: true,
   },
-  theoryMarks: {
+  subjectCode: String,
+  theoryScore: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0,
   },
-  practicalMarks: {
+  practicalScore: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0,
   },
-  totalMarks: {
+  totalScore: {
     type: Number,
-    default: 0
+    default: 0,
   },
   maxMarks: {
     type: Number,
-    required: true
+    required: true,
+    default: 100,
   },
   passingMarks: {
     type: Number,
-    required: true
+    default: 40,
   },
   percentage: {
     type: Number,
-    default: 0
+    default: 0,
   },
   grade: {
-    type: String
+    type: String,
+    default: "F",
   },
-  remarks: {
-    type: String
-  },
-  enteredBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  enteredAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  },
-  isEditable: {
+  remarks: String,
+  isAbsent: {
     type: Boolean,
-    default: true
-  }
-}, {
-  timestamps: true
+    default: false,
+  },
 });
 
-MarkSchema.pre('save', function(next) {
-  this.totalMarks = (this.theoryMarks || 0) + (this.practicalMarks || 0);
-  this.percentage = (this.totalMarks / this.maxMarks) * 100;
-  this.grade = this.calculateGrade();
+const MarkSchema = new mongoose.Schema(
+  {
+    // Identifiers
+    studentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Student",
+      required: true,
+    },
+    studentName: {
+      type: String,
+      required: true,
+    },
+    studentCode: String,
+    rollNumber: String,
+    admissionNo: String,
+    
+    examId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Exam",
+      required: true,
+    },
+    examName: String,
+    examType: String,
+    term: String,
+    
+    classId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Class",
+      required: true,
+    },
+    className: String,
+    
+    academicYearId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "AcademicYear",
+      required: true,
+    },
+    academicYear: String,
+    
+    // All subjects marks for this student in this exam
+    subjects: [SubjectMarkSchema],
+    
+    // Summary
+    totalMarks: {
+      type: Number,
+      default: 0,
+    },
+    totalMaxMarks: {
+      type: Number,
+      default: 0,
+    },
+    percentage: {
+      type: Number,
+      default: 0,
+    },
+    grade: {
+      type: String,
+      default: "F",
+    },
+    rank: Number,
+    
+    // Status tracking
+    status: {
+      type: String,
+      enum: Object.values(MARK_STATUS),
+      default: "draft",
+    },
+    
+    // Metadata
+    enteredBy: {
+      type: String,
+    },
+    enteredByName: String,
+    enteredAt: {
+      type: Date,
+      default: Date.now,
+    },
+    lastUpdatedBy: {
+      type: String,
+    },
+    lastUpdatedAt: Date,
+    submittedBy: {
+      type: String,
+    },
+    submittedAt: Date,
+    reviewedBy: {
+      type: String,
+    },
+    reviewedAt: Date,
+    
+    // Finalization
+    isFinalized: {
+      type: Boolean,
+      default: false,
+    },
+    finalizedAt: Date,
+    finalizedBy: {
+      type: String,
+    },
+    
+    // Additional
+    remarks: String,
+  },
+  { timestamps: true }
+);
+
+// Pre-save middleware to calculate totals and percentages
+MarkSchema.pre("save", function (next) {
+  let totalMarks = 0;
+  let totalMaxMarks = 0;
+  
+  this.subjects.forEach(subject => {
+    // Calculate total score for each subject
+    subject.totalScore = (subject.theoryScore || 0) + (subject.practicalScore || 0);
+    
+    // Calculate percentage for each subject
+    if (subject.maxMarks > 0) {
+      subject.percentage = (subject.totalScore / subject.maxMarks) * 100;
+      
+      // Calculate grade for each subject
+      const pct = subject.percentage;
+      if (pct >= 90) subject.grade = "A+";
+      else if (pct >= 80) subject.grade = "A";
+      else if (pct >= 70) subject.grade = "B+";
+      else if (pct >= 60) subject.grade = "B";
+      else if (pct >= 50) subject.grade = "C+";
+      else if (pct >= 40) subject.grade = "C";
+      else if (pct >= 33) subject.grade = "D";
+      else subject.grade = "F";
+    }
+    
+    totalMarks += subject.totalScore;
+    totalMaxMarks += subject.maxMarks;
+  });
+  
+  this.totalMarks = totalMarks;
+  this.totalMaxMarks = totalMaxMarks;
+  
+  if (totalMaxMarks > 0) {
+    this.percentage = (totalMarks / totalMaxMarks) * 100;
+    
+    // Calculate overall grade
+    const overallPct = this.percentage;
+    if (overallPct >= 90) this.grade = "A+";
+    else if (overallPct >= 80) this.grade = "A";
+    else if (overallPct >= 70) this.grade = "B+";
+    else if (overallPct >= 60) this.grade = "B";
+    else if (overallPct >= 50) this.grade = "C+";
+    else if (overallPct >= 40) this.grade = "C";
+    else if (overallPct >= 33) this.grade = "D";
+    else this.grade = "F";
+  }
+  
   next();
 });
 
-MarkSchema.methods.calculateGrade = function() {
-  const percentage = this.percentage;
-  if (percentage >= 90) return 'A+';
-  if (percentage >= 80) return 'A';
-  if (percentage >= 70) return 'B+';
-  if (percentage >= 60) return 'B';
-  if (percentage >= 50) return 'C+';
-  if (percentage >= 40) return 'C';
-  if (percentage >= 33) return 'D';
-  return 'F';
-};
+// Indexes
+MarkSchema.index({ studentId: 1, examId: 1, classId: 1 }, { unique: true });
+MarkSchema.index({ examId: 1, classId: 1 });
+MarkSchema.index({ examId: 1, classId: 1, status: 1 });
+MarkSchema.index({ academicYearId: 1 });
+MarkSchema.index({ status: 1 });
+MarkSchema.index({ percentage: -1 });
 
-MarkSchema.index({ studentId: 1, examId: 1, subjectId: 1 }, { unique: true });
-MarkSchema.index({ examId: 1 });
-
-module.exports = mongoose.model('Mark', MarkSchema);
+module.exports = mongoose.models.Mark || mongoose.model("Mark", MarkSchema);

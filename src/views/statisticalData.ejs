@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Statistical Data - <%= className %> <%= academicYear %></title>
+
+<style>
+@page {
+    size: A4 landscape;
+    margin: 3mm;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 297mm;
+    font-family: 'Times New Roman', 'Arial', sans-serif;
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.page-container {
+    width: 291mm;
+    min-height: 200mm;
+    margin: 0 auto 3mm auto;
+    padding: 3mm;
+    border: 2px solid #000;
+    position: relative;
+    page-break-after: always;
+    box-sizing: border-box;
+}
+
+.page-container:last-child {
+    page-break-after: auto;
+    margin-bottom: 0;
+}
+
+/* Watermark */
+.watermark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-45deg);
+    font-size: 70px;
+    font-weight: bold;
+    color: rgba(0, 0, 0, 0.04);
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 1;
+    text-transform: uppercase;
+    letter-spacing: 15px;
+    font-family: 'Times New Roman', serif;
+    width: 100%;
+    text-align: center;
+}
+
+.content-layer {
+    position: relative;
+    z-index: 2;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header */
+.header {
+    text-align: center;
+    margin-bottom: 5px;
+    padding-bottom: 3px;
+    border-bottom: 2px solid #000;
+}
+
+.school-name {
+    font-size: 14px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 2px;
+}
+
+.title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.class-info {
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.page-number {
+    float: right;
+    font-size: 9px;
+    margin-top: 3px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #8e8e8e;
+}
+
+/* Table */
+.table-container {
+    margin-top: 5px;
+    flex: 1;
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 7px;
+}
+
+th, td {
+    border: 1px solid #000;
+    padding: 3px 2px;
+    text-align: left;
+    vertical-align: middle;
+    word-break: break-word;
+}
+
+th {
+    background: #f0f0f0;
+    font-weight: 900;
+    text-align: center;
+    text-transform: uppercase;
+    font-size: 7px;
+    padding: 4px 2px;
+}
+
+td {
+    background: #fff;
+}
+
+/* Column widths */
+th:nth-child(1), td:nth-child(1) { width: 3%; text-align: center; }
+th:nth-child(2), td:nth-child(2) { width: 5%; text-align: center; }
+th:nth-child(3), td:nth-child(3) { width: 12%; }
+th:nth-child(4), td:nth-child(4) { width: 3%; text-align: center; }
+th:nth-child(5), td:nth-child(5) { width: 6%; text-align: center; }
+th:nth-child(6), td:nth-child(6) { width: 15%; }
+th:nth-child(7), td:nth-child(7) { width: 4%; text-align: center; }
+th:nth-child(8), td:nth-child(8) { width: 5%; }
+th:nth-child(9), td:nth-child(9) { width: 4%; text-align: center; }
+th:nth-child(10), td:nth-child(10) { width: 4%; text-align: center; }
+th:nth-child(11), td:nth-child(11) { width: 12%; }
+
+.text-center { 
+    text-align: center; 
+}
+
+/* Zebra striping */
+tbody tr:nth-child(even) td {
+    background-color: #f9f9f9;
+}
+
+/* Footer */
+.footer {
+    margin-top: 5px;
+    padding-top: 3px;
+    border-top: 1px solid #000;
+    overflow: hidden;
+}
+
+.total-students {
+    float: left;
+    font-weight: 700;
+    font-size: 8px;
+}
+
+.generated-info {
+    float: right;
+    font-size: 7px;
+}
+
+/* Summary row */
+.summary-row {
+    background: #e8e8e8;
+    font-weight: 700;
+}
+
+.summary-row td {
+    background: #e8e8e8;
+    font-weight: 700;
+}
+
+/* Print optimization */
+@media print {
+    html, body {
+        width: 297mm;
+        margin: 0;
+        padding: 0;
+    }
+    
+    th {
+        background: #f0f0f0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    tbody tr:nth-child(even) td {
+        background-color: #f9f9f9 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .page-container {
+        border: 2px solid #000;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        page-break-after: always;
+    }
+    
+    .watermark {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<%
+const studentsPerPage = 33;
+const totalPages = Math.ceil(students.length / studentsPerPage);
+
+for (let page = 0; page < totalPages; page++) {
+    const startIndex = page * studentsPerPage;
+    const endIndex = Math.min(startIndex + studentsPerPage, students.length);
+    const pageStudents = students.slice(startIndex, endIndex);
+    const isFirstPage = page === 0;
+%>
+
+<div class="page-container">
+    
+    <div class="watermark">
+        PPM HSS KOTTUKKARA
+    </div>
+    
+    <div class="content-layer">
+        
+        <div class="header">
+            <div class="school-name">PPM HSS KOTTUKKARA - STATISTICAL DATA - <%= className %> <%= academicYear %></div>
+            <% if (!isFirstPage) { %>
+            <!-- <div class="title" style="font-size: 10px;">(Continued)</div> -->
+            <% } %>
+        </div>
+        
+        
+        
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Sl No</th>
+                        <th>Admn No</th>
+                        <th>Name of Student & UID</th>
+                        <th>Sex</th>
+                        <th>Date of Birth</th>
+                        <th>Name of Parent & Address</th>
+                        <th>Religion</th>
+                        <th>Caste</th>
+                        <th>Category</th>
+                        <th>APL/BPL</th>
+                        <th>Name of Mother & Phone No</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% 
+                    pageStudents.forEach(function(student, index) { 
+                        const slNo = startIndex + index + 1;
+                    %>
+                    <tr>
+                        <td class="text-center"><%= slNo %></td>
+                        <td class="text-center"><%= student.admissionNo || '-' %></td>
+                        <td><%= student.name %> <%= student.uid || '' %></td>
+                        <td class="text-center"><%= student.gender || '-' %></td>
+                        <td class="text-center"><%= student.dob || '-' %></td>
+                        <td><%= student.parentName %> <%= student.address || '' %></td>
+                        <td class="text-center"><%= student.religion || '-' %></td>
+                        <td><%= student.caste || '-' %></td>
+                        <td class="text-center"><%= student.category || '-' %></td>
+                        <td class="text-center"><%= student.aplBpl || '-' %></td>
+                        <td><%= student.motherName || '-' %> <%= student.phone || '' %></td>
+                    </tr>
+                    <% }); %>
+                    
+                    <% 
+                    const remainingRows = studentsPerPage - pageStudents.length;
+                    for (let i = 0; i < remainingRows; i++) {
+                    %>
+                    <!-- <tr>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td>-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td>-</td>
+                        <td class="text-center">-</td>
+                        <td>-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td>-</td>
+                    </tr> -->
+                    <% } %>
+                </tbody>
+            </table>
+        </div>
+        
+        <% if (page === totalPages - 1) { %>
+        <div class="footer">
+            <span class="total-students">Total Students: <%= students.length %></span>
+            <span class="generated-info">Generated on: <%= new Date().toLocaleDateString('en-IN') %></span>
+        </div>
+        <% } else { %>
+        <div class="footer" style="border-top: none;">
+            <!-- <span class="total-students">Continued on next page...</span>
+            <span class="generated-info">Page <%= page + 1 %> of <%= totalPages %></span> -->
+        </div>
+        <% } %>
+        <div class="page-number">Page <%= page + 1 %> of <%= totalPages %></div>
+    </div>
+</div>
+
+<% } %>
+
+</body>
+</html>

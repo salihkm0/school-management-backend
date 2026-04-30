@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: school-management-backend
+    runtime: node
+    plan: free
+    buildCommand: |
+      npm ci --production=false --legacy-peer-deps
+      npm remove puppeteer phantomjs-prebuilt || true
+      npm cache clean --force
+    startCommand: NODE_OPTIONS="--max-old-space-size=512 --max-http-header-size=16384" npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: MAX_FILE_SIZE
+        value: "5242880"
+      - key: RATE_LIMIT_WINDOW_MS
+        value: "900000"
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: "100"
+    healthCheckPath: /api/health
+    autoDeploy: true

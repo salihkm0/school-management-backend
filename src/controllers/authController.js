@@ -1,26 +1,90 @@
+// controllers/authController.js - Updated for phone login
 const User = require('../models/User');
 const Student = require('../models/Student');
 const Staff = require('../models/Staff');
+const Parent = require('../models/Parent');
+const { RecentActivity, ACTIVITY_TYPES, ENTITY_TYPES, SEVERITY } = require('../models/RecentActivity');
 const jwt = require('jsonwebtoken');
 const { sendEmail } = require('../services/emailService');
 const crypto = require('crypto');
+const { broadcastToUser, broadcastToRole } = require('../config/socket');
+
+// Helper function to create recent activity
+async function createRecentActivity({
+  title,
+  description,
+  activityType,
+  entityType,
+  entityId = null,
+  entityModel = null,
+  performedBy,
+  performedByName,
+  performedByRole,
+  details = {},
+  changes = {},
+  ipAddress = null,
+  userAgent = null,
+  severity = SEVERITY.INFO,
+  batchId = null
+}) {
+  try {
+    const activity = await RecentActivity.create({
+      title,
+      description,
+      activityType,
+      entityType,
+      entityId,
+      entityModel,
+      performedBy,
+      performedByName,
+      performedByRole,
+      details,
+      changes,
+      ipAddress,
+      userAgent,
+      severity,
+      batchId
+    });
+    
+    broadcastToRole('admin', 'recent_activity:created', { activity });
+    
+    return activity;
+  } catch (error) {
+    console.error('Error creating recent activity:', error);
+    return null;
+  }
+}
 
 exports.register = async (req, res) => {
   try {
     const { email, password, name, role, phone } = req.body;
 
-    const existingUser = await User.findOne({ email });
+    // Check if user exists by phone or email
+    const existingUser = await User.findOne({ 
+      $or: [{ phone }, { email }] 
+    });
+    
     if (existingUser) {
-      return res.status(400).json({ message: 'User already exists' });
+      if (existingUser.phone === phone) {
+        return res.status(400).json({ message: 'Phone number already registered' });
+      }
+      if (email && existingUser.email === email) {
+        return res.status(400).json({ message: 'Email already registered' });
+      }
     }
 
-    const user = await User.create({
-      email,
+    const userData = {
       password,
       name,
       role,
       phone
-    });
+    };
+    
+    if (email) {
+      userData.email = email;
+    }
+
+    const user = await User.create(userData);
 
     if (role === 'staff') {
       await Staff.create({
@@ -33,11 +97,15 @@ exports.register = async (req, res) => {
       });
     }
 
-    if (role === 'parent' && req.body.studentId) {
-      await Student.findByIdAndUpdate(
-        req.body.studentId,
-        { $addToSet: { parentIds: user._id } }
-      );
+    if (role === 'parent') {
+      await Parent.create({
+        userId: user._id,
+        fullName: name,
+        email: email || null,
+        phone: phone,
+        students: [],
+        profileCompleted: true
+      });
     }
 
     const token = user.generateAuthToken();
@@ -47,6 +115,25 @@ exports.register = async (req, res) => {
     user.refreshTokenExpire = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     await user.save();
 
+    await createRecentActivity({
+      title: `New User Registered: ${name}`,
+      description: `User ${name} (${phone}) registered with role: ${role}`,
+      activityType: ACTIVITY_TYPES.USER_REGISTERED,
+      entityType: ENTITY_TYPES.USER,
+      entityId: user._id,
+      entityModel: 'User',
+      performedBy: user._id,
+      performedByName: user.name,
+      performedByRole: user.role,
+      details: {
+        phone: user.phone,
+        email: user.email,
+        name: user.name,
+        role: user.role
+      },
+      severity: SEVERITY.SUCCESS
+    });
+
     res.status(201).json({
       success: true,
       token,
@@ -54,22 +141,40 @@ exports.register = async (req, res) => {
       user: {
         id: user._id,
         email: user.email,
+        phone: user.phone,
         name: user.name,
         role: user.role,
-        phone: user.phone,
         photoUrl: user.photoUrl
       }
     });
   } catch (error) {
+    console.error('Register error:', error);
     res.status(500).json({ message: error.message });
   }
 };
 
 exports.login = async (req, res) => {
   try {
-    const { email, password, rememberMe } = req.body;
+    const { email, phone, password, rememberMe } = req.body;
 
-    const user = await User.findOne({ email }).select('+password');
+    console.log("body :" , req.body)
+
+    console.log('Login attempt:', { email, phone });
+
+    let query = {};
+    if (email) {
+      query.email = email;
+    } else if (phone) {
+      query.phone = phone;
+    } else {
+      return res.status(400).json({ message: 'Email or phone number is required' });
+    }
+
+    console.log('Login query:', query);
+
+    const user = await User.findOne(query).select('+password');
+    console.log('User found:', user ? { id: user._id, phone: user.phone, email: user.email, role: user.role } : 'No user found');
+
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
@@ -79,9 +184,14 @@ exports.login = async (req, res) => {
     }
 
     const isMatch = await user.comparePassword(password);
+    console.log('Password match:', isMatch);
+
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
+
+    const ipAddress = req.ip || req.connection.remoteAddress;
+    const userAgent = req.headers['user-agent'];
 
     user.lastLogin = new Date();
     await user.save();
@@ -102,6 +212,10 @@ exports.login = async (req, res) => {
         additionalData.staff = staff;
       }
     } else if (user.role === 'parent') {
+      const parent = await Parent.findOne({ userId: user._id });
+      if (parent) {
+        additionalData.parent = parent;
+      }
       const children = await Student.find({ parentIds: user._id }).populate('classId', 'name section');
       additionalData.children = children;
     }
@@ -113,14 +227,15 @@ exports.login = async (req, res) => {
       user: {
         id: user._id,
         email: user.email,
+        phone: user.phone,
         name: user.name,
         role: user.role,
-        phone: user.phone,
         photoUrl: user.photoUrl
       },
       ...additionalData
     });
   } catch (error) {
+    console.error('Login error:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -165,6 +280,23 @@ exports.logout = async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
     if (user) {
+      await createRecentActivity({
+        title: `User Logout: ${user.name}`,
+        description: `User ${user.name} (${user.phone}) logged out`,
+        activityType: ACTIVITY_TYPES.USER_LOGOUT,
+        entityType: ENTITY_TYPES.USER,
+        entityId: user._id,
+        entityModel: 'User',
+        performedBy: user._id,
+        performedByName: user.name,
+        performedByRole: user.role,
+        details: {
+          phone: user.phone,
+          role: user.role
+        },
+        severity: SEVERITY.INFO
+      });
+      
       user.refreshToken = null;
       user.refreshTokenExpire = null;
       await user.save();
@@ -203,12 +335,26 @@ exports.forgotPassword = async (req, res) => {
       message
     });
 
+    await createRecentActivity({
+      title: `Password Reset Requested: ${user.name}`,
+      description: `Password reset was requested for user ${user.name}`,
+      activityType: ACTIVITY_TYPES.PASSWORD_RESET_REQUESTED,
+      entityType: ENTITY_TYPES.USER,
+      entityId: user._id,
+      entityModel: 'User',
+      performedBy: user._id,
+      performedByName: user.name,
+      performedByRole: user.role,
+      details: {
+        phone: user.phone,
+        resetTokenExpires: user.resetPasswordExpire
+      },
+      severity: SEVERITY.WARNING
+    });
+
     res.json({ success: true, message: 'Email sent' });
   } catch (error) {
-    User.resetPasswordToken = undefined;
-    User.resetPasswordExpire = undefined;
-    await User.save();
-
+    console.error('Forgot password error:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -234,6 +380,23 @@ exports.resetPassword = async (req, res) => {
     user.resetPasswordExpire = undefined;
     await user.save();
 
+    await createRecentActivity({
+      title: `Password Reset Completed: ${user.name}`,
+      description: `User ${user.name} reset their password successfully`,
+      activityType: ACTIVITY_TYPES.PASSWORD_CHANGED,
+      entityType: ENTITY_TYPES.USER,
+      entityId: user._id,
+      entityModel: 'User',
+      performedBy: user._id,
+      performedByName: user.name,
+      performedByRole: user.role,
+      details: {
+        phone: user.phone,
+        resetMethod: 'forgot_password'
+      },
+      severity: SEVERITY.SUCCESS
+    });
+
     res.json({ success: true, message: 'Password reset successful' });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -253,6 +416,30 @@ exports.changePassword = async (req, res) => {
     user.password = newPassword;
     await user.save();
 
+    await createRecentActivity({
+      title: `Password Changed: ${user.name}`,
+      description: `User ${user.name} changed their password`,
+      activityType: ACTIVITY_TYPES.PASSWORD_CHANGED,
+      entityType: ENTITY_TYPES.USER,
+      entityId: user._id,
+      entityModel: 'User',
+      performedBy: user._id,
+      performedByName: user.name,
+      performedByRole: user.role,
+      details: {
+        phone: user.phone,
+        resetMethod: 'manual_change'
+      },
+      severity: SEVERITY.INFO
+    });
+
+    if (user._id) {
+      broadcastToUser(user._id.toString(), 'password:changed', {
+        message: 'Your password has been changed successfully',
+        timestamp: new Date()
+      });
+    }
+
     res.json({ success: true, message: 'Password changed successfully' });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -268,6 +455,8 @@ exports.getMe = async (req, res) => {
       const staff = await Staff.findOne({ userId: user._id });
       additionalData.staff = staff;
     } else if (user.role === 'parent') {
+      const parent = await Parent.findOne({ userId: user._id });
+      additionalData.parent = parent;
       const children = await Student.find({ parentIds: user._id }).populate('classId', 'name section');
       additionalData.children = children;
     }

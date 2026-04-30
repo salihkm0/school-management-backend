@@ -1,3 +1,4 @@
+// routes/subjectRoutes.js
 const express = require('express');
 const router = express.Router();
 const { protect, authorize } = require('../middleware/auth');
@@ -12,29 +13,25 @@ const {
   getSubjectsByTeacher,
   getSubjectStats,
   bulkImportSubjects,
-  assignSubjectToClasses
+  assignSubjectToClasses,
+  getLanguageSubjects,
+  getSubjectsByTemplate
 } = require('../controllers/subjectController');
 
-// Public routes (with authentication)
 router.use(protect);
 
-// Stats route (admin only)
+router.get('/', validate(paginationQuery), getSubjects);
 router.get('/stats', authorize('admin'), getSubjectStats);
-
-// Bulk import (admin only)
-router.post('/bulk-import', authorize('admin'), bulkImportSubjects);
-
-// Get subjects by class or teacher
+router.get('/languages', getLanguageSubjects);
+router.get('/template/:className', getSubjectsByTemplate);
 router.get('/class/:classId', validate([idParam]), getSubjectsByClass);
 router.get('/teacher/:staffId', validate([idParam]), getSubjectsByTeacher);
+router.get('/:id', validate([idParam]), getSubject);
 
-// Assign subject to classes (admin only)
+router.post('/', authorize('admin'), createSubject);
+router.post('/bulk-import', authorize('admin'), bulkImportSubjects);
 router.post('/:id/assign-to-classes', authorize('admin'), validate([idParam]), assignSubjectToClasses);
 
-// CRUD operations
-router.get('/', validate(paginationQuery), getSubjects);
-router.get('/:id', validate([idParam]), getSubject);
-router.post('/', authorize('admin'), createSubject);
 router.put('/:id', authorize('admin'), validate([idParam]), updateSubject);
 router.delete('/:id', authorize('admin'), validate([idParam]), deleteSubject);
 

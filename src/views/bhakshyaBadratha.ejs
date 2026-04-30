@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>ഭക്ഷ്യ സുരക്ഷാ അലവൻസ് - <%= className %> <%= academicYear %></title>
+
+<style>
+@page {
+    size: A4 portrait;
+    margin: 3mm;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 210mm;
+    font-family: "Times New Roman", "Arial", "Noto Sans Malayalam", serif;
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.page-container {
+    width: 204mm;
+    min-height: 287mm;
+    margin: 0 auto 3mm auto;
+    padding: 5mm 3mm;
+    border: 2px solid #000;
+    position: relative;
+    page-break-after: always;
+    box-sizing: border-box;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+}
+
+.page-container:last-child {
+    page-break-after: auto;
+    margin-bottom: 0;
+}
+
+/* Watermark */
+.watermark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-45deg);
+    font-size: 60px;
+    font-weight: bold;
+    color: rgba(0, 0, 0, 0.04);
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 1;
+    text-transform: uppercase;
+    letter-spacing: 10px;
+    font-family: 'Times New Roman', serif;
+    width: 100%;
+    text-align: center;
+}
+
+.content-layer {
+    position: relative;
+    z-index: 2;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+/* Main content area */
+.main-content {
+    flex: 1;
+}
+
+/* Header Section */
+.header-section {
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+.main-title {
+    font-size: 14px;
+    font-weight: 900;
+    margin-bottom: 3px;
+}
+
+.sub-title {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 5px;
+}
+
+.class-info {
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 5px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid #000;
+}
+
+/* Main Table */
+.main-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8.5px;
+    margin-top: 3px;
+}
+
+.main-table th,
+.main-table td {
+    border: 1.5px solid #000;
+    padding: 5px 2px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.main-table th {
+    background: #f0f0f0;
+    font-weight: 900;
+    font-size: 7.5px;
+    padding: 4px 2px;
+}
+
+.main-table td {
+    background: transparent;
+}
+
+/* Column widths */
+.main-table .sl-col { width: 5%; }
+.main-table .name-col { width: 14%; text-align: left; padding-left: 3px; }
+.main-table .adm-col { width: 8%; }
+.main-table .parent-col { width: 16%; text-align: left; padding-left: 3px; }
+.main-table .uid-col { width: 13%; }
+.main-table .qty-col { width: 8%; }
+.main-table .kit-col { width: 12%; }
+.main-table .sign-col { width: 24%; }
+
+/* Bottom Section */
+.bottom-section {
+    margin-top: auto;
+    padding-top: 10px;
+}
+
+/* Signature Section */
+.signature-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 5px;
+}
+
+.signature-left {
+    font-size: 10px;
+    font-weight: bold;
+}
+
+.signature-right {
+    font-size: 10px;
+    font-weight: bold;
+    text-align: right;
+}
+
+.signature-line {
+    display: inline-block;
+    width: 150px;
+    border-bottom: 1px solid #000;
+    margin-left: 5px;
+}
+
+/* Footer */
+.footer {
+    padding-top: 8px;
+    border-top: 1px solid #000;
+    font-size: 10px;
+    text-align: center;
+    font-weight: bold;
+}
+
+.page-number {
+    text-align: center;
+}
+
+.total-students {
+    float: left;
+    font-weight: 700;
+    font-size: 9px;
+}
+
+.generated-info {
+    float: right;
+    font-size: 8px;
+}
+
+/* Print optimization */
+@media print {
+    html, body {
+        width: 210mm;
+        margin: 0;
+        padding: 0;
+    }
+    
+    th {
+        background: #f0f0f0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    td {
+        background: transparent !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .page-container {
+        border: 2px solid #000;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        page-break-after: always;
+    }
+    
+    .watermark {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<%
+const studentsPerPage = 35;
+const totalPages = Math.ceil(students.length / studentsPerPage);
+const displayAcademicYear = typeof academicYear !== 'undefined' ? academicYear : '2025-26';
+const displayClassName = typeof className !== 'undefined' ? className : '8 A';
+
+for (let page = 0; page < totalPages; page++) {
+    const startIndex = page * studentsPerPage;
+    const endIndex = Math.min(startIndex + studentsPerPage, students.length);
+    const pageStudents = students.slice(startIndex, endIndex);
+    const isFirstPage = page === 0;
+    const isLastPage = page === totalPages - 1;
+%>
+
+<div class="page-container">
+    
+    <div class="watermark">
+        PPM HSS KOTTUKKARA
+    </div>
+    
+    <div class="content-layer">
+        
+        <div class="main-content">
+            
+            <div class="header-section">
+                <div class="main-title">ഭക്ഷ്യ സുരക്ഷാ അലവൻസ് (അരി + ഭക്ഷ്യകിറ്റ്) വിതരണം <%= displayAcademicYear %></div>
+                <div class="sub-title">അക്സെപ്റ്റൻസ് റെജിസ്റ്റർ</div>
+                <div class="sub-title">പി.പി.എം.എച്ച്.എസ്.എസ് കൊട്ടുക്കര</div>
+            </div>
+            
+            <div class="class-info">ക്ലാസ്സ് - <%= displayClassName %> <%= displayAcademicYear %></div>
+            
+            <table class="main-table">
+                <thead>
+                    <tr>
+                        <th class="sl-col">ക്രമ<br/>നമ്പർ</th>
+                        <th class="name-col">പേര്</th>
+                        <th class="adm-col">അഡ്മിഷൻ<br/>നമ്പർ</th>
+                        <th class="parent-col">രക്ഷിതാവിന്റെ<br/>പേര്</th>
+                        <th class="uid-col">UID</th>
+                        <th class="qty-col">കൈപ്പറ്റിയ<br/>അരിയുടെ അളവ്</th>
+                        <th class="kit-col">ഏത് തരം കിറ്റ് ആണ്<br/>കൈപ്പറ്റിയത്<br/>(കിറ്റ് എ/ബി/സി)</th>
+                        <th class="sign-col">രക്ഷിതാവിന്റെ ഒപ്പ്<br/>(തീയതിയോടു കൂടി)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% pageStudents.forEach(function(student, index) { 
+                        const slNo = startIndex + index + 1;
+                    %>
+                    <tr>
+                        <td><%= slNo %></td>
+                        <td style="text-align: left; padding-left: 3px;"><%= student.name %></td>
+                        <td><%= student.admissionNo %></td>
+                        <td style="text-align: left; padding-left: 3px;"><%= student.parentName %></td>
+                        <td><%= student.uid || '-' %></td>
+                        <td>4 Kg</td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                    <% }); %>
+                    
+                    <% 
+                    const remainingRows = studentsPerPage - pageStudents.length;
+                    for (let i = 0; i < remainingRows; i++) {
+                    %>
+                    <!-- <tr>
+                        <td>-</td>
+                        <td style="text-align: left;">-</td>
+                        <td>-</td>
+                        <td style="text-align: left;">-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td></td>
+                        <td></td>
+                    </tr> -->
+                    <% } %>
+                </tbody>
+            </table>
+            
+        </div>
+        
+        <% if (isLastPage) { %>
+        <div class="bottom-section">
+            <div class="signature-section">
+                <div class="signature-left">
+                    ക്ലാസ് ടീച്ചറുടെ പേരും ഒപ്പും : <span class="signature-line"></span>
+                </div>
+                <div class="signature-right">
+                    ഹെഡ്മാസ്റ്ററുടെ ഒപ്പ് : <span class="signature-line"></span>
+                </div>
+            </div>
+        </div>
+        <% } %>
+        
+        <div class="footer">
+            <span class="total-students">ആകെ വിദ്യാർത്ഥികൾ: <%= students.length %></span>
+            <span class="page-number">പേജ് <%= page + 1 %> / <%= totalPages %></span>
+            <span class="generated-info">Generated: <%= new Date().toLocaleDateString('en-IN') %></span>
+        </div>
+        
+    </div>
+</div>
+
+<% } %>
+
+</body>
+</html>

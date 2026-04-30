@@ -5,8 +5,8 @@ const jwt = require('jsonwebtoken');
 const UserSchema = new mongoose.Schema({
   email: {
     type: String,
-    required: [true, 'Email is required'],
     unique: true,
+    sparse: true,  // Allows null/undefined values
     lowercase: true,
     trim: true,
     match: [/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email']
@@ -29,7 +29,9 @@ const UserSchema = new mongoose.Schema({
   },
   phone: {
     type: String,
-    trim: true
+    trim: true,
+    required: [true, 'Phone number is required'],
+    unique: true,  // Phone should be unique
   },
   photoUrl: {
     type: String,
@@ -51,6 +53,10 @@ const UserSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Add index for phone for faster queries
+UserSchema.index({ phone: 1 });
+UserSchema.index({ email: 1 }, { sparse: true });
+
 UserSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
   
@@ -69,7 +75,7 @@ UserSchema.methods.comparePassword = async function(enteredPassword) {
 
 UserSchema.methods.generateAuthToken = function() {
   return jwt.sign(
-    { id: this._id, role: this.role, email: this.email },
+    { id: this._id, role: this.role, email: this.email, phone: this.phone },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRE }
   );

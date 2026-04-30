@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>MID DAY MEAL SCHEME - Beneficiary List</title>
+
+<style>
+@page {
+    size: A4 portrait;
+    margin: 5mm;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 210mm;
+    font-family: "Times New Roman", serif;
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.page-container {
+    width: 200mm;
+    min-height: 277mm;
+    margin: 0 auto 5mm auto;
+    padding: 5mm 3mm;
+    border: 2px solid #000;
+    position: relative;
+    page-break-after: always;
+    box-sizing: border-box;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+}
+
+.page-container:last-child {
+    page-break-after: auto;
+    margin-bottom: 0;
+}
+
+/* Watermark */
+.watermark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-45deg);
+    font-size: 60px;
+    font-weight: bold;
+    color: rgba(0, 0, 0, 0.045);
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 1;
+    text-transform: uppercase;
+    letter-spacing: 10px;
+    font-family: 'Times New Roman', serif;
+    width: 100%;
+    text-align: center;
+}
+
+.content-layer {
+    position: relative;
+    z-index: 2;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+/* Header */
+.header {
+    margin-bottom: 8px;
+}
+
+.header-title {
+    text-align: center;
+    font-size: 16px;
+    font-weight: 900;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    padding-bottom: 5px;
+    border-bottom: 2px solid #000;
+}
+
+.header-info {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 5px;
+    font-size: 10px;
+}
+
+.header-info td {
+    border: 1.5px solid #000;
+    padding: 4px 5px;
+    font-weight: bold;
+}
+
+.page-number {
+    float: right;
+    font-size: 9px;
+    margin-top: 3px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #8e8e8e;
+}
+
+/* Table */
+.table-container {
+    margin-top: 5px;
+    flex: 1;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8.5px;
+}
+
+th, td {
+    border: 1px solid #000;
+    padding: 4px 2px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+th {
+    background: #f0f0f0;
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: 8px;
+    padding: 5px 2px;
+}
+
+td {
+    background: transparent;
+}
+
+/* Main table column widths */
+.main-table th:nth-child(1), .main-table td:nth-child(1) { width: 5%; }
+.main-table th:nth-child(2), .main-table td:nth-child(2) { width: 7%; }
+.main-table th:nth-child(3), .main-table td:nth-child(3) { width: 18%; text-align: left; padding-left: 4px; }
+.main-table th:nth-child(4), .main-table td:nth-child(4) { width: 13%; }
+.main-table th:nth-child(5), .main-table td:nth-child(5) { width: 4%; }
+.main-table th:nth-child(6), .main-table td:nth-child(6) { width: 8%; }
+.main-table th:nth-child(7), .main-table td:nth-child(7) { width: 5%; }
+
+/* Bottom Section - Fixed to bottom */
+.bottom-section {
+    margin-top: auto;
+    padding-top: 10px;
+}
+
+/* Summary Table */
+.summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8px;
+}
+
+.summary-table th,
+.summary-table td {
+    border: 1.5px solid #000;
+    padding: 4px 2px;
+    text-align: center;
+    vertical-align: middle;
+    background: transparent;
+}
+
+.summary-table th {
+    background: #f0f0f0;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+/* Summary column widths */
+.summary-table .label-col { width: 3%; font-weight: 900; }
+
+.summary-table .st-b { width: 2.2%; }
+.summary-table .st-g { width: 2.2%; }
+.summary-table .st-t { width: 2.2%; }
+
+.summary-table .sc-b { width: 2.2%; }
+.summary-table .sc-g { width: 2.2%; }
+.summary-table .sc-t { width: 2.2%; }
+
+.summary-table .obc-b { width: 2.2%; }
+.summary-table .obc-g { width: 2.2%; }
+.summary-table .obc-t { width: 2.2%; }
+
+.summary-table .gen-b { width: 2.2%; }
+.summary-table .gen-g { width: 2.2%; }
+.summary-table .gen-t { width: 2.2%; }
+
+.summary-table .meal-boys { width: 4%; }
+.summary-table .meal-girls { width: 4%; }
+.summary-table .meal-total { width: 4%; }
+
+/* Nutrition Table */
+.nutrition-table {
+    margin-top: 8px;
+    width: 40%;
+    border-collapse: collapse;
+    font-size: 8px;
+}
+
+.nutrition-table th,
+.nutrition-table td {
+    border: 1.5px solid #000;
+    padding: 5px 3px;
+    text-align: center;
+    background: transparent;
+}
+
+.nutrition-table th {
+    background: #f0f0f0;
+    font-weight: 900;
+}
+
+/* Signatures */
+.signatures {
+    margin-top: 15px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.signature-item {
+    text-align: center;
+    width: 140px;
+    font-size: 9px;
+    font-weight: bold;
+}
+
+.signature-line {
+    margin-top: 25px;
+    border-top: 1px solid #000;
+    width: 100%;
+}
+
+/* Footer */
+.footer {
+    margin-top: 8px;
+    padding-top: 5px;
+    border-top: 1px solid #000;
+    overflow: hidden;
+    font-size: 9px;
+}
+
+.total-students {
+    float: left;
+    font-weight: 700;
+}
+
+.generated-info {
+    float: right;
+}
+
+/* Print optimization */
+@media print {
+    html, body {
+        width: 210mm;
+        margin: 0;
+        padding: 0;
+    }
+    
+    th {
+        background: #f0f0f0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    td {
+        background: transparent !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .page-container {
+        border: 2px solid #000;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        page-break-after: always;
+    }
+    
+    .watermark {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<%
+const studentsPerPage = 40;
+const totalPages = Math.ceil(students.length / studentsPerPage);
+const displayAcademicYear = typeof academicYear !== 'undefined' ? academicYear : '2025-26';
+const displaySchoolCode = typeof schoolCode !== 'undefined' ? schoolCode : '19057';
+const displaySchoolName = typeof schoolName !== 'undefined' ? schoolName : 'PPMHSS KOTTUKKARA';
+const displayClassName = typeof className !== 'undefined' ? className : '8 A';
+
+// Calculate category counts
+const categoryCounts = {
+    ST: { B: 0, G: 0, T: 0 },
+    SC: { B: 0, G: 0, T: 0 },
+    OBC: { B: 0, G: 0, T: 0 },
+    General: { B: 0, G: 0, T: 0 }
+};
+
+students.forEach(function(student) {
+    let category = student.category || 'General';
+    if (category === 'ST') category = 'ST';
+    else if (category === 'SC') category = 'SC';
+    else if (category === 'OBC') category = 'OBC';
+    else category = 'General';
+    
+    const gender = student.gender || 'F';
+    
+    if (categoryCounts[category]) {
+        if (gender === 'M' || gender === 'B') {
+            categoryCounts[category].B++;
+        } else {
+            categoryCounts[category].G++;
+        }
+        categoryCounts[category].T = categoryCounts[category].B + categoryCounts[category].G;
+    }
+});
+
+const totalBoys = students.filter(s => s.gender === 'M' || s.gender === 'B').length;
+const totalGirls = students.filter(s => s.gender === 'F' || s.gender === 'G').length;
+const grandTotal = students.length;
+
+for (let page = 0; page < totalPages; page++) {
+    const startIndex = page * studentsPerPage;
+    const endIndex = Math.min(startIndex + studentsPerPage, students.length);
+    const pageStudents = students.slice(startIndex, endIndex);
+    const isLastPage = page === totalPages - 1;
+%>
+
+<div class="page-container">
+    
+    <div class="watermark">
+        PPM HSS KOTTUKKARA
+    </div>
+    
+    <div class="content-layer">
+        
+        <div class="header">
+            <div class="header-title">MID DAY MEAL SCHEME <%= displayAcademicYear %> - BENEFICIARY LIST</div>
+            
+            <table class="header-info">
+                <tr>
+                    <td colspan="2">SCHOOL CODE</td>
+                    <td colspan="2"><%= displaySchoolCode %></td>
+                    <td colspan="2">SCHOOL NAME</td>
+                    <td colspan="2"><%= displaySchoolName %></td>
+                    <td colspan="2">CLASS</td>
+                    <td colspan="2"><%= displayClassName %> <%= displayAcademicYear %></td>
+                    <td rowspan="2" style="text-align: center; vertical-align: middle;">Supply.<br>Ntrn.<br>Food</td>
+                </tr>
+            </table>
+        </div>
+        
+        
+        
+        <div class="table-container">
+            <table class="main-table">
+                <thead>
+                    <tr>
+                        <th>Sl no</th>
+                        <th>Adm No</th>
+                        <th>Name of Pupil</th>
+                        <th>UID/EID</th>
+                        <th>B/G</th>
+                        <th>Category</th>
+                        <th>Y/N</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% pageStudents.forEach(function(student, index) { 
+                        const slNo = startIndex + index + 1;
+                        const gender = (student.gender === 'M' || student.gender === 'B') ? 'B' : 'G';
+                    %>
+                    <tr>
+                        <td><%= slNo %></td>
+                        <td><%= student.admissionNo %></td>
+                        <td style="text-align: left; padding-left: 4px;"><%= student.name %></td>
+                        <td><%= student.uid || '-' %></td>
+                        <td><%= gender %></td>
+                        <td><%= student.category || 'General' %></td>
+                        <td></td>
+                    </tr>
+                    <% }); %>
+                </tbody>
+            </table>
+        </div>
+        
+        <% if (isLastPage) { %>
+        <!-- Bottom Section - Fixed to bottom -->
+        <div class="bottom-section">
+            <!-- Summary Table -->
+            <table class="summary-table">
+                <thead>
+                    <tr>
+                        <th colspan="2"></th>
+                        <th colspan="3">ST</th>
+                        <th colspan="3">SC</th>
+                        <th colspan="3">OBC</th>
+                        <th colspan="3">GENERAL</th>
+                        <th colspan="3">Total Meal Student</th>
+                    </tr>
+                    <tr>
+                        <th colspan="2"></th>
+                        <!-- <th></th> -->
+                        <th>B</th><th>G</th><th>T</th>
+                        <th>B</th><th>G</th><th>T</th>
+                        <th>B</th><th>G</th><th>T</th>
+                        <th>B</th><th>G</th><th>T</th>
+                        <th>Boys</th><th>Girls</th><th>Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="label-col" style="font-weight: 900;" colspan="2">RS</td>
+                        <!-- <td></td> -->
+                        <td></td><td></td><td></td>
+                        <td></td><td></td><td></td>
+                        <td></td><td></td><td></td>
+                        <td></td><td></td><td></td>
+                        <td></td><td></td><td></td>
+                    </tr>
+                    <tr>
+                        <td class="label-col" style="font-weight: 900;" colspan="2">FS</td>
+                        <!-- <td></td> -->
+                        <td></td><td></td><td></td>
+                        <td></td><td></td><td></td>
+                        <td></td><td></td><td></td>
+                        <td></td><td></td><td></td>
+                        <td></td><td></td><td></td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <!-- Total Nutrition Students Table -->
+            <table class="nutrition-table">
+                <thead>
+                    <tr>
+                        <th colspan="3">Total Nutrition Students</th>
+                    </tr>
+                    <tr>
+                        <th>Boys</th>
+                        <th>Girls</th>
+                        <th>Grand Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="height: 20px;"></td>
+                        <td style="height: 20px;"></td>
+                        <td style="height: 20px;"></td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <!-- Signatures -->
+            <div class="signatures">
+                <div class="signature-item">
+                    <div>Class Teacher</div>
+                    <div class="signature-line"></div>
+                </div>
+                <div class="signature-item">
+                    <div>Headmaster</div>
+                    <div class="signature-line"></div>
+                </div>
+                <div class="signature-item">
+                    <div>PTA President</div>
+                    <div class="signature-line"></div>
+                </div>
+            </div>
+            
+            <div class="footer">
+                <span class="total-students">Total Students: <%= students.length %></span>
+                <span class="generated-info">Generated on: <%= new Date().toLocaleDateString('en-IN') %></span>
+            </div>
+        </div>
+        <% } else { %>
+        <!-- <div class="footer" style="margin-top: auto; border-top: none;">
+            <span class="total-students">Continued on next page...</span>
+            <span class="generated-info">Page <%= page + 1 %> of <%= totalPages %></span>
+        </div> -->
+        <% } %>
+        
+    </div>
+    <div class="page-number">Page <%= page + 1 %> of <%= totalPages %></div>
+</div>
+
+<% } %>
+
+</body>
+</html>

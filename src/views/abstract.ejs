@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Abstract of Admission Register</title>
+
+<style>
+@page {
+    size: A4 portrait;
+    margin: 5mm;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 210mm;
+    font-family: "Times New Roman", serif;
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.page-container {
+    width: 200mm;
+    min-height: 277mm;
+    margin: 0 auto;
+    padding: 10mm 8mm;
+    border: 2px solid #000;
+    position: relative;
+    box-sizing: border-box;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Logo Watermark */
+.logo-watermark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.logo-watermark img {
+    width: 120mm;
+    height: 120mm;
+    object-fit: contain;
+    opacity: 0.04;
+}
+
+.content-layer {
+    position: relative;
+    z-index: 2;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+/* Header Section */
+.header-section {
+    text-align: center;
+    margin-bottom: 15px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #000;
+}
+
+.school-logo {
+    width: 22mm;
+    height: 22mm;
+    margin: 0 auto 5px;
+}
+
+.school-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.school-name {
+    font-size: 14px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+}
+
+.arabic-text {
+    font-size: 10px;
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: #333;
+}
+
+.abstract-title {
+    font-size: 16px;
+    font-weight: 900;
+    text-transform: uppercase;
+    text-decoration: underline;
+    margin-top: 5px;
+}
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    font-size: 11px;
+    line-height: 1.8;
+}
+
+/* Field Rows - Using table for perfect alignment */
+.field-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.field-table tr {
+    border-bottom: 1px dotted #ccc;
+}
+
+.field-table td {
+    padding: 4px 0;
+    vertical-align: top;
+}
+
+.field-number {
+    width: 25px;
+    font-weight: 700;
+    vertical-align: top;
+    padding-right: 5px;
+}
+
+.field-label {
+    width: 210px;
+    font-weight: 700;
+    vertical-align: top;
+}
+
+.field-colon {
+    width: 15px;
+    text-align: center;
+    vertical-align: top;
+}
+
+.field-value {
+    font-weight: 400;
+    vertical-align: top;
+}
+
+.field-value strong {
+    font-weight: 700;
+}
+
+/* Indented fields */
+.indent-field .field-number {
+    visibility: hidden;
+}
+
+.indent-field .field-label {
+    padding-left: 25px;
+}
+
+/* Bottom Section */
+.bottom-section {
+    margin-top: auto;
+    padding-top: 15px;
+}
+
+/* Signature Section */
+.signature-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-top: 20px;
+    margin-bottom: 50px;
+}
+
+.station-date {
+    font-size: 11px;
+}
+
+.signature-item {
+    text-align: start;
+    width: 230px;
+}
+
+.signature-line {
+    margin-top: 25px;
+    border-top: 1.5px solid #000;
+    width: 100%;
+}
+
+.signature-label {
+    font-size: 11px;
+    font-weight: bold;
+    margin-top: 5px;
+}
+
+/* Footer */
+.footer {
+    margin-top: 8px;
+    padding-top: 5px;
+    font-size: 8px;
+    color: #666;
+    text-align: right;
+    border-top: 1px solid #ccc;
+}
+
+/* Print optimization */
+@media print {
+    html, body {
+        width: 210mm;
+        margin: 0;
+        padding: 0;
+    }
+    
+    .page-container {
+        border: 2px solid #000;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .logo-watermark img {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<%
+// Define all variables FIRST - with safe defaults
+const schoolLogo = typeof schoolLogoUrl !== 'undefined' ? schoolLogoUrl : 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
+
+const studentData = typeof student !== 'undefined' && student ? student : { 
+    name: 'ISHA MINNA. M',
+    admissionNo: '41317',
+    parentName: 'MUHAMMED IQBAL MADATHIL',
+    parentRelation: 'Father',
+    address: 'MADATHIL HOUSE',
+    postOffice: 'KONDOTTY',
+    previousSchool: '-',
+    previousClass: '-',
+    admissionDate: '08/05/2025',
+    dob: '29/08/2011',
+    religion: 'Islam',
+    caste: 'Mappila',
+    category: 'OBC',
+    admissionClass: '8',
+    leavingClass: 'Still on the Roll',
+    tcNo: '-',
+    tcDate: '-',
+    tcGrantedNo: 'NA',
+    tcGrantedDate: 'NA',
+    leavingReason: 'NA',
+    vaccinationDate: '',
+    identificationMarks: 'A BLACK MOLE ON THE OUTER PALM',
+    remarks: '',
+    gender: 'F'
+};
+
+const schoolNameDisplay = typeof schoolName !== 'undefined' ? schoolName : 'PPMHSS KOTTUKKARA';
+const abstractDateDisplay = typeof abstractDate !== 'undefined' ? abstractDate : new Date().toLocaleDateString('en-IN');
+const stationDisplay = typeof station !== 'undefined' ? station : 'KOTTUKKARA';
+
+// Determine gender for pronoun
+const gender = studentData.gender || 'F';
+%>
+
+<div class="page-container">
+    
+    <!-- Logo Watermark -->
+    <div class="logo-watermark">
+        <img src="<%= schoolLogo %>" alt="Watermark">
+    </div>
+    
+    <div class="content-layer">
+        
+        <!-- Header Section -->
+        <div class="header-section">
+            <div class="school-logo">
+                <img src="<%= schoolLogo %>" alt="School Logo">
+            </div>
+            <div class="school-name">P.P.M.H.S.S. KOTTUKKARA</div>
+            <!-- <div class="arabic-text">العلم نور &nbsp;&nbsp; العلم نور</div> -->
+            <div class="abstract-title">ABSTRACT OF ADMISSION REGISTER</div>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="main-content">
+            
+            <table class="field-table">
+                <!-- 1. Admission no -->
+                <tr>
+                    <td class="field-number">1.</td>
+                    <td class="field-label">Admission no</td>
+                    <td class="field-colon">:</td>
+                    <td class="field-value"><strong><%= studentData.admissionNo %></strong></td>
+                </tr>
+                
+                <!-- 2. Name of School -->
+                <tr>
+                    <td class="field-number">2.</td>
+                    <td class="field-label">Name of School</td>
+                    <td class="field-colon">:</td>
+                    <td class="field-value"><strong><%= schoolNameDisplay %></strong></td>
+                </tr>
+                
+                <!-- 3. Name of Pupil -->
+                <tr>
+                    <td class="field-number">3.</td>
+                    <td class="field-label">Name of Pupil</td>
+                    <td class="field-colon">:</td>
+                    <td class="field-value"><strong><%= studentData.name %></strong></td>
+                </tr>
+                
+                <!-- 4. Parents/Guardian's Name -->
+                <tr>
+                    <td class="field-number">4.</td>
+                    <td class="field-label">Parents/Guardian's Name and relationship</td>
+                    <td class="field-colon">:</td>
+                    <td class="field-value"><strong><%= studentData.parentName %> (<%= studentData.parentRelation %>)</strong></td>
+                </tr>
+                
+                <!-- Address -->
+                <tr class="indent-field">
+                    <td class="field-number"></td>
+                    <td class="field-label">with the pupil Address</td>
+                    <td class="field-colon">:</td>
+                    <td class="field-value"><strong><%= studentData.address %> :<%= studentData.postOffice %></strong></td>
+                </tr>
+                
+                <!-- 5. School previously attended -->
+                <tr>
+                    <td class="field-number">5.</td>
+                    <td class="field-label">School previously attended and the</td>
+                    <td class="field-colon">:</td>
+                    <td class="field-value"><strong><%= studentData.previousSchool %></strong></td>
+                </tr>
+                
+                <!-- period spend in each class -->
+                <tr class="indent-field">
+                    <td class="field-number"></td>
+                    <td class="field-label">period spend in each class</td>
+                    <td class="field-colon">:</td>
+                    <td class="field-value"><strong><%= studentData.previousClass %></strong></td>
+                </tr>
+                
+                <!-- 6. Date of admission -->
+                <tr>
+                    <td class="field-number">6.</td>
+                    <td class="field-label">Date of admission</td>
+                    <td class="field-colon">:</td>
+                    <td class="field-value"><strong><%= studentData.admissionDate %></strong></td>
+                </tr>
+                
+                <!-- 7. Date of birth -->
+                <tr>
+                    <td class="field-number">7.</td>
+                    <td class="field-label">Date of birth according to admission</td>
+                    <td class="field-colon">:</td>
+                    <td class="field-value"><strong><%= studentData.dob %></strong></td>
+                </tr>
+                
+                <!-- register -->
+                <tr class="indent-field">
+                    <td class="field-number"></td>
+                    <td class="field-label">register</td>
+                    <td class="field-colon"></td>
+                    <td class="field-value"></td>
+                </tr>
+                
+                <!-- 8. Religion and Caste -->
+                <tr>
+                    <td class="field-number">8.</td>
+                    <td class="field-label">Religion and Caste</td>
+                    <td class="field-colon">:</td>
+                    <td class="field-value"><strong><%= studentData.religion %> - <%= studentData.caste %></strong></td>
+                </tr>
+                
+                <!-- 9. Scheduled Tribes / OBC -->
+                <tr>
+                    <td class="field-number">9.</td>
+                    <td class="field-label">Does the Pupil belongs to scheduled Tribes</td>
+                    <td class="field-colon">:</td>
+                    <td class="field-value"><strong><%= studentData.category %> or Other backward communities</strong></td>
+                </tr>
+                
+                <!-- 10. Standard on admission -->
+                <tr>
+                    <td class="field-number">10.</td>
+                    <td class="field-label">Standard on admission</td>
+                    <td class="field-colon">:</td>
+                    <td class="field-value"><strong><%= studentData.admissionClass %></strong></td>
+                </tr>
+                
+                <!-- 11. Standard on leaving -->
+                <tr>
+                    <td class="field-number">11.</td>
+                    <td class="field-label">Standard on leaving</td>
+                    <td class="field-colon">:</td>
+                    <td class="field-value"><strong><%= studentData.leavingClass %></strong></td>
+                </tr>
+                
+                <!-- 12. TC produced on admission -->
+                <tr>
+                    <td class="field-number">12.</td>
+                    <td class="field-label">No and Date of Transfer Certificate</td>
+                    <td class="field-colon">:</td>
+                    <td class="field-value"><strong><%= studentData.tcNo %></strong></td>
+                </tr>
+                
+                <tr class="indent-field">
+                    <td class="field-number"></td>
+                    <td class="field-label">produced on admission</td>
+                    <td class="field-colon">:</td>
+                    <td class="field-value"><strong><%= studentData.tcDate %></strong></td>
+                </tr>
+                
+                <!-- 13. TC granted on leaving -->
+                <tr>
+                    <td class="field-number">13.</td>
+                    <td class="field-label">No and Date of Transfer Certificate granted</td>
+                    <td class="field-colon">:</td>
+                    <td class="field-value"><strong><%= studentData.tcGrantedNo %></strong></td>
+                </tr>
+                
+                <tr class="indent-field">
+                    <td class="field-number"></td>
+                    <td class="field-label">on leaving</td>
+                    <td class="field-colon">:</td>
+                    <td class="field-value"><strong><%= studentData.tcGrantedDate %></strong></td>
+                </tr>
+                
+                <!-- 14. Reason for leaving -->
+                <tr>
+                    <td class="field-number">14.</td>
+                    <td class="field-label">Reason for leaving</td>
+                    <td class="field-colon">:</td>
+                    <td class="field-value"><strong><%= studentData.leavingReason %></strong></td>
+                </tr>
+                
+                <!-- 15. Date of vaccination -->
+                <tr>
+                    <td class="field-number">15.</td>
+                    <td class="field-label">Date of vaccination</td>
+                    <td class="field-colon">:</td>
+                    <td class="field-value"><strong><%= studentData.vaccinationDate || '' %></strong></td>
+                </tr>
+                
+                <!-- 16. Identification marks -->
+                <tr>
+                    <td class="field-number">16.</td>
+                    <td class="field-label">Identification marks if any</td>
+                    <td class="field-colon">:</td>
+                    <td class="field-value"><strong><%= studentData.identificationMarks %></strong></td>
+                </tr>
+                
+                <!-- 17. Remarks -->
+                <tr>
+                    <td class="field-number">17.</td>
+                    <td class="field-label">Remarks</td>
+                    <td class="field-colon">:</td>
+                    <td class="field-value"><strong><%= studentData.remarks || '' %></strong></td>
+                </tr>
+            </table>
+            
+        </div>
+        
+        <!-- Bottom Section -->
+        <div class="bottom-section">
+            
+            <!-- Signature Section -->
+            <div class="signature-section">
+                <div class="station-date">
+                    Station: <strong><%= stationDisplay %></strong><br/>
+                    Date: <strong><%= abstractDateDisplay %></strong>
+                </div>
+                <div class="signature-item">
+                    <div class="signature-label">Head master</div>
+                    <div class="signature-line"></div>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="footer">
+                Generated on: <%= new Date().toLocaleDateString('en-IN') %>
+            </div>
+            
+        </div>
+        
+    </div>
+</div>
+
+</body>
+</html>

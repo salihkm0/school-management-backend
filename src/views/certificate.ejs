@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Certificate - Student</title>
+
+<style>
+@page {
+    size: A4 portrait;
+    margin: 5mm;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 210mm;
+    font-family: "Times New Roman", serif;
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.page-container {
+    width: 200mm;
+    min-height: 277mm;
+    margin: 0 auto;
+    padding: 12mm 10mm;
+    border: 3px solid #1a1a1a;
+    position: relative;
+    box-sizing: border-box;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Decorative Border */
+.page-container::before {
+    content: '';
+    position: absolute;
+    top: 3mm;
+    left: 3mm;
+    right: 3mm;
+    bottom: 3mm;
+    border: 1px solid #999;
+    pointer-events: none;
+}
+
+/* Logo Watermark */
+.logo-watermark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.logo-watermark img {
+    width: 120mm;
+    height: 120mm;
+    object-fit: contain;
+    opacity: 0.04;
+}
+
+.content-layer {
+    position: relative;
+    z-index: 2;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+/* Header Section - At Top */
+.header-section {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.school-logo {
+    width: 28mm;
+    height: 28mm;
+    margin: 0 auto 8px;
+}
+
+.school-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.school-name {
+    font-size: 15px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 3px;
+    line-height: 1.4;
+}
+
+/* Middle Content - Centered */
+.middle-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.certificate-title {
+    font-size: 32px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 6px;
+    margin-bottom: 30px;
+    text-decoration: underline;
+    text-underline-offset: 8px;
+    text-align: center;
+}
+
+/* Certificate Content */
+.certificate-content {
+    font-size: 18px;
+    line-height: 2.4;
+    text-align: center;
+    margin-bottom: 40px;
+    padding: 0 15px;
+}
+
+.student-name {
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 20px;
+}
+
+.highlight {
+    font-weight: 700;
+}
+
+/* Signature Section */
+.signature-section {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 30px;
+}
+
+.signature-item {
+    text-align: start;
+    width: 230px;
+}
+
+.signature-line {
+    margin-top: 35px;
+    border-top: 1.5px solid #000;
+    width: 100%;
+}
+
+.signature-label {
+    font-size: 14px;
+    font-weight: bold;
+    margin-top: 8px;
+}
+
+/* Date and Place - Bottom */
+.date-place {
+    font-size: 15px;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 100px;
+}
+
+/* Footer */
+.footer {
+    margin-top: 10px;
+    padding-top: 5px;
+    font-size: 10px;
+    color: #666;
+    text-align: right;
+    padding-top: 20px;
+    border-top: 1px solid #ccc;
+}
+
+/* Print optimization */
+@media print {
+    html, body {
+        width: 210mm;
+        margin: 0;
+        padding: 0;
+    }
+    
+    .page-container {
+        border: 3px solid #1a1a1a;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .page-container::before {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .logo-watermark img {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<%
+// Define all variables first
+const schoolLogo = typeof schoolLogoUrl !== 'undefined' ? schoolLogoUrl : 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
+const studentData = typeof student !== 'undefined' && student ? student : { 
+    name: 'ISHA MINNA. M', 
+    parentName: 'MUHAMMED IQBAL', 
+    houseName: 'MADATHIL', 
+    houseAddress: 'MADATHIL HOUSE', 
+    postOffice: 'KONDOTTY', 
+    admissionNo: '41317', 
+    className: '8', 
+    dob: '29/08/2011', 
+    gender: 'F' 
+};
+const academicYearDisplay = typeof academicYear !== 'undefined' ? academicYear : '2025-26';
+const certificateDateDisplay = typeof certificateDate !== 'undefined' ? certificateDate : new Date().toLocaleDateString('en-IN');
+const placeDisplay = typeof place !== 'undefined' ? place : 'Kottukkara';
+
+// Determine gender prefix
+const gender = studentData.gender || 'F';
+const prefix = gender === 'M' ? 'Kumaran' : 'Kumari';
+const sonDaughter = gender === 'M' ? 'S/O' : 'D/O';
+%>
+
+<div class="page-container">
+    
+    <!-- Logo Watermark -->
+    <div class="logo-watermark">
+        <img src="<%= schoolLogo %>" alt="Watermark">
+    </div>
+    
+    <div class="content-layer">
+        
+        <!-- Header Section - Top -->
+        <div class="header-section">
+            <div class="school-logo">
+                <img src="<%= schoolLogo %>" alt="School Logo">
+            </div>
+            <div class="school-name">
+                P.P. M.HIGHER SECONDARY SCHOOL KOTTUKKARA,<br/>
+                KONDOTTY.P.O. Pin. 673638, MALAPPURAM (DT)<br/>
+                KERALA, Ph: 0483-2711374
+            </div>
+        </div>
+        
+        <!-- Middle Content - Centered -->
+        <div class="middle-content">
+            
+            <div class="certificate-title">CERTIFICATE</div>
+            
+            <div class="certificate-content">
+                Certified that <span class="student-name"><%= prefix %> <%= studentData.name %></span> 
+                <%= sonDaughter %> <span class="highlight"><%= studentData.parentName %></span>, 
+                <span class="highlight"><%= studentData.houseName %></span>, <%= studentData.houseAddress %> House, 
+                <span class="highlight"><%= studentData.postOffice %></span> PO is studying in the institution in 
+                <span class="highlight"><%= studentData.className %> standard</span> with admission Number 
+                <span class="highlight"><%= studentData.admissionNo %></span> during the Academic year 
+                <span class="highlight"><%= academicYearDisplay %></span> and certify that <%= gender === 'M' ? 'his' : 'her' %> 
+                date of birth according to the school record is <span class="highlight"><%= studentData.dob %></span>
+            </div>
+            
+            <!-- Signature Section -->
+            <div class="signature-section">
+                <div class="signature-item">
+                    <div class="signature-label">Headmaster</div>
+                    <div class="signature-line"></div>
+                </div>
+            </div>
+            
+        </div>
+        
+        <!-- Date and Place - Bottom -->
+        <div class="date-place">
+            <span class="date-item">Date: <span class="highlight"><%= certificateDateDisplay %></span></span>
+            <span class="place-item">Place: <span class="highlight"><%= placeDisplay %></span></span>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            Generated on: <%= new Date().toLocaleDateString('en-IN') %>
+        </div>
+        
+    </div>
+</div>
+
+</body>
+</html>

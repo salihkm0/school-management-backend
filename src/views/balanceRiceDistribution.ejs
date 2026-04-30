@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Balance Rice Distribution - <%= className %> <%= academicYear %></title>
+
+<style>
+@page {
+    size: A4 portrait;
+    margin: 5mm;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 210mm;
+    font-family: "Times New Roman", serif;
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.page-container {
+    width: 200mm;
+    min-height: 277mm;
+    margin: 0 auto 5mm auto;
+    padding: 5mm 3mm;
+    border: 2px solid #000;
+    position: relative;
+    page-break-after: always;
+    box-sizing: border-box;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+}
+
+.page-container:last-child {
+    page-break-after: auto;
+    margin-bottom: 0;
+}
+
+/* Watermark */
+.watermark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-45deg);
+    font-size: 60px;
+    font-weight: bold;
+    color: rgba(0, 0, 0, 0.04);
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 1;
+    text-transform: uppercase;
+    letter-spacing: 10px;
+    font-family: 'Times New Roman', serif;
+    width: 100%;
+    text-align: center;
+}
+
+.content-layer {
+    position: relative;
+    z-index: 2;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+/* Main content area - takes available space */
+.main-content {
+    flex: 1;
+}
+
+/* Header Section */
+.header-section {
+    text-align: center;
+    margin-bottom: 5px;
+}
+
+.main-title {
+    font-size: 16px;
+    font-weight: 900;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.school-name {
+    font-size: 18px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 5px;
+}
+
+/* Header Row */
+.header-row {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 5px;
+    font-size: 11px;
+}
+
+.header-row td {
+    border: 1.5px solid #000;
+    padding: 5px 3px;
+    text-align: center;
+    font-weight: bold;
+    vertical-align: middle;
+}
+
+/* Main Table */
+.main-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8.5px;
+    margin-top: 3px;
+}
+
+.main-table th,
+.main-table td {
+    border: 1.5px solid #000;
+    padding: 5px 2px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.main-table th {
+    background: #f0f0f0;
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: 8px;
+    padding: 5px 2px;
+}
+
+.main-table td {
+    background: transparent;
+}
+
+/* Column widths */
+.main-table .sl-col { width: 6%; }
+.main-table .adm-col { width: 8%; }
+.main-table .name-col { width: 20%; text-align: left; padding-left: 4px; }
+.main-table .uid-col { width: 15%; }
+.main-table .parent-col { width: 22%; text-align: left; padding-left: 4px; }
+.main-table .qty-col { width: 10%; }
+.main-table .sign-col { width: 19%; }
+
+/* Bottom Section - Fixed to bottom */
+.bottom-section {
+    margin-top: auto;
+    padding-top: 10px;
+}
+
+/* Signature Section */
+.signature-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 5px;
+}
+
+.signature-left {
+    font-size: 10px;
+    font-weight: bold;
+}
+
+.signature-right {
+    font-size: 10px;
+    font-weight: bold;
+    text-align: right;
+}
+
+.signature-line {
+    display: inline-block;
+    width: 150px;
+    border-bottom: 1px solid #000;
+    margin-left: 5px;
+}
+
+/* Footer with Page Number Centered */
+.footer {
+    padding-top: 8px;
+    border-top: 1px solid #000;
+    font-size: 10px;
+    text-align: center;
+    font-weight: bold;
+}
+
+.page-number {
+    text-align: center;
+}
+
+.total-students {
+    float: left;
+    font-weight: 700;
+    font-size: 9px;
+}
+
+.generated-info {
+    float: right;
+    font-size: 8px;
+}
+
+/* Print optimization */
+@media print {
+    html, body {
+        width: 210mm;
+        margin: 0;
+        padding: 0;
+    }
+    
+    th {
+        background: #f0f0f0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    td {
+        background: transparent !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .page-container {
+        border: 2px solid #000;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        page-break-after: always;
+    }
+    
+    .watermark {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<%
+const studentsPerPage = 40;
+const totalPages = Math.ceil(students.length / studentsPerPage);
+const displayAcademicYear = typeof academicYear !== 'undefined' ? academicYear : '2025-2026';
+const displayClassName = typeof className !== 'undefined' ? className : '8 A';
+const displayMonth = typeof month !== 'undefined' ? month : 'March 2026';
+const displaySchoolName = typeof schoolName !== 'undefined' ? schoolName : 'PPMHSS KOTTUKKARA';
+
+for (let page = 0; page < totalPages; page++) {
+    const startIndex = page * studentsPerPage;
+    const endIndex = Math.min(startIndex + studentsPerPage, students.length);
+    const pageStudents = students.slice(startIndex, endIndex);
+    const isFirstPage = page === 0;
+    const isLastPage = page === totalPages - 1;
+%>
+
+<div class="page-container">
+    
+    <div class="watermark">
+        PPM HSS KOTTUKKARA
+    </div>
+    
+    <div class="content-layer">
+        
+        <div class="main-content">
+            
+            <div class="header-section">
+                <div class="main-title">Balance Rice Distribution - <%= displayMonth %></div>
+                <div class="school-name"><%= displaySchoolName %></div>
+            </div>
+            
+            <table class="header-row">
+                <% if (isFirstPage) { %>
+                <tr>
+                    <td colspan="7"><%= displayAcademicYear %></td>
+                    <td colspan="5">Class & Division : <%= displayClassName %></td>
+                </tr>
+                <% } else { %>
+                <tr>
+                    <td colspan="12"><%= displayAcademicYear %></td>
+                </tr>
+                <% } %>
+            </table>
+            
+            <table class="main-table">
+                <thead>
+                    <tr>
+                        <th class="sl-col">Sl No</th>
+                        <th class="adm-col">Adm. No</th>
+                        <th class="name-col">Name of Student</th>
+                        <th class="uid-col">UID</th>
+                        <th class="parent-col">Name of Parent</th>
+                        <th class="qty-col">Quantity of Rice</th>
+                        <th class="sign-col">Signature</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% pageStudents.forEach(function(student, index) { 
+                        const slNo = startIndex + index + 1;
+                    %>
+                    <tr>
+                        <td><%= slNo %></td>
+                        <td><%= student.admissionNo %></td>
+                        <td style="text-align: left; padding-left: 4px;"><%= student.name %></td>
+                        <td><%= student.uid || '-' %></td>
+                        <td style="text-align: left; padding-left: 4px;"><%= student.parentName %></td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                    <% }); %>
+                    
+                    <% 
+                    const remainingRows = studentsPerPage - pageStudents.length;
+                    for (let i = 0; i < remainingRows; i++) {
+                    %>
+                    <!-- <tr>
+                        <td>-</td>
+                        <td>-</td>
+                        <td style="text-align: left;">-</td>
+                        <td>-</td>
+                        <td style="text-align: left;">-</td>
+                        <td></td>
+                        <td></td>
+                    </tr> -->
+                    <% } %>
+                </tbody>
+            </table>
+            
+        </div>
+        
+        <% if (isLastPage) { %>
+        <div class="bottom-section">
+            <div class="signature-section">
+                <div class="signature-left">
+                    Name and signature of class teacher : <span class="signature-line"></span>
+                </div>
+                <div class="signature-right">
+                    Signature of HM : <span class="signature-line"></span>
+                </div>
+            </div>
+        </div>
+        <% } %>
+        
+        <div class="footer">
+            <span class="total-students">Total Students: <%= students.length %></span>
+            <span class="page-number">Page <%= page + 1 %> of <%= totalPages %></span>
+            <span class="generated-info">Generated: <%= new Date().toLocaleDateString('en-IN') %></span>
+        </div>
+        
+    </div>
+</div>
+
+<% } %>
+
+</body>
+</html>

@@ -49,8 +49,7 @@ const SubjectSchema = new mongoose.Schema(
   },
 );
 
-// Indexes
 SubjectSchema.index({ name: "text", code: "text" });
-// SubjectSchema.index({ code: 1 });
 
-module.exports = mongoose.model("Subject", SubjectSchema);
+// Check if model already exists before creating
+module.exports = mongoose.models.Subject || mongoose.model("Subject", SubjectSchema);

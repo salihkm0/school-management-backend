@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Bank Account Details - <%= categoryName %> Students - <%= className %> <%= academicYear %></title>
+
+<style>
+@page {
+    size: A4 landscape;
+    margin: 3mm;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 297mm;
+    font-family: "Times New Roman", serif;
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.page-container {
+    width: 291mm;
+    min-height: 200mm;
+    margin: 0 auto 3mm auto;
+    padding: 5mm 3mm;
+    border: 2px solid #000;
+    position: relative;
+    page-break-after: always;
+    box-sizing: border-box;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+}
+
+.page-container:last-child {
+    page-break-after: auto;
+    margin-bottom: 0;
+}
+
+/* Logo Watermark - Absolute positioning for perfect center */
+.logo-watermark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.logo-watermark img {
+    width: 140mm;
+    height: 140mm;
+    object-fit: contain;
+    opacity: 0.05;
+}
+
+.content-layer {
+    position: relative;
+    z-index: 2;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+/* Main content */
+.main-content {
+    flex: 1;
+}
+
+/* Header Section */
+.header-section {
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.school-logo {
+    width: 20mm;
+    height: 20mm;
+    margin: 0 auto 3px;
+}
+
+.school-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.school-name {
+    font-size: 14px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+}
+
+.arabic-text {
+    font-size: 10px;
+    font-weight: bold;
+    margin-bottom: 3px;
+    color: #333;
+}
+
+.main-title {
+    font-size: 13px;
+    font-weight: 900;
+    text-transform: uppercase;
+    text-decoration: underline;
+    margin-bottom: 8px;
+}
+
+/* Header Info Row */
+.header-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    font-weight: bold;
+    margin-bottom: 8px;
+    padding: 0 5px;
+}
+
+.year-range {
+    text-align: left;
+}
+
+.class-info {
+    text-align: right;
+}
+
+/* Main Table */
+.main-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 7px;
+    margin-top: 3px;
+}
+
+.main-table th,
+.main-table td {
+    border: 1px solid #000;
+    padding: 3px 1px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.main-table th {
+    background: #f0f0f0;
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: 6px;
+    padding: 3px 1px;
+}
+
+.main-table td {
+    background: transparent;
+}
+
+/* Column widths */
+.main-table .sl-col { width: 3%; }
+.main-table .adm-col { width: 5%; }
+.main-table .name-col { width: 12%; text-align: left; padding-left: 2px; }
+.main-table .parent-col { width: 12%; text-align: left; padding-left: 2px; }
+.main-table .class-col { width: 4%; }
+.main-table .gender-col { width: 3%; }
+.main-table .category-col { width: 6%; }
+.main-table .caste-col { width: 6%; }
+.main-table .ration-col { width: 4%; }
+.main-table .account-col { width: 10%; }
+.main-table .ifsc-col { width: 8%; }
+.main-table .bank-col { width: 12%; text-align: left; padding-left: 2px; }
+.main-table .branch-col { width: 10%; text-align: left; padding-left: 2px; }
+
+/* Bottom Section */
+.bottom-section {
+    margin-top: auto;
+    padding-top: 8px;
+}
+
+/* Footer */
+.footer {
+    display: flex;
+    justify-content: space-between;
+    font-size: 4px;
+    margin-top: 8px;
+    padding-top: 5px;
+    border-top: 1px solid #000;
+}
+
+.signature-item {
+    text-align: center;
+    width: 120px;
+}
+
+.signature-line {
+    margin-top: 15px;
+    border-top: 1px solid #000;
+    width: 100%;
+}
+
+.total-students {
+    font-weight: 700;
+    font-size: 8px;
+}
+
+.generated-info {
+    color: #666;
+    font-size: 8px;
+}
+
+.page-number {
+    text-align: center;
+    font-size: 8px;
+    margin-top: 3px;
+}
+
+/* Print optimization */
+@media print {
+    html, body {
+        width: 297mm;
+        margin: 0;
+        padding: 0;
+    }
+    
+    th {
+        background: #f0f0f0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    td {
+        background: transparent !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .page-container {
+        border: 2px solid #000;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        page-break-after: always;
+    }
+    
+    .logo-watermark img {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<%
+const studentsPerPage = 35;
+const totalPages = Math.ceil(students.length / studentsPerPage);
+const displayAcademicYear = typeof academicYear !== 'undefined' ? academicYear : '2025-2026';
+const displayClassName = typeof className !== 'undefined' ? className : '8 A';
+const displayCategoryName = typeof categoryName !== 'undefined' ? categoryName : 'SC/ST';
+const schoolLogo = typeof schoolLogoUrl !== 'undefined' ? schoolLogoUrl : 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
+
+for (let page = 0; page < totalPages; page++) {
+    const startIndex = page * studentsPerPage;
+    const endIndex = Math.min(startIndex + studentsPerPage, students.length);
+    const pageStudents = students.slice(startIndex, endIndex);
+    const isLastPage = page === totalPages - 1;
+    const isFirstPage = page === 0;
+%>
+
+<div class="page-container">
+    
+    <!-- Logo Watermark - Fixed Centering -->
+    <div class="logo-watermark">
+        <img src="<%= schoolLogo %>" alt="Watermark">
+    </div>
+    
+    <div class="content-layer">
+        
+        <div class="main-content">
+            
+            <!-- Header -->
+            <div class="header-section">
+                <div class="school-logo">
+                    <img src="<%= schoolLogo %>" alt="School Logo">
+                </div>
+                <div class="school-name">P.P.M.H.S.S. KOTTUKKARA</div>
+                <!-- <div class="arabic-text">العلم نور &nbsp;&nbsp; العلم نور</div> -->
+                <div class="main-title">BANK ACCOUNT DETAILS OF <%= displayCategoryName %> STUDENTS - <%= displayAcademicYear %></div>
+            </div>
+            
+            <!-- Header Info -->
+            <div class="header-info">
+                <span class="year-range"></span>
+                <span class="class-info">Class : <%= displayClassName %></span>
+            </div>
+            
+            <!-- Main Table -->
+            <table class="main-table">
+                <thead>
+                    <tr>
+                        <th class="sl-col">Sl<br/>No</th>
+                        <th class="adm-col">Adm<br/>No</th>
+                        <th class="name-col">Name</th>
+                        <th class="parent-col">Parent Name</th>
+                        <th class="class-col">Class</th>
+                        <th class="gender-col">Sex</th>
+                        <th class="category-col">Category</th>
+                        <th class="caste-col">Caste</th>
+                        <th class="ration-col">Ration<br/>Card</th>
+                        <th class="account-col">Account No</th>
+                        <th class="ifsc-col">IFSC</th>
+                        <th class="bank-col">Bank Name</th>
+                        <th class="branch-col">Branch</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% pageStudents.forEach(function(student, index) { 
+                        const slNo = startIndex + index + 1;
+                    %>
+                    <tr>
+                        <td><%= slNo %></td>
+                        <td><%= student.admissionNo || '-' %></td>
+                        <td style="text-align: left; padding-left: 2px;"><%= student.name || '-' %></td>
+                        <td style="text-align: left; padding-left: 2px;"><%= student.parentName || '-' %></td>
+                        <td><%= student.class || displayClassName.charAt(0) %></td>
+                        <td><%= student.gender || '-' %></td>
+                        <td><%= student.category || 'SC' %></td>
+                        <td><%= student.caste || '-' %></td>
+                        <td><%= student.rationCard || 'NONE' %></td>
+                        <td><%= student.accountNo || '-' %></td>
+                        <td><%= student.ifsc || '-' %></td>
+                        <td style="text-align: left; padding-left: 2px;"><%= student.bankName || '-' %></td>
+                        <td style="text-align: left; padding-left: 2px;"><%= student.branch || '-' %></td>
+                    </tr>
+                    <% }); %>
+                    
+                    <% 
+                    const remainingRows = studentsPerPage - pageStudents.length;
+                    for (let i = 0; i < remainingRows; i++) {
+                    %>
+                    <!-- <tr>
+                        <td>-</td><td>-</td><td style="text-align: left;">-</td>
+                        <td style="text-align: left;">-</td><td>-</td><td>-</td>
+                        <td>-</td><td>-</td><td>-</td><td>-</td>
+                        <td>-</td><td style="text-align: left;">-</td><td style="text-align: left;">-</td>
+                    </tr> -->
+                    <% } %>
+                </tbody>
+            </table>
+            
+        </div>
+        
+        <!-- Bottom Section -->
+        <div class="bottom-section">
+            
+            <!-- Signatures -->
+            <!-- <div class="footer">
+                <div class="signature-item">
+                    <div>Class Teacher</div>
+                    <div class="signature-line"></div>
+                </div>
+                <div class="signature-item">
+                    <div>Principal</div>
+                    <div class="signature-line"></div>
+                </div>
+                <div class="signature-item">
+                    <div>Clerk</div>
+                    <div class="signature-line"></div>
+                </div>
+            </div> -->
+            
+            <!-- Footer Info -->
+            <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+                <span class="total-students">Total Students: <%= students.length %></span>
+                <span class="generated-info">Generated on: <%= new Date().toLocaleDateString('en-IN') %></span>
+            </div>
+            
+        </div>
+        
+        <div class="page-number">Page <%= page + 1 %> of <%= totalPages %></div>
+        
+    </div>
+</div>
+
+<% } %>
+
+</body>
+</html>

@@ -6,7 +6,7 @@ const UserSchema = new mongoose.Schema({
   email: {
     type: String,
     unique: true,
-    sparse: true,  // Allows null/undefined values
+    sparse: true,
     lowercase: true,
     trim: true,
     match: [/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email']
@@ -31,7 +31,7 @@ const UserSchema = new mongoose.Schema({
     type: String,
     trim: true,
     required: [true, 'Phone number is required'],
-    unique: true,  // Phone should be unique
+    unique: true,
   },
   photoUrl: {
     type: String,
@@ -48,14 +48,35 @@ const UserSchema = new mongoose.Schema({
   resetPasswordToken: String,
   resetPasswordExpire: Date,
   refreshToken: String,
-  refreshTokenExpire: Date
+  refreshTokenExpire: Date,
+  // FCM Tokens for push notifications
+  fcmTokens: [{
+    token: {
+      type: String,
+      required: true
+    },
+    deviceInfo: {
+      platform: String,
+      model: String,
+      appVersion: String
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    },
+    lastUsed: {
+      type: Date,
+      default: Date.now
+    }
+  }]
 }, {
   timestamps: true
 });
 
-// Add index for phone for faster queries
+// Add indexes
 UserSchema.index({ phone: 1 });
 UserSchema.index({ email: 1 }, { sparse: true });
+UserSchema.index({ 'fcmTokens.token': 1 });
 
 UserSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
@@ -87,6 +108,44 @@ UserSchema.methods.generateRefreshToken = function() {
     process.env.JWT_REFRESH_SECRET,
     { expiresIn: process.env.JWT_REFRESH_EXPIRE }
   );
+};
+
+// Add FCM token management methods
+UserSchema.methods.addFcmToken = async function(token, deviceInfo = {}) {
+  const existingToken = this.fcmTokens.find(t => t.token === token);
+  if (existingToken) {
+    existingToken.lastUsed = new Date();
+    existingToken.deviceInfo = deviceInfo;
+  } else {
+    this.fcmTokens.push({
+      token,
+      deviceInfo,
+      createdAt: new Date(),
+      lastUsed: new Date()
+    });
+  }
+  
+  if (this.fcmTokens.length > 5) {
+    this.fcmTokens = this.fcmTokens.slice(-5);
+  }
+  
+  await this.save();
+  return this.fcmTokens;
+};
+
+UserSchema.methods.removeFcmToken = async function(token) {
+  this.fcmTokens = this.fcmTokens.filter(t => t.token !== token);
+  await this.save();
+  return this.fcmTokens;
+};
+
+UserSchema.methods.getActiveFcmTokens = function() {
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  
+  return this.fcmTokens
+    .filter(t => t.lastUsed > thirtyDaysAgo)
+    .map(t => t.token);
 };
 
 module.exports = mongoose.model('User', UserSchema);

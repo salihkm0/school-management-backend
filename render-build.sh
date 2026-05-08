@@ -1,5 +1,5 @@
 #!/bin/bash
-# Render build script - KEEP PUPPETEER INSTALLED
+# Render build script - PROPER PUPPETEER CONFIGURATION
 
 echo "🚀 Starting Render build process..."
 
@@ -7,37 +7,45 @@ echo "🚀 Starting Render build process..."
 node --version
 npm --version
 
-# Install dependencies (including puppeteer)
-echo "📦 Installing dependencies with puppeteer..."
+# Install dependencies
+echo "📦 Installing dependencies..."
 npm install --production=false --legacy-peer-deps
 
-# DO NOT remove puppeteer - Comment out the removal line
-# echo "🗑️ Removing heavy dependencies not needed in production..."
-# npm remove puppeteer phantomjs-prebuilt html-pdf 2>/dev/null || true
-
-# Configure puppeteer for Render environment
-echo "🔧 Configuring puppeteer for Render..."
-export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-export PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
-
-# Install Chromium for puppeteer (critical for PDF generation)
+# Install Chromium for puppeteer on Render
 echo "📦 Installing Chromium browser for puppeteer..."
-apt-get update && apt-get install -y chromium-browser || \
-apt-get update && apt-get install -y chromium || \
-echo "⚠️ Chromium not installed via apt, puppeteer will download its own"
+apt-get update
+
+# Try different package names for different Linux versions
+apt-get install -y chromium-browser || \
+apt-get install -y chromium || \
+apt-get install -y chromium-bsu || \
+echo "⚠️ Chromium not found via apt, puppeteer will download its own"
 
 # Create required directories
 echo "📁 Creating required directories..."
 mkdir -p uploads logs public
 
-# Clean cache to reduce size (but keep puppeteer)
+# Configure puppeteer environment variables
+echo "🔧 Configuring puppeteer environment..."
+export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=false
+export PUPPETEER_EXECUTABLE_PATH=$(which chromium-browser 2>/dev/null || which chromium 2>/dev/null || echo "")
+
+# If Chromium not found, set cache directory for puppeteer to download
+if [ -z "$PUPPETEER_EXECUTABLE_PATH" ]; then
+    echo "⚠️ No system Chromium found, puppeteer will download its own browser"
+    export PUPPETEER_CACHE_DIR=/opt/render/.cache/puppeteer
+    mkdir -p /opt/render/.cache/puppeteer
+fi
+
+# Clean cache to reduce size
 echo "🧹 Cleaning cache..."
 npm cache clean --force
 
 # Build summary
-echo "✅ Build completed with puppeteer!"
+echo "✅ Build completed!"
 echo "  - Node version: $(node --version)"
 echo "  - NPM version: $(npm --version)"
-echo "  - Puppeteer installed: $(npm list puppeteer --depth=0 || echo 'Checking...')"
+echo "  - Chromium path: ${PUPPETEER_EXECUTABLE_PATH:-'Will be downloaded by puppeteer'}"
+echo "  - Puppeteer cache dir: ${PUPPETEER_CACHE_DIR:-'Default'}"
 
 exit 0

@@ -54,6 +54,9 @@ const feeCollectionRoutes = require('./src/routes/pdf/feeCollectionRoutes');
 const promotionListRoutes = require('./src/routes/pdf/promotionListRoutes');
 const userRoutes = require('./src/routes/userRoutes');
 
+const { closeBrowser: closeAbstractBrowser } = require('./src/services/pdf/abstractPdfService');
+const { closeBrowser: closeBalanceRiceBrowser } = require('./src/services/pdf/balanceRiceDistributionPdfService');
+
 
 const app = express();
 const server = http.createServer(app);
@@ -116,8 +119,23 @@ connectRedis().then(client => {
 });
 
 // Update shutdown handlers
+// const gracefulShutdown = async () => {
+//   console.log('Received shutdown signal, closing connections...');
+//   await disconnectRedis();
+//   server.close(() => {
+//     console.log('Server closed');
+//     process.exit(0);
+//   });
+// };
+
+// Update shutdown handlers
 const gracefulShutdown = async () => {
   console.log('Received shutdown signal, closing connections...');
+  
+  // Close Puppeteer browsers
+  await closeAbstractBrowser().catch(err => console.error('Error closing abstract browser:', err));
+  await closeBalanceRiceBrowser().catch(err => console.error('Error closing balance rice browser:', err));
+  
   await disconnectRedis();
   server.close(() => {
     console.log('Server closed');

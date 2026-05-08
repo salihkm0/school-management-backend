@@ -58,7 +58,8 @@ const {
   markAllAsRead,
   deleteNotification,
   registerFcmToken,
-  unregisterFcmToken
+  unregisterFcmToken,
+  sendTestPush
 } = require('../controllers/notificationController');
 
 // FCM Token routes
@@ -82,5 +83,7 @@ router.post('/bulk', protect, authorize('admin'), sendBulk);
 router.post('/exam', protect, authorize('admin'), sendExamNotification);
 router.post('/attendance', protect, authorize('admin'), sendAttendanceNotification);
 router.post('/duty', protect, authorize('admin'), sendDutyNotification);
+
+router.post('/test-push', protect, authorize('admin'), sendTestPush);
 
 module.exports = router;

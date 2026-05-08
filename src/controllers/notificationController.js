@@ -654,3 +654,52 @@ exports.sendDutyNotification = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
+
+// @desc    Send test push notification
+// @route   POST /api/notifications/test-push
+// @access  Public (for testing only)
+exports.sendTestPush = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message: 'FCM token is required'
+      });
+    }
+
+    const result = await fcmService.sendToDevice(
+      token,
+      'Test Notification 🚀',
+      'Push notification working successfully!',
+      {
+        type: 'test',
+        click_action: 'FLUTTER_NOTIFICATION_CLICK'
+      }
+    );
+
+    if (result.success) {
+      return res.json({
+        success: true,
+        message: 'Test push notification sent successfully',
+        response: result.response
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      error: result.error
+    });
+
+  } catch (error) {
+    console.error('Test push error:', error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};

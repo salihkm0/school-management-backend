@@ -7,7 +7,7 @@
 <style>
 @page {
     size: A4 portrait;
-    margin: 5mm;
+    margin: 0;
 }
 
 * {
@@ -20,6 +20,7 @@ html, body {
     margin: 0;
     padding: 0;
     width: 210mm;
+    height: 297mm;
     font-family: 'Times New Roman', 'Arial', sans-serif;
     background: #fff;
     -webkit-print-color-adjust: exact;
@@ -27,38 +28,55 @@ html, body {
 }
 
 .page-container {
-    width: 200mm;
-    min-height: 277mm;
-    margin: 0 auto 0mm auto;
-    padding: 5mm 2mm;
-    border: 1px solid #000;
+    width: 100%;
+    min-height: 100%;
+    padding: 10mm 8mm;
+    border: 2px solid #000;
     position: relative;
     page-break-after: always;
     box-sizing: border-box;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
 }
 
 .page-container:last-child {
     page-break-after: auto;
-    margin-bottom: 0;
 }
 
-/* Watermark */
-.watermark {
+/* Logo Watermark - Centered */
+.logo-watermark {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) rotate(-45deg);
-    font-size: 60px;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.logo-watermark img {
+    max-width: 120mm;
+    max-height: 120mm;
+    width: auto;
+    height: auto;
+    opacity: 0.04;
+    object-fit: contain;
+}
+
+.logo-watermark .watermark-text {
+    font-size: 40px;
     font-weight: bold;
     color: rgba(0, 0, 0, 0.04);
-    white-space: nowrap;
-    pointer-events: none;
-    z-index: 1;
     text-transform: uppercase;
-    letter-spacing: 2px;
-    font-family: 'Times New Roman', serif;
-    width: 100%;
-    text-align: center;
+    letter-spacing: 5px;
+    white-space: nowrap;
+    transform: rotate(-45deg);
 }
 
 .content-layer {
@@ -67,45 +85,65 @@ html, body {
     height: 100%;
     display: flex;
     flex-direction: column;
+    flex: 1;
 }
 
-/* Header */
+/* Header - Compact */
 .header {
     text-align: center;
     margin-bottom: 8px;
     padding-bottom: 5px;
-    border-bottom: 1px solid #000;
+    border-bottom: 1.5px solid #000;
+}
+
+.school-logo {
+    width: 20mm;
+    height: 20mm;
+    margin: 0 auto 3px;
+}
+
+.school-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
 }
 
 .school-name {
-    font-size: 18px;
+    font-size: 13px;
     font-weight: 900;
     text-transform: uppercase;
-    letter-spacing: 2px;
-    margin-bottom: 3px;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+}
+
+.arabic-text {
+    font-size: 11px;
+    font-weight: bold;
+    margin-bottom: 2px;
+    color: #333;
 }
 
 .title {
     font-size: 14px;
     font-weight: 700;
     text-transform: uppercase;
-    margin-bottom: 3px;
+    margin-bottom: 2px;
 }
 
 .class-info {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
 }
 
 .page-number {
     float: right;
-    font-size: 9px;
+    font-size: 8px;
     margin-top: 3px;
     font-weight: bold;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #8e8e8e;
+    color: #666;
 }
 
 /* Table */
@@ -117,13 +155,13 @@ html, body {
 table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 9px;
+    font-size: 8px;
     table-layout: fixed;
 }
 
 th, td {
     border: 1px solid #000;
-    padding: 4px 1px;
+    padding: 3px 2px;
     text-align: left;
     vertical-align: middle;
     overflow: hidden;
@@ -136,21 +174,21 @@ th {
     text-align: center;
     text-transform: uppercase;
     font-size: 7px;
-    padding: 4px 1px;
+    padding: 4px 2px;
 }
 
 td {
-    background: #fff;
+    background: #ffffff00;
 }
 
-/* Column widths - Equal for tick columns */
-th:nth-child(1), td:nth-child(1) { width: 5%; text-align: center; }
-th:nth-child(2), td:nth-child(2) { width: 8%; text-align: center; }
-th:nth-child(3), td:nth-child(3) { width: 20%; font-weight: 600; padding-left: 3px; }
+/* Column widths */
+th:nth-child(1), td:nth-child(1) { width: 6%; text-align: center; }
+th:nth-child(2), td:nth-child(2) { width: 10%; text-align: center; }
+th:nth-child(3), td:nth-child(3) { width: 24%; font-weight: 600; padding-left: 5px; }
 
 /* All tick columns get equal width */
 th:nth-child(n+4), td:nth-child(n+4) { 
-    width: 3.35%;
+    width: 3%;
     text-align: center; 
 }
 
@@ -159,12 +197,12 @@ th:nth-child(n+4), td:nth-child(n+4) {
 }
 
 .tick-box {
-    font-size: 10px;
+    font-size: 9px;
 }
 
 /* Zebra striping */
 tbody tr:nth-child(even) td {
-    background-color: #f9f9f9;
+    background-color: #f9f9f900;
 }
 
 /* Footer */
@@ -178,18 +216,20 @@ tbody tr:nth-child(even) td {
 .total-students {
     float: left;
     font-weight: 700;
-    font-size: 10px;
+    font-size: 9px;
 }
 
 .generated-info {
     float: right;
     font-size: 8px;
+    color: #666;
 }
 
 /* Print optimization */
 @media print {
     html, body {
         width: 210mm;
+        height: 297mm;
         margin: 0;
         padding: 0;
     }
@@ -201,19 +241,19 @@ tbody tr:nth-child(even) td {
     }
     
     tbody tr:nth-child(even) td {
-        background-color: #f9f9f9 !important;
+        background-color: #f9f9f900 !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
     
     .page-container {
-        border: 1px solid #000;
+        border: 2px solid #000;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
         page-break-after: always;
     }
     
-    .watermark {
+    .logo-watermark {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
@@ -226,13 +266,16 @@ tbody tr:nth-child(even) td {
 <%
 const studentsPerPage = 45;
 const totalPages = Math.ceil(students.length / studentsPerPage);
+const displayAcademicYear = typeof academicYear !== 'undefined' ? academicYear : '2025-2026';
+const displayClassName = typeof className !== 'undefined' ? className : '8 A';
+const displaySchoolName = typeof schoolName !== 'undefined' ? schoolName : 'P.P.M.H.S.S. KOTTUKKARA';
+const displaySchoolLogo = typeof schoolLogo !== 'undefined' ? schoolLogo : '';
 
-// Column headers for tick columns
-const tickHeaders = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20'];
-
-// Calculate equal width for tick columns
-const tickColumnCount = tickHeaders.length;
-const tickColumnWidth = (67 / tickColumnCount).toFixed(2); // 67% total for all tick columns
+// Column headers for tick columns (1 to 20)
+const tickHeaders = [];
+for (let i = 1; i <= 20; i++) {
+    tickHeaders.push(i.toString());
+}
 
 for (let page = 0; page < totalPages; page++) {
     const startIndex = page * studentsPerPage;
@@ -243,22 +286,32 @@ for (let page = 0; page < totalPages; page++) {
 
 <div class="page-container">
     
-    <div class="watermark">
-        PPM HSS KOTTUKKARA
+    <!-- Logo Watermark - Centered -->
+    <div class="logo-watermark">
+        <% if (displaySchoolLogo) { %>
+            <img src="<%= displaySchoolLogo %>" alt="Watermark">
+        <% } else { %>
+            <div class="watermark-text"><%= displaySchoolName %></div>
+        <% } %>
     </div>
     
     <div class="content-layer">
         
+        <!-- Header -->
         <div class="header">
-            <div class="school-name">PPM HSS KOTTUKKARA</div>
-            <div class="title">List of students</div>
-            <div class="class-info">(Standard and Division - <%= className %> <%= academicYear %>)</div>
+            <% if (isFirstPage && displaySchoolLogo) { %>
+            <div class="school-logo">
+                <img src="<%= displaySchoolLogo %>" alt="School Logo">
+            </div>
+            <% } %>
+            <div class="school-name"><%= displaySchoolName %></div>
+            <div class="title">LIST OF STUDENTS</div>
+            <div class="class-info">Standard and Division - <%= displayClassName %> | <%= displayAcademicYear %></div>
         </div>
         
-       
-        
+        <!-- Table -->
         <div class="table-container">
-            <table>
+            <table cellspacing="0" cellpadding="0">
                 <thead>
                     <tr>
                         <th>Sl No</th>
@@ -279,41 +332,21 @@ for (let page = 0; page < totalPages; page++) {
                         <td class="text-center"><%= student.admissionNo %></td>
                         <td><%= student.name %></td>
                         <% tickHeaders.forEach(function() { %>
-                        <td class="text-center tick-box"></td>
+                        <td class="text-center tick-box">&nbsp;</td>
                         <% }); %>
                     </tr>
                     <% }); %>
-                    
-                    <% 
-                    const remainingRows = studentsPerPage - pageStudents.length;
-                    for (let i = 0; i < remainingRows; i++) {
-                    %>
-                    <!-- <tr>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td>-</td>
-                        <% tickHeaders.forEach(function() { %>
-                        <td class="text-center">-</td>
-                        <% }); %>
-                    </tr> -->
-                    <% } %>
                 </tbody>
             </table>
         </div>
         
-        <% if (page === totalPages - 1) { %>
+        <!-- Footer -->
         <div class="footer">
             <span class="total-students">Total Students: <%= students.length %></span>
-            <span class="generated-info">Generated on: <%= new Date().toLocaleDateString('en-IN') %></span>
+            <span class="generated-info"><%= new Date().toLocaleDateString('en-IN') %></span>
         </div>
-        <% } else { %>
-        <div class="footer" style="border-top: none;">
-            <!-- <span class="total-students">Continued on next page...</span>
-            <span class="generated-info">Page <%= page + 1 %> of <%= totalPages %></span> -->
-        </div>
-        <% } %>
-
-         <div class="page-number">Page <%= page + 1 %> of <%= totalPages %></div>
+        
+        <div class="page-number">Page <%= page + 1 %> of <%= totalPages %></div>
         
     </div>
 </div>

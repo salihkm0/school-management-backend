@@ -30,7 +30,7 @@ html, body {
     width: 204mm;
     min-height: 287mm;
     margin: 0 auto 3mm auto;
-    padding: 5mm 3mm;
+    padding: 10mm 8mm;
     border: 2px solid #000;
     position: relative;
     page-break-after: always;
@@ -45,23 +45,23 @@ html, body {
     margin-bottom: 0;
 }
 
-/* Watermark */
-.watermark {
+/* Logo Watermark */
+.logo-watermark {
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%) rotate(-45deg);
-    font-size: 60px;
-    font-weight: bold;
-    color: rgba(0, 0, 0, 0.04);
-    white-space: nowrap;
-    pointer-events: none;
+    transform: translate(-50%, -50%);
+    width: 140mm;
+    height: 140mm;
+    opacity: 0.04;
     z-index: 1;
-    text-transform: uppercase;
-    letter-spacing: 10px;
-    font-family: 'Times New Roman', serif;
+    pointer-events: none;
+}
+
+.logo-watermark img {
     width: 100%;
-    text-align: center;
+    height: 100%;
+    object-fit: contain;
 }
 
 .content-layer {
@@ -84,6 +84,33 @@ html, body {
     margin-bottom: 8px;
 }
 
+.school-logo {
+    width: 25mm;
+    height: 25mm;
+    margin: 0 auto 5px;
+}
+
+.school-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.school-name {
+    font-size: 14px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 3px;
+}
+
+.arabic-text {
+    font-size: 12px;
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: #333;
+}
+
 .main-title {
     font-size: 14px;
     font-weight: 900;
@@ -100,7 +127,7 @@ html, body {
     font-size: 12px;
     font-weight: 700;
     text-align: center;
-    margin-bottom: 5px;
+    margin-bottom: 8px;
     padding-bottom: 3px;
     border-bottom: 1px solid #000;
 }
@@ -110,7 +137,7 @@ html, body {
     width: 100%;
     border-collapse: collapse;
     font-size: 8.5px;
-    margin-top: 3px;
+    margin-top: 5px;
 }
 
 .main-table th,
@@ -125,7 +152,7 @@ html, body {
     background: #f0f0f0;
     font-weight: 900;
     font-size: 7.5px;
-    padding: 4px 2px;
+    padding: 5px 2px;
 }
 
 .main-table td {
@@ -225,7 +252,7 @@ html, body {
         page-break-after: always;
     }
     
-    .watermark {
+    .logo-watermark {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
@@ -240,6 +267,8 @@ const studentsPerPage = 35;
 const totalPages = Math.ceil(students.length / studentsPerPage);
 const displayAcademicYear = typeof academicYear !== 'undefined' ? academicYear : '2025-26';
 const displayClassName = typeof className !== 'undefined' ? className : '8 A';
+const displaySchoolName = typeof schoolName !== 'undefined' ? schoolName : 'P.P.M.H.S.S. KOTTUKKARA';
+const displaySchoolLogo = typeof schoolLogo !== 'undefined' ? schoolLogo : '';
 
 for (let page = 0; page < totalPages; page++) {
     const startIndex = page * studentsPerPage;
@@ -251,8 +280,15 @@ for (let page = 0; page < totalPages; page++) {
 
 <div class="page-container">
     
-    <div class="watermark">
-        PPM HSS KOTTUKKARA
+    <!-- Logo Watermark -->
+    <div class="logo-watermark">
+        <% if (displaySchoolLogo) { %>
+            <img src="<%= displaySchoolLogo %>" alt="Watermark">
+        <% } else { %>
+            <div style="font-size: 40px; font-weight: bold; text-align: center; color: rgba(0,0,0,0.04);">
+                <%= displaySchoolName %>
+            </div>
+        <% } %>
     </div>
     
     <div class="content-layer">
@@ -260,12 +296,17 @@ for (let page = 0; page < totalPages; page++) {
         <div class="main-content">
             
             <div class="header-section">
+                <% if (displaySchoolLogo) { %>
+                <div class="school-logo">
+                    <img src="<%= displaySchoolLogo %>" alt="School Logo">
+                </div>
+                <% } %>
+                <div class="school-name"><%= displaySchoolName %></div>
                 <div class="main-title">ഭക്ഷ്യ സുരക്ഷാ അലവൻസ് (അരി + ഭക്ഷ്യകിറ്റ്) വിതരണം <%= displayAcademicYear %></div>
                 <div class="sub-title">അക്സെപ്റ്റൻസ് റെജിസ്റ്റർ</div>
-                <div class="sub-title">പി.പി.എം.എച്ച്.എസ്.എസ് കൊട്ടുക്കര</div>
             </div>
             
-            <div class="class-info">ക്ലാസ്സ് - <%= displayClassName %> <%= displayAcademicYear %></div>
+            <div class="class-info">ക്ലാസ്സ് - <%= displayClassName %> (<%= displayAcademicYear %>)</div>
             
             <table class="main-table">
                 <thead>
@@ -295,22 +336,6 @@ for (let page = 0; page < totalPages; page++) {
                         <td></td>
                     </tr>
                     <% }); %>
-                    
-                    <% 
-                    const remainingRows = studentsPerPage - pageStudents.length;
-                    for (let i = 0; i < remainingRows; i++) {
-                    %>
-                    <!-- <tr>
-                        <td>-</td>
-                        <td style="text-align: left;">-</td>
-                        <td>-</td>
-                        <td style="text-align: left;">-</td>
-                        <td>-</td>
-                        <td>-</td>
-                        <td></td>
-                        <td></td>
-                    </tr> -->
-                    <% } %>
                 </tbody>
             </table>
             

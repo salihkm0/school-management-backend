@@ -53,9 +53,9 @@ const classTeacherListRoutes = require('./src/routes/pdf/classTeacherListRoutes'
 const feeCollectionRoutes = require('./src/routes/pdf/feeCollectionRoutes');
 const promotionListRoutes = require('./src/routes/pdf/promotionListRoutes');
 const userRoutes = require('./src/routes/userRoutes');
+const dashboardRoutes = require('./src/routes/dashboardRoutes');
+const reportCardRoutes = require('./src/routes/pdf/reportCardRoutes');
 
-const { closeBrowser: closeAbstractBrowser } = require('./src/services/pdf/abstractPdfService');
-const { closeBrowser: closeBalanceRiceBrowser } = require('./src/services/pdf/balanceRiceDistributionPdfService');
 
 
 const app = express();
@@ -119,29 +119,29 @@ connectRedis().then(client => {
 });
 
 // Update shutdown handlers
-// const gracefulShutdown = async () => {
-//   console.log('Received shutdown signal, closing connections...');
-//   await disconnectRedis();
-//   server.close(() => {
-//     console.log('Server closed');
-//     process.exit(0);
-//   });
-// };
-
-// Update shutdown handlers
 const gracefulShutdown = async () => {
   console.log('Received shutdown signal, closing connections...');
-  
-  // Close Puppeteer browsers
-  await closeAbstractBrowser().catch(err => console.error('Error closing abstract browser:', err));
-  await closeBalanceRiceBrowser().catch(err => console.error('Error closing balance rice browser:', err));
-  
   await disconnectRedis();
   server.close(() => {
     console.log('Server closed');
     process.exit(0);
   });
 };
+
+// // Update shutdown handlers
+// const gracefulShutdown = async () => {
+//   console.log('Received shutdown signal, closing connections...');
+  
+//   // Close Puppeteer browsers
+//   await closeAbstractBrowser().catch(err => console.error('Error closing abstract browser:', err));
+//   await closeBalanceRiceBrowser().catch(err => console.error('Error closing balance rice browser:', err));
+  
+//   await disconnectRedis();
+//   server.close(() => {
+//     console.log('Server closed');
+//     process.exit(0);
+//   });
+// };
 
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
@@ -199,6 +199,7 @@ app.use('/api/academic-years', academicYearRoutes);
 app.use('/api/subject-templates', subjectClassTemplateRoutes);
 app.use('/api/parents', parentRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 //pdf routes
 app.use('/api/pdf/statistical-data', statisticalDataRoutes);
@@ -221,6 +222,7 @@ app.use('/api/pdf/staff-list', staffListRoutes);
 app.use('/api/pdf/class-teacher-list', classTeacherListRoutes);
 app.use('/api/pdf/fee-collection', feeCollectionRoutes);
 app.use('/api/pdf/promotion-list', promotionListRoutes);
+app.use('/api/pdf/report-card', reportCardRoutes);
 
 
 // Health check endpoint

@@ -7,7 +7,7 @@
 <style>
 @page {
     size: A4 landscape;
-    margin: 3mm;
+    margin: 0;
 }
 
 * {
@@ -20,6 +20,7 @@ html, body {
     margin: 0;
     padding: 0;
     width: 297mm;
+    height: 210mm;
     font-family: "Times New Roman", serif;
     background: #fff;
     -webkit-print-color-adjust: exact;
@@ -27,10 +28,9 @@ html, body {
 }
 
 .page-container {
-    width: 291mm;
-    min-height: 200mm;
-    margin: 0 auto 3mm auto;
-    padding: 3mm 2mm;
+    width: 100%;
+    min-height: 100%;
+    padding: 10mm 8mm;
     border: 2px solid #000;
     position: relative;
     page-break-after: always;
@@ -42,26 +42,41 @@ html, body {
 
 .page-container:last-child {
     page-break-after: auto;
-    margin-bottom: 0;
 }
 
-/* Watermark */
-.watermark {
+/* Logo Watermark - Centered correctly */
+.logo-watermark {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) rotate(-45deg);
-    font-size: 80px;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.logo-watermark img {
+    max-width: 140mm;
+    max-height: 140mm;
+    width: auto;
+    height: auto;
+    opacity: 0.04;
+    object-fit: contain;
+}
+
+.logo-watermark .watermark-text {
+    font-size: 50px;
     font-weight: bold;
     color: rgba(0, 0, 0, 0.04);
-    white-space: nowrap;
-    pointer-events: none;
-    z-index: 1;
     text-transform: uppercase;
-    letter-spacing: 15px;
-    font-family: 'Times New Roman', serif;
-    width: 100%;
-    text-align: center;
+    letter-spacing: 5px;
+    white-space: nowrap;
+    transform: rotate(-45deg);
 }
 
 .content-layer {
@@ -84,19 +99,38 @@ html, body {
     margin-bottom: 5px;
 }
 
+.school-logo {
+    width: 25mm;
+    height: 25mm;
+    margin: 0 auto 5px;
+}
+
+.school-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.school-name {
+    font-size: 14px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 3px;
+}
+
+.arabic-text {
+    font-size: 12px;
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: #333;
+}
+
 .main-title {
     font-size: 16px;
     font-weight: 900;
     text-transform: uppercase;
     margin-bottom: 2px;
-}
-
-.school-name {
-    font-size: 18px;
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    margin-bottom: 5px;
 }
 
 /* Header Row */
@@ -241,6 +275,7 @@ html, body {
 @media print {
     html, body {
         width: 297mm;
+        height: 210mm;
         margin: 0;
         padding: 0;
     }
@@ -270,7 +305,7 @@ html, body {
         page-break-after: always;
     }
     
-    .watermark {
+    .logo-watermark {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
@@ -284,8 +319,8 @@ html, body {
 const girls = students.filter(s => s.gender === 'F' || s.gender === 'G');
 const boys = students.filter(s => s.gender === 'M' || s.gender === 'B');
 
-const girlsPerPage = 40;
-const boysPerPage = 40;
+const girlsPerPage = 35;
+const boysPerPage = 35;
 
 const girlsPages = Math.ceil(girls.length / girlsPerPage);
 const boysPages = Math.ceil(boys.length / boysPerPage);
@@ -293,6 +328,8 @@ const boysPages = Math.ceil(boys.length / boysPerPage);
 const displayAcademicYear = typeof academicYear !== 'undefined' ? academicYear : '2025-2026';
 const displayClassName = typeof className !== 'undefined' ? className : '8 A';
 const displayMonth = typeof month !== 'undefined' ? month : new Date().toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+const displaySchoolName = typeof schoolName !== 'undefined' ? schoolName : 'P.P.M.H.S.S. KOTTUKKARA';
+const displaySchoolLogo = typeof schoolLogo !== 'undefined' ? schoolLogo : '';
 
 // Generate dates (empty headers - no numbers)
 const mealDates = [];
@@ -313,12 +350,18 @@ for (let page = 0; page < boysPages; page++) {
     const endIndex = Math.min(startIndex + boysPerPage, boys.length);
     const pageBoys = boys.slice(startIndex, endIndex);
     const isLastBoysPage = page === boysPages - 1;
+    const isFirstBoysPage = page === 0;
 %>
 
 <div class="page-container">
     
-    <div class="watermark">
-        PPM HSS KOTTUKKARA
+    <!-- Logo Watermark - Centered -->
+    <div class="logo-watermark">
+        <% if (displaySchoolLogo) { %>
+            <img src="<%= displaySchoolLogo %>" alt="Watermark">
+        <% } else { %>
+            <div class="watermark-text"><%= displaySchoolName %></div>
+        <% } %>
     </div>
     
     <div class="content-layer">
@@ -326,8 +369,13 @@ for (let page = 0; page < boysPages; page++) {
         <div class="main-content">
             
             <div class="header-section">
+                <% if (isFirstBoysPage && displaySchoolLogo) { %>
+                <div class="school-logo">
+                    <img src="<%= displaySchoolLogo %>" alt="School Logo">
+                </div>
+                <% } %>
+                <div class="school-name"><%= displaySchoolName %></div>
                 <div class="main-title">Noon Feeding Attendance Register</div>
-                <div class="school-name">PPMHSS KOTTUKKARA</div>
             </div>
             
             <table class="header-row">
@@ -337,8 +385,6 @@ for (let page = 0; page < boysPages; page++) {
                     <td colspan="13">BOYS</td>
                 </tr>
             </table>
-            
-           
             
             <table class="main-table">
                 <thead>
@@ -364,9 +410,9 @@ for (let page = 0; page < boysPages; page++) {
                         <td><%= slNo %></td>
                         <td><%= student.admissionNo %></td>
                         <td style="text-align: left; padding-left: 3px;"><%= student.name %></td>
-                        <% mealDates.forEach(() => { %><td></td><% }) %>
-                        <% milkDates.forEach(() => { %><td></td><% }) %>
-                        <% eggDates.forEach(() => { %><td></td><% }) %>
+                        <% mealDates.forEach(() => { %><td>&nbsp;</td><% }) %>
+                        <% milkDates.forEach(() => { %><td>&nbsp;</td><% }) %>
+                        <% eggDates.forEach(() => { %><td>&nbsp;</td><% }) %>
                     </tr>
                     <% }); %>
                 </tbody>
@@ -377,7 +423,7 @@ for (let page = 0; page < boysPages; page++) {
                 <tbody>
                     <tr class="total-row">
                         <td colspan="10" style="text-align: right; padding-right: 5px;">Boys Total</td>
-                        <% for (let i = 0; i < totalDateColumns; i++) { %><td></td><% } %>
+                        <% for (let i = 0; i < totalDateColumns; i++) { %><td>&nbsp;</td><% } %>
                     </tr>
                 </tbody>
             </table>
@@ -408,7 +454,7 @@ for (let page = 0; page < boysPages; page++) {
         <% } %>
         
     </div>
-     <div class="page-number">Page <%= page + 1 %> of <%= boysPages + girlsPages %></div>
+    <div class="page-number">Page <%= page + 1 %> of <%= boysPages + girlsPages %></div>
 </div>
 
 <% } %>
@@ -421,12 +467,18 @@ for (let page = 0; page < girlsPages; page++) {
     const pageGirls = girls.slice(startIndex, endIndex);
     const isLastGirlsPage = page === girlsPages - 1;
     const overallPage = boysPages + page + 1;
+    const isFirstGirlsPage = page === 0;
 %>
 
 <div class="page-container">
     
-    <div class="watermark">
-        PPM HSS KOTTUKKARA
+    <!-- Logo Watermark - Centered -->
+    <div class="logo-watermark">
+        <% if (displaySchoolLogo) { %>
+            <img src="<%= displaySchoolLogo %>" alt="Watermark">
+        <% } else { %>
+            <div class="watermark-text"><%= displaySchoolName %></div>
+        <% } %>
     </div>
     
     <div class="content-layer">
@@ -434,8 +486,13 @@ for (let page = 0; page < girlsPages; page++) {
         <div class="main-content">
             
             <div class="header-section">
+                <% if (isFirstGirlsPage && displaySchoolLogo) { %>
+                <div class="school-logo">
+                    <img src="<%= displaySchoolLogo %>" alt="School Logo">
+                </div>
+                <% } %>
+                <div class="school-name"><%= displaySchoolName %></div>
                 <div class="main-title">Noon Feeding Attendance Register</div>
-                <div class="school-name">PPMHSS KOTTUKKARA</div>
             </div>
             
             <table class="header-row">
@@ -445,8 +502,6 @@ for (let page = 0; page < girlsPages; page++) {
                     <td colspan="13">GIRLS</td>
                 </tr>
             </table>
-            
-            
             
             <table class="main-table">
                 <thead>
@@ -472,9 +527,9 @@ for (let page = 0; page < girlsPages; page++) {
                         <td><%= slNo %></td>
                         <td><%= student.admissionNo %></td>
                         <td style="text-align: left; padding-left: 3px;"><%= student.name %></td>
-                        <% mealDates.forEach(() => { %><td></td><% }) %>
-                        <% milkDates.forEach(() => { %><td></td><% }) %>
-                        <% eggDates.forEach(() => { %><td></td><% }) %>
+                        <% mealDates.forEach(() => { %><td>&nbsp;</td><% }) %>
+                        <% milkDates.forEach(() => { %><td>&nbsp;</td><% }) %>
+                        <% eggDates.forEach(() => { %><td>&nbsp;</td><% }) %>
                     </tr>
                     <% }); %>
                 </tbody>
@@ -485,7 +540,7 @@ for (let page = 0; page < girlsPages; page++) {
                 <tbody>
                     <tr class="total-row">
                         <td colspan="10" style="text-align: right; padding-right: 5px;">Girls Total</td>
-                        <% for (let i = 0; i < totalDateColumns; i++) { %><td></td><% } %>
+                        <% for (let i = 0; i < totalDateColumns; i++) { %><td>&nbsp;</td><% } %>
                     </tr>
                 </tbody>
             </table>

@@ -4,6 +4,9 @@ const AcademicYear = require('../../models/AcademicYear');
 const Class = require('../../models/Class');
 const { generateStatisticalDataPDF } = require('../../services/pdf/statisticalDataPdfService');
 
+// School logo URL
+const SCHOOL_LOGO_URL = 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
+
 /**
  * Generate PDF for Statistical Data
  * GET /api/statistical-data/pdf/:classId/:academicYearId?
@@ -71,7 +74,7 @@ exports.generateStatisticalDataPDF = async (req, res) => {
         admissionNo: student.admissionNo || '-',
         name: student.fullName || '-',
         uid: uid,
-        gender: student.gender || '-',
+        gender: student.gender === 'M' ? 'M' : (student.gender === 'F' ? 'F' : 'O'),
         dob: dobFormatted,
         parentName: parentName,
         address: address,
@@ -85,8 +88,11 @@ exports.generateStatisticalDataPDF = async (req, res) => {
     });
 
     const templateData = {
+      schoolLogo: SCHOOL_LOGO_URL,
       className: classDetails.displayName || `${classDetails.name} ${classDetails.section || ''}`,
       academicYear: academicYearString,
+      schoolName: 'P.P.M.H.S.S. KOTTUKKARA',
+      schoolAddress: 'Kottukkara, Kondotty, Malappuram, Kerala - 673638',
       students: studentList
     };
 

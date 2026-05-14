@@ -2,11 +2,12 @@
 <html>
 <head>
 <meta charset="UTF-8">
+<title>Noon Meal Programme Consolidation - <%= monthYear %></title>
 
 <style>
 @page {
     size: A4 landscape;
-    margin: 4mm;
+    margin: 0;
 }
 
 * {
@@ -19,6 +20,7 @@ html, body {
     margin: 0;
     padding: 0;
     width: 297mm;
+    height: 210mm;
     font-family: "Times New Roman", serif;
     background: #fff;
     -webkit-print-color-adjust: exact;
@@ -27,39 +29,55 @@ html, body {
 
 /* Page Container - Each page gets border */
 .page-container {
-    width: 289mm;
-    min-height: 200mm;
-    margin: 0 auto 4mm auto;
-    padding: 5mm 4mm;
+    width: 100%;
+    min-height: 100%;
+    padding: 8mm 8mm;
     border: 2px solid #000;
     position: relative;
     page-break-after: always;
     box-sizing: border-box;
     background: #fff;
+    display: flex;
+    flex-direction: column;
 }
 
 .page-container:last-child {
     page-break-after: auto;
-    margin-bottom: 0;
 }
 
-/* Watermark */
-.watermark {
+/* Logo Watermark - Centered correctly */
+.logo-watermark {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) rotate(-45deg);
-    font-size: 80px;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.logo-watermark img {
+    max-width: 120mm;
+    max-height: 120mm;
+    width: auto;
+    height: auto;
+    opacity: 0.04;
+    object-fit: contain;
+}
+
+.logo-watermark .watermark-text {
+    font-size: 40px;
     font-weight: bold;
     color: rgba(0, 0, 0, 0.04);
-    white-space: nowrap;
-    pointer-events: none;
-    z-index: 1;
     text-transform: uppercase;
-    letter-spacing: 7px;
-    font-family: 'Times New Roman', serif;
-    width: 100%;
-    text-align: center;
+    letter-spacing: 5px;
+    white-space: nowrap;
+    transform: rotate(-45deg);
 }
 
 .content-layer {
@@ -68,60 +86,74 @@ html, body {
     height: 100%;
     display: flex;
     flex-direction: column;
+    flex: 1;
 }
 
-/* Header */
+/* Header - Compact version */
 .header {
     text-align: center;
-    margin-bottom: 8px;
-    padding-bottom: 5px;
-    border-bottom: 2px solid #000;
+    margin-bottom: 5px;
+    padding-bottom: 3px;
+    border-bottom: 1.5px solid #000;
+}
+
+.school-logo {
+    width: 18mm;
+    height: 18mm;
+    margin: 0 auto 3px;
+}
+
+.school-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
 }
 
 .school-name {
-    font-size: 18px;
+    font-size: 12px;
     font-weight: 900;
     text-transform: uppercase;
-    letter-spacing: 2px;
-    margin-bottom: 3px;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
 }
 
 .school-address {
-    font-size: 11px;
-    margin-bottom: 3px;
+    font-size: 8px;
+    margin-bottom: 2px;
 }
 
 .title {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: bold;
     text-transform: uppercase;
-    margin-bottom: 3px;
+    margin-bottom: 2px;
+    letter-spacing: 1px;
 }
 
 .subtitle {
-    font-size: 13px;
+    font-size: 11px;
     font-weight: bold;
-    margin-bottom: 3px;
+    margin-bottom: 2px;
 }
 
 .month-year {
-    font-size: 12px;
+    font-size: 10px;
     font-weight: bold;
-    margin-top: 3px;
+    margin-top: 2px;
 }
 
 .page-number {
     float: right;
-    font-size: 9px;
+    font-size: 8px;
     margin-top: 3px;
     font-weight: bold;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #8e8e8e;
+    color: #666;
 }
 
-/* Table */
+/* Table - Optimized spacing */
 .table-container {
     margin-top: 5px;
     flex: 1;
@@ -137,18 +169,19 @@ table {
 th, td {
     border: 1px solid #000;
     text-align: center;
-    font-size: 9px;
-    padding: 3px 2px;
-    height: 20px;
+    font-size: 8px;
+    padding: 2px 1px;
+    height: 18px;
     vertical-align: middle;
     background: transparent;
 }
 
 th {
-    background: #f5f5f5;
+    background: #f0f0f0;
     font-weight: 900;
     text-transform: uppercase;
-    font-size: 8px;
+    font-size: 7px;
+    padding: 3px 1px;
 }
 
 td {
@@ -157,9 +190,9 @@ td {
 
 /* Column widths */
 th:nth-child(1), td:nth-child(1) {
-    width: 50px;
+    width: 55px;
     text-align: left;
-    padding-left: 5px;
+    padding-left: 6px;
     font-weight: bold;
 }
 
@@ -170,21 +203,21 @@ th:nth-child(2), td:nth-child(2) {
 
 /* Day columns - equal width */
 th:nth-child(n+3), td:nth-child(n+3) { 
-    width: calc((100% - 80px) / attr(data-days length));
+    width: auto;
 }
 
 .day-col {
     writing-mode: horizontal-tb;
-    font-size: 8px;
+    font-size: 7px;
 }
 
 /* Total rows styling */
-.total-boys-row {
+.total-boys-row, .total-girls-row {
     background: #e8e8e8;
     font-weight: bold;
 }
 
-.total-girls-row {
+.total-boys-row td, .total-girls-row td {
     background: #e8e8e8;
     font-weight: bold;
 }
@@ -195,45 +228,46 @@ tbody tr:nth-child(4n+2) td {
     background-color: rgba(0, 0, 0, 0.02);
 }
 
-/* Footer */
+/* Footer - Compact */
 .footer {
-    margin-top: 10px;
-    padding-top: 8px;
-    border-top: 2px solid #000;
+    margin-top: 6px;
+    padding-top: 5px;
+    border-top: 1.5px solid #000;
     overflow: hidden;
-    font-size: 11px;
+    font-size: 9px;
     display: flex;
     justify-content: space-between;
+    align-items: center;
 }
 
 .total-divisions {
-    float: left;
     font-weight: 700;
-    font-size: 10px;
+    font-size: 9px;
 }
 
 .total-students-month {
     font-weight: 900;
-    font-size: 12px;
+    font-size: 10px;
     text-align: center;
     text-transform: uppercase;
 }
 
 .generated-info {
-    float: right;
-    font-size: 9px;
+    font-size: 8px;
+    color: #666;
 }
 
 /* Print optimization */
 @media print {
     html, body {
         width: 297mm;
+        height: 210mm;
         margin: 0;
         padding: 0;
     }
     
     th {
-        background: #f5f5f5 !important;
+        background: #f0f0f0 !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
@@ -265,7 +299,7 @@ tbody tr:nth-child(4n+2) td {
         page-break-after: always;
     }
     
-    .watermark {
+    .logo-watermark {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
@@ -276,10 +310,13 @@ tbody tr:nth-child(4n+2) td {
 <body>
 
 <%
-const divisionsPerPage = 12;
+const divisionsPerPage = 14; // Increased from 12 to show more rows per page
 const totalPages = Math.ceil(divisions.length / divisionsPerPage);
 const displayMonthYear = typeof monthYear !== 'undefined' ? monthYear : new Date().toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
 const displayWorkingDays = typeof workingDays !== 'undefined' ? workingDays : 25;
+const displaySchoolName = typeof schoolName !== 'undefined' ? schoolName : 'P.P.M.H.S.S. KOTTUKKARA';
+const displaySchoolAddress = typeof schoolAddress !== 'undefined' ? schoolAddress : 'Kottukkara, Kondotty, Malappuram, Kerala - 673638';
+const displaySchoolLogo = typeof schoolLogo !== 'undefined' ? schoolLogo : '';
 
 // Generate day numbers
 const days = [];
@@ -297,28 +334,35 @@ for (let page = 0; page < totalPages; page++) {
 
 <div class="page-container">
     
-    <!-- Watermark -->
-    <div class="watermark">
-        PPM HSS KOTTUKKARA
+    <!-- Logo Watermark - Centered -->
+    <div class="logo-watermark">
+        <% if (displaySchoolLogo) { %>
+            <img src="<%= displaySchoolLogo %>" alt="Watermark">
+        <% } else { %>
+            <div class="watermark-text"><%= displaySchoolName %></div>
+        <% } %>
     </div>
     
     <div class="content-layer">
         
+        <!-- Compact Header -->
         <div class="header">
-            <div class="school-name">PPMHSS KOTTUKKARA</div>
-            <div class="school-address">P.O KONDOTTY</div>
-            <div class="title">NOON MEAL PROGRAMME <%= academicYear %></div>
-            <div class="subtitle">CLASS CONSOLIDATION LIST</div>
-            <div class="month-year">MONTH & YEAR : <%= displayMonthYear %></div>
+            <% if (isFirstPage && displaySchoolLogo) { %>
+            <div class="school-logo">
+                <img src="<%= displaySchoolLogo %>" alt="School Logo">
+            </div>
+            <% } %>
+            <div class="school-name"><%= displaySchoolName %></div>
+            <div class="title">NOON MEAL PROGRAMME | <%= academicYear %></div>
+            <div class="subtitle">CLASS CONSOLIDATION LIST | <%= displayMonthYear %></div>
         </div>
         
-        
-        
+        <!-- Table Container -->
         <div class="table-container">
-            <table>
+            <table cellspacing="0" cellpadding="0">
                 <thead>
                     <tr class="header-row">
-                        <th rowspan="2">Class Division</th>
+                        <th rowspan="2">Division</th>
                         <th rowspan="2">B/G</th>
                         <th colspan="<%= displayWorkingDays %>">Working Days</th>
                     </tr>
@@ -335,33 +379,31 @@ for (let page = 0; page < totalPages; page++) {
                             <td><%= div %></td>
                             <td>B</td>
                             <% days.forEach(function() { %>
-                                <td></td>
+                                <td>&nbsp;</td>
                             <% }) %>
                         </tr>
                         <!-- Girls Row -->
                         <tr>
-                            <td></td>
+                            <td>&nbsp;</td>
                             <td>G</td>
                             <% days.forEach(function() { %>
-                                <td></td>
+                                <td>&nbsp;</td>
                             <% }) %>
                         </tr>
                     <% }) %>
                     
+                    <!-- Total Rows - Only on Last Page -->
                     <% if (isLastPage) { %>
-                    <!-- Total Boys Row - Only on Last Page -->
                     <tr class="total-boys-row">
-                        <td colspan="2" style="text-align: right; padding-right: 10px;">TOTAL BOYS</td>
+                        <td colspan="2" style="text-align: right; padding-right: 8px; font-weight: bold;">TOTAL BOYS</td>
                         <% days.forEach(function() { %>
-                            <td></td>
+                            <td>&nbsp;</td>
                         <% }) %>
                     </tr>
-                    
-                    <!-- Total Girls Row - Only on Last Page -->
                     <tr class="total-girls-row">
-                        <td colspan="2" style="text-align: right; padding-right: 10px;">TOTAL GIRLS</td>
+                        <td colspan="2" style="text-align: right; padding-right: 8px; font-weight: bold;">TOTAL GIRLS</td>
                         <% days.forEach(function() { %>
-                            <td></td>
+                            <td>&nbsp;</td>
                         <% }) %>
                     </tr>
                     <% } %>
@@ -369,18 +411,13 @@ for (let page = 0; page < totalPages; page++) {
             </table>
         </div>
         
-        <% if (isLastPage) { %>
+        <!-- Footer -->
         <div class="footer">
             <span class="total-divisions">Total Divisions: <%= divisions.length %></span>
             <span class="total-students-month">TOTAL STUDENTS FOR THIS MONTH : _____________</span>
-            <span class="generated-info">Generated on: <%= new Date().toLocaleDateString('en-IN') %></span>
+            <span class="generated-info"><%= new Date().toLocaleDateString('en-IN') %></span>
         </div>
-        <% } else { %>
-        <div class="footer" style="border-top: none;">
-            <!-- <span class="total-divisions">Continued on next page...</span>
-            <span class="generated-info">Page <%= page + 1 %> of <%= totalPages %></span> -->
-        </div>
-        <% } %>
+        
         <div class="page-number">Page <%= page + 1 %> of <%= totalPages %></div>
     </div>
 </div>

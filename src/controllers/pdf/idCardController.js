@@ -4,6 +4,9 @@ const AcademicYear = require('../../models/AcademicYear');
 const Class = require('../../models/Class');
 const { generateIdCardListPDF } = require('../../services/pdf/idCardListPdfService');
 
+// School logo URL
+const SCHOOL_LOGO_URL = 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
+
 /**
  * Generate PDF for ID card list
  * GET /api/id-card/pdf/:classId/:academicYearId?
@@ -54,13 +57,15 @@ exports.generateIdCardListPDF = async (req, res) => {
       parentName: student.fatherFullName || student.guardianName || '-',
       phone1: student.phoneNumber || student.fatherPhone || '-',
       phone2: student.motherPhone || student.alternatePhone || '-',
-      street: student.permanentAddress || student.presentAddress || '-'
+      street: student.houseName || student.streetName || student.permanentAddress || student.presentAddress || '-'
     }));
 
     // Prepare template data
     const templateData = {
+      schoolLogo: SCHOOL_LOGO_URL,
       className: classDetails.displayName || `${classDetails.name} ${classDetails.section || ''}`,
       academicYear: academicYearString,
+      schoolName: 'P.P.M.H.S.S. KOTTUKKARA',
       students: studentList
     };
 
@@ -85,7 +90,7 @@ exports.generateIdCardListPDF = async (req, res) => {
 
     console.log('PDF buffer size:', pdfBuffer?.length);
 
-    res.end(pdfBuffer); // ✅ Use res.end instead of res.send
+    res.end(pdfBuffer);
 
   } catch (error) {
     console.error("ID card list PDF generation error:", error);
@@ -140,7 +145,7 @@ exports.getIdCardListByClass = async (req, res) => {
       parentName: student.fatherFullName || student.guardianName || '-',
       phone1: student.phoneNumber || student.fatherPhone || '-',
       phone2: student.motherPhone || student.alternatePhone || '-',
-      street: student.permanentAddress || student.presentAddress || '-'
+      street: student.houseName || student.streetName || student.permanentAddress || student.presentAddress || '-'
     }));
 
     // Return JSON response

@@ -28,6 +28,11 @@ const SubjectMarkSchema = new mongoose.Schema({
     default: 0,
     min: 0,
   },
+  ceScore: {  // ADD THIS FIELD - CE marks
+    type: Number,
+    default: 0,
+    min: 0,
+  },
   totalScore: {
     type: Number,
     default: 0,
@@ -168,8 +173,8 @@ MarkSchema.pre("save", function (next) {
   let totalMaxMarks = 0;
   
   this.subjects.forEach(subject => {
-    // Calculate total score for each subject
-    subject.totalScore = (subject.theoryScore || 0) + (subject.practicalScore || 0);
+    // Calculate total score for each subject (Theory + Practical + CE)
+    subject.totalScore = (subject.theoryScore || 0) + (subject.practicalScore || 0) + (subject.ceScore || 0);
     
     // Calculate percentage for each subject
     if (subject.maxMarks > 0) {

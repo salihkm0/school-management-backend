@@ -4,6 +4,9 @@ const AcademicYear = require('../../models/AcademicYear');
 const Class = require('../../models/Class');
 const { generateNoonFeedingRegisterPDF } = require('../../services/pdf/noonFeedingRegisterPdfService');
 
+// School logo URL
+const SCHOOL_LOGO_URL = 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
+
 /**
  * Generate PDF for Noon Feeding Attendance Register
  * GET /api/noon-feeding-register/pdf/:classId/:month?/:year?
@@ -57,9 +60,11 @@ exports.generateNoonFeedingRegisterPDF = async (req, res) => {
     }));
 
     const templateData = {
+      schoolLogo: SCHOOL_LOGO_URL,
       academicYear: academicYearString,
       className: classDetails.displayName || `${classDetails.name} ${classDetails.section || ''}`,
       month: monthYear,
+      schoolName: 'P.P.M.H.S.S. KOTTUKKARA',
       students: studentList
     };
 

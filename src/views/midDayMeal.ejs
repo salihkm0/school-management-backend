@@ -30,7 +30,7 @@ html, body {
     width: 200mm;
     min-height: 277mm;
     margin: 0 auto 5mm auto;
-    padding: 5mm 3mm;
+    padding: 10mm 8mm;
     border: 2px solid #000;
     position: relative;
     page-break-after: always;
@@ -45,23 +45,23 @@ html, body {
     margin-bottom: 0;
 }
 
-/* Watermark */
-.watermark {
+/* Logo Watermark */
+.logo-watermark {
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%) rotate(-45deg);
-    font-size: 60px;
-    font-weight: bold;
-    color: rgba(0, 0, 0, 0.045);
-    white-space: nowrap;
-    pointer-events: none;
+    transform: translate(-50%, -50%);
+    width: 140mm;
+    height: 140mm;
+    opacity: 0.04;
     z-index: 1;
-    text-transform: uppercase;
-    letter-spacing: 10px;
-    font-family: 'Times New Roman', serif;
+    pointer-events: none;
+}
+
+.logo-watermark img {
     width: 100%;
-    text-align: center;
+    height: 100%;
+    object-fit: contain;
 }
 
 .content-layer {
@@ -76,6 +76,34 @@ html, body {
 /* Header */
 .header {
     margin-bottom: 8px;
+    text-align: center;
+}
+
+.school-logo {
+    width: 25mm;
+    height: 25mm;
+    margin: 0 auto 5px;
+}
+
+.school-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.school-name {
+    font-size: 14px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 3px;
+}
+
+.arabic-text {
+    font-size: 12px;
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: #333;
 }
 
 .header-title {
@@ -97,7 +125,7 @@ html, body {
 
 .header-info td {
     border: 1.5px solid #000;
-    padding: 4px 5px;
+    padding: 6px 5px;
     font-weight: bold;
 }
 
@@ -126,7 +154,7 @@ table {
 
 th, td {
     border: 1px solid #000;
-    padding: 4px 2px;
+    padding: 5px 2px;
     text-align: center;
     vertical-align: middle;
 }
@@ -136,7 +164,7 @@ th {
     font-weight: 900;
     text-transform: uppercase;
     font-size: 8px;
-    padding: 5px 2px;
+    padding: 6px 2px;
 }
 
 td {
@@ -145,11 +173,11 @@ td {
 
 /* Main table column widths */
 .main-table th:nth-child(1), .main-table td:nth-child(1) { width: 5%; }
-.main-table th:nth-child(2), .main-table td:nth-child(2) { width: 7%; }
-.main-table th:nth-child(3), .main-table td:nth-child(3) { width: 18%; text-align: left; padding-left: 4px; }
-.main-table th:nth-child(4), .main-table td:nth-child(4) { width: 13%; }
-.main-table th:nth-child(5), .main-table td:nth-child(5) { width: 4%; }
-.main-table th:nth-child(6), .main-table td:nth-child(6) { width: 8%; }
+.main-table th:nth-child(2), .main-table td:nth-child(2) { width: 8%; }
+.main-table th:nth-child(3), .main-table td:nth-child(3) { width: 22%; text-align: left; padding-left: 4px; }
+.main-table th:nth-child(4), .main-table td:nth-child(4) { width: 15%; }
+.main-table th:nth-child(5), .main-table td:nth-child(5) { width: 5%; }
+.main-table th:nth-child(6), .main-table td:nth-child(6) { width: 10%; }
 .main-table th:nth-child(7), .main-table td:nth-child(7) { width: 5%; }
 
 /* Bottom Section - Fixed to bottom */
@@ -289,7 +317,7 @@ td {
         page-break-after: always;
     }
     
-    .watermark {
+    .logo-watermark {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
@@ -300,12 +328,13 @@ td {
 <body>
 
 <%
-const studentsPerPage = 40;
+const studentsPerPage = 35;
 const totalPages = Math.ceil(students.length / studentsPerPage);
 const displayAcademicYear = typeof academicYear !== 'undefined' ? academicYear : '2025-26';
 const displaySchoolCode = typeof schoolCode !== 'undefined' ? schoolCode : '19057';
-const displaySchoolName = typeof schoolName !== 'undefined' ? schoolName : 'PPMHSS KOTTUKKARA';
+const displaySchoolName = typeof schoolName !== 'undefined' ? schoolName : 'P.P.M.H.S.S. KOTTUKKARA';
 const displayClassName = typeof className !== 'undefined' ? className : '8 A';
+const displaySchoolLogo = typeof schoolLogo !== 'undefined' ? schoolLogo : '';
 
 // Calculate category counts
 const categoryCounts = {
@@ -343,33 +372,46 @@ for (let page = 0; page < totalPages; page++) {
     const endIndex = Math.min(startIndex + studentsPerPage, students.length);
     const pageStudents = students.slice(startIndex, endIndex);
     const isLastPage = page === totalPages - 1;
+    const isFirstPage = page === 0;
 %>
 
 <div class="page-container">
     
-    <div class="watermark">
-        PPM HSS KOTTUKKARA
+    <!-- Logo Watermark -->
+    <div class="logo-watermark">
+        <% if (displaySchoolLogo) { %>
+            <img src="<%= displaySchoolLogo %>" alt="Watermark">
+        <% } else { %>
+            <div style="font-size: 40px; font-weight: bold; text-align: center; color: rgba(0,0,0,0.04);">
+                <%= displaySchoolName %>
+            </div>
+        <% } %>
     </div>
     
     <div class="content-layer">
         
         <div class="header">
+            <!-- School Logo on first page only -->
+            <% if (isFirstPage && displaySchoolLogo) { %>
+            <div class="school-logo">
+                <img src="<%= displaySchoolLogo %>" alt="School Logo">
+            </div>
+            <% } %>
+            <div class="school-name"><%= displaySchoolName %></div>
             <div class="header-title">MID DAY MEAL SCHEME <%= displayAcademicYear %> - BENEFICIARY LIST</div>
             
             <table class="header-info">
                 <tr>
-                    <td colspan="2">SCHOOL CODE</td>
-                    <td colspan="2"><%= displaySchoolCode %></td>
-                    <td colspan="2">SCHOOL NAME</td>
+                    <td><strong>SCHOOL CODE</strong></td>
+                    <td><%= displaySchoolCode %></td>
+                    <td><strong>SCHOOL NAME</strong></td>
                     <td colspan="2"><%= displaySchoolName %></td>
-                    <td colspan="2">CLASS</td>
-                    <td colspan="2"><%= displayClassName %> <%= displayAcademicYear %></td>
-                    <td rowspan="2" style="text-align: center; vertical-align: middle;">Supply.<br>Ntrn.<br>Food</td>
+                    <td><strong>CLASS</strong></td>
+                    <td><%= displayClassName %> (<%= displayAcademicYear %>)</td>
+                    <td><strong>Supply. Ntrn. Food</strong></td>
                 </tr>
             </table>
         </div>
-        
-        
         
         <div class="table-container">
             <table class="main-table">
@@ -396,7 +438,7 @@ for (let page = 0; page < totalPages; page++) {
                         <td><%= student.uid || '-' %></td>
                         <td><%= gender %></td>
                         <td><%= student.category || 'General' %></td>
-                        <td></td>
+                        <td>&nbsp;</td>
                     </tr>
                     <% }); %>
                 </tbody>
@@ -419,7 +461,6 @@ for (let page = 0; page < totalPages; page++) {
                     </tr>
                     <tr>
                         <th colspan="2"></th>
-                        <!-- <th></th> -->
                         <th>B</th><th>G</th><th>T</th>
                         <th>B</th><th>G</th><th>T</th>
                         <th>B</th><th>G</th><th>T</th>
@@ -428,18 +469,45 @@ for (let page = 0; page < totalPages; page++) {
                     </tr>
                 </thead>
                 <tbody>
+                    <!-- <tr>
+                        <td class="label-col" style="font-weight: 900;" colspan="2">RS</td>
+                        <td><%= categoryCounts.ST.B %></td>
+                        <td><%= categoryCounts.ST.G %></td>
+                        <td><%= categoryCounts.ST.T %></td>
+                        <td><%= categoryCounts.SC.B %></td>
+                        <td><%= categoryCounts.SC.G %></td>
+                        <td><%= categoryCounts.SC.T %></td>
+                        <td><%= categoryCounts.OBC.B %></td>
+                        <td><%= categoryCounts.OBC.G %></td>
+                        <td><%= categoryCounts.OBC.T %></td>
+                        <td><%= categoryCounts.General.B %></td>
+                        <td><%= categoryCounts.General.G %></td>
+                        <td><%= categoryCounts.General.T %></td>
+                        <td><%= totalBoys %></td>
+                        <td><%= totalGirls %></td>
+                        <td><%= grandTotal %></td>
+                    </tr> -->
                     <tr>
                         <td class="label-col" style="font-weight: 900;" colspan="2">RS</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
                         <!-- <td></td> -->
-                        <td></td><td></td><td></td>
-                        <td></td><td></td><td></td>
-                        <td></td><td></td><td></td>
-                        <td></td><td></td><td></td>
-                        <td></td><td></td><td></td>
                     </tr>
                     <tr>
                         <td class="label-col" style="font-weight: 900;" colspan="2">FS</td>
-                        <!-- <td></td> -->
                         <td></td><td></td><td></td>
                         <td></td><td></td><td></td>
                         <td></td><td></td><td></td>
@@ -463,9 +531,14 @@ for (let page = 0; page < totalPages; page++) {
                 </thead>
                 <tbody>
                     <tr>
-                        <td style="height: 20px;"></td>
-                        <td style="height: 20px;"></td>
-                        <td style="height: 20px;"></td>
+                        <td style="height: 20px;">&nbsp;</td>
+                        <td style="height: 20px;">&nbsp;</td>
+                        <td style="height: 20px;">&nbsp;</td>
+                    </tr>
+                    <tr>
+                        <td style="height: 20px;">&nbsp;</td>
+                        <td style="height: 20px;">&nbsp;</td>
+                        <td style="height: 20px;">&nbsp;</td>
                     </tr>
                 </tbody>
             </table>
@@ -491,15 +564,10 @@ for (let page = 0; page < totalPages; page++) {
                 <span class="generated-info">Generated on: <%= new Date().toLocaleDateString('en-IN') %></span>
             </div>
         </div>
-        <% } else { %>
-        <!-- <div class="footer" style="margin-top: auto; border-top: none;">
-            <span class="total-students">Continued on next page...</span>
-            <span class="generated-info">Page <%= page + 1 %> of <%= totalPages %></span>
-        </div> -->
         <% } %>
         
+        <div class="page-number">Page <%= page + 1 %> of <%= totalPages %></div>
     </div>
-    <div class="page-number">Page <%= page + 1 %> of <%= totalPages %></div>
 </div>
 
 <% } %>

@@ -4,7 +4,7 @@
   "description": "School Management System Backend with Socket.IO",
   "main": "server.js",
   "puppeteer": {
-    "skip_chromium_download": false
+    "skip_chromium_download": true
   },
   "scripts": {
     "start": "NODE_ENV=production node server.js",
@@ -14,7 +14,7 @@
     "test": "jest",
     "seed": "node src/seed/index.js",
     "seed:dev": "NODE_ENV=development node src/seed/index.js",
-    "postinstall": "echo 'Postinstall completed'"
+    "postinstall": "echo 'Postinstall completed - keeping puppeteer'"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -36,9 +36,8 @@
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.9.7",
-    "pdfkit": "^0.14.0",
     "phantomjs-prebuilt": "^2.1.16",
-    "puppeteer": "^24.41.0",
+    "puppeteer": "^24.43.0",
     "redis": "^4.6.12",
     "socket.io": "^4.7.2",
     "socket.io-client": "^4.7.2",

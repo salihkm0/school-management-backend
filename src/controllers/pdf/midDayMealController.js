@@ -4,6 +4,9 @@ const AcademicYear = require('../../models/AcademicYear');
 const Class = require('../../models/Class');
 const { generateMidDayMealPDF } = require('../../services/pdf/midDayMealPdfService');
 
+// School logo URL
+const SCHOOL_LOGO_URL = 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
+
 /**
  * Generate PDF for Mid Day Meal Scheme Beneficiary List
  * GET /api/mid-day-meal/pdf/:classId/:academicYearId?
@@ -44,8 +47,6 @@ exports.generateMidDayMealPDF = async (req, res) => {
 
     console.log(`Found ${students.length} students`);
 
-    console.log("students : ",students)
-
     const studentList = students.map(student => ({
       admissionNo: student.admissionNo || '-',
       name: student.fullName || '-',
@@ -55,9 +56,10 @@ exports.generateMidDayMealPDF = async (req, res) => {
     }));
 
     const templateData = {
+      schoolLogo: SCHOOL_LOGO_URL,
       academicYear: academicYearShort,
       schoolCode: '19057',
-      schoolName: 'PPMHSS KOTTUKKARA',
+      schoolName: 'P.P.M.H.S.S. KOTTUKKARA',
       className: classDetails.displayName || `${classDetails.name} ${classDetails.section || ''}`,
       students: studentList
     };

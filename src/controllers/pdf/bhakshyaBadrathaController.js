@@ -4,6 +4,9 @@ const AcademicYear = require('../../models/AcademicYear');
 const Class = require('../../models/Class');
 const { generateBhakshyaBadrathaPDF } = require('../../services/pdf/bhakshyaBadrathaPdfService');
 
+// School logo URL
+const SCHOOL_LOGO_URL = 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
+
 /**
  * Generate PDF for Bhakshya Badratha (Food Security Allowance)
  * GET /api/bhakshya-badratha/view/:classId/:academicYearId?
@@ -51,8 +54,10 @@ exports.generateBhakshyaBadrathaPDF = async (req, res) => {
     }));
 
     const templateData = {
+      schoolLogo: SCHOOL_LOGO_URL,
       academicYear: academicYearShort,
       className: classDetails.displayName || `${classDetails.name} ${classDetails.section || ''}`,
+      schoolName: 'P.P.M.H.S.S. KOTTUKKARA',
       students: studentList
     };
 
@@ -120,8 +125,10 @@ exports.downloadBhakshyaBadrathaPDF = async (req, res) => {
     }));
 
     const templateData = {
+      schoolLogo: SCHOOL_LOGO_URL,
       academicYear: academicYearShort,
       className: classDetails.displayName || `${classDetails.name} ${classDetails.section || ''}`,
+      schoolName: 'P.P.M.H.S.S. KOTTUKKARA',
       students: studentList
     };
 

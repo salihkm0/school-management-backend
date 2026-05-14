@@ -1,19 +1,7 @@
 // services/specialRiceDistributionPdfService.js
 const ejs = require('ejs');
 const path = require('path');
-const puppeteer = require('puppeteer');
-
-let browserInstance = null;
-
-const getBrowser = async () => {
-  if (!browserInstance) {
-    browserInstance = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
-  }
-  return browserInstance;
-};
+const { getBrowser } = require('./browserHelper');
 
 const generateSpecialRiceDistributionPDF = async (data) => {
   let page;

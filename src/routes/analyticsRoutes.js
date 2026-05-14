@@ -4,41 +4,48 @@ const router = express.Router();
 const { protect, authorize } = require('../middleware/auth');
 const {
   getDashboardAnalytics,
+  getRecentActivities,
+  subscribeDashboard,
+  getPerformanceAnalytics,
+  getAttendanceAnalytics,
   getGradeAnalysis,
   getFullAPlusStudents,
   getNearFullAPlusStudents,
-  generateReportCard,
-  generateClassReportCards,
-  getPerformanceAnalytics,
-  getAttendanceAnalytics,
   getTopPerformingClasses,
   getStudentProgressTrend,
+  generateReportCard,
+  generateClassReportCards,
   generateReportCardPDF,
   generateClassReportCardsPDF,
-  getRecentActivities,
-  subscribeDashboard
 } = require('../controllers/analyticsController');
 
+// All analytics routes require authentication
 router.use(protect);
 
-// Dashboard
-router.get('/dashboard', getDashboardAnalytics);
-router.get('/recent-activities', getRecentActivities);
-router.post('/dashboard/subscribe', subscribeDashboard);
+// Dashboard analytics
+router.get('/dashboard', authorize('admin', 'staff'), getDashboardAnalytics);
+router.get('/recent-activities', authorize('admin', 'staff'), getRecentActivities);
+router.post('/dashboard/subscribe', authorize('admin', 'staff'), subscribeDashboard);
 
-// Grade Analysis
-router.get('/grade-analysis', getGradeAnalysis);
-router.get('/full-aplus', getFullAPlusStudents);
-router.get('/near-full-aplus', getNearFullAPlusStudents);
+// Performance analytics
+router.get('/performance', authorize('admin', 'staff'), getPerformanceAnalytics);
+router.get('/attendance', authorize('admin', 'staff', 'parent'), getAttendanceAnalytics);
+router.get('/grade-analysis', authorize('admin', 'staff'), getGradeAnalysis);
+router.get('/full-aplus', authorize('admin', 'staff'), getFullAPlusStudents);
+router.get('/near-full-aplus', authorize('admin', 'staff'), getNearFullAPlusStudents);
+router.get('/top-classes', authorize('admin', 'staff'), getTopPerformingClasses);
+router.get('/student-progress/:studentId', authorize('admin', 'staff', 'parent'), getStudentProgressTrend);
 
-// Report Cards
-router.get('/report-card/:studentId/:academicYearId?', generateReportCardPDF);
-router.get('/class-report-cards/:classId/:academicYearId', authorize('admin', 'staff'), generateClassReportCardsPDF);
+// Report cards
+router.get('/report-card/:studentId', authorize('admin', 'staff', 'parent'), generateReportCard);
+router.get('/report-card/:studentId/:academicYearId', authorize('admin', 'staff', 'parent'), generateReportCard);
+router.get('/class-report-cards/:classId', authorize('admin', 'staff'), generateClassReportCards);
+router.get('/class-report-cards/:classId/:academicYearId', authorize('admin', 'staff'), generateClassReportCards);
 
-// Performance & Attendance
-router.get('/performance', getPerformanceAnalytics);
-router.get('/attendance', getAttendanceAnalytics);
-router.get('/top-classes', getTopPerformingClasses);
-router.get('/student-progress/:studentId', getStudentProgressTrend);
+// PDF generation (optional - can be implemented later)
+router.get('/report-card-pdf/:studentId', authorize('admin', 'staff', 'parent'), generateReportCardPDF);
+router.get('/report-card-pdf/:studentId/:academicYearId', authorize('admin', 'staff', 'parent'), generateReportCardPDF);
+router.get('/class-report-cards-pdf/:classId', authorize('admin', 'staff'), generateClassReportCardsPDF);
+router.get('/class-report-cards-pdf/:classId/:academicYearId', authorize('admin', 'staff'), generateClassReportCardsPDF);
 
 module.exports = router;

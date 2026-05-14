@@ -7,7 +7,7 @@
 <style>
 @page {
     size: A4 portrait;
-    margin: 3mm;
+    margin: 0;
 }
 
 * {
@@ -20,6 +20,7 @@ html, body {
     margin: 0;
     padding: 0;
     width: 210mm;
+    height: 297mm;
     font-family: "Times New Roman", serif;
     background: #fff;
     -webkit-print-color-adjust: exact;
@@ -27,10 +28,9 @@ html, body {
 }
 
 .page-container {
-    width: 204mm;
-    min-height: 287mm;
-    margin: 0 auto 3mm auto;
-    padding: 5mm 3mm;
+    width: 100%;
+    min-height: 100%;
+    padding: 10mm 8mm;
     border: 2px solid #000;
     position: relative;
     page-break-after: always;
@@ -42,26 +42,41 @@ html, body {
 
 .page-container:last-child {
     page-break-after: auto;
-    margin-bottom: 0;
 }
 
-/* Watermark */
-.watermark {
+/* Logo Watermark - Centered */
+.logo-watermark {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) rotate(-45deg);
-    font-size: 60px;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.logo-watermark img {
+    max-width: 120mm;
+    max-height: 120mm;
+    width: auto;
+    height: auto;
+    opacity: 0.04;
+    object-fit: contain;
+}
+
+.logo-watermark .watermark-text {
+    font-size: 40px;
     font-weight: bold;
     color: rgba(0, 0, 0, 0.04);
-    white-space: nowrap;
-    pointer-events: none;
-    z-index: 1;
     text-transform: uppercase;
-    letter-spacing: 10px;
-    font-family: 'Times New Roman', serif;
-    width: 100%;
-    text-align: center;
+    letter-spacing: 5px;
+    white-space: nowrap;
+    transform: rotate(-45deg);
 }
 
 .content-layer {
@@ -78,30 +93,42 @@ html, body {
     flex: 1;
 }
 
-/* Header Section - Like Noon Feeding Attendance Register */
+/* Header Section */
 .header-section {
     text-align: center;
     margin-bottom: 8px;
 }
 
-.main-title {
-    font-size: 16px;
-    font-weight: 900;
-    text-transform: uppercase;
-    margin-bottom: 3px;
+.school-logo {
+    width: 20mm;
+    height: 20mm;
+    margin: 0 auto 3px;
+}
+
+.school-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
 }
 
 .school-name {
-    font-size: 18px;
+    font-size: 13px;
     font-weight: 900;
     text-transform: uppercase;
-    letter-spacing: 2px;
-    margin-bottom: 5px;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
 }
 
-.sub-title {
-    font-size: 13px;
-    font-weight: 700;
+.arabic-text {
+    font-size: 11px;
+    font-weight: bold;
+    margin-bottom: 2px;
+    color: #333;
+}
+
+.main-title {
+    font-size: 14px;
+    font-weight: 900;
     text-transform: uppercase;
     margin-bottom: 3px;
 }
@@ -111,7 +138,8 @@ html, body {
     width: 100%;
     border-collapse: collapse;
     margin-bottom: 5px;
-    font-size: 11px;
+    margin-top: 5px;
+    font-size: 10px;
 }
 
 .header-row td {
@@ -126,23 +154,24 @@ html, body {
 .main-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 8.5px;
-    margin-top: 3px;
+    font-size: 8px;
+    margin-top: 5px;
+    table-layout: fixed;
 }
 
 .main-table th,
 .main-table td {
     border: 1.5px solid #000;
-    padding: 5px 2px;
+    padding: 4px 2px;
     text-align: center;
     vertical-align: middle;
 }
 
 .main-table th {
-    background: #f0f0f0;
+    background: transparent;
     font-weight: 900;
     text-transform: uppercase;
-    font-size: 8px;
+    font-size: 7.5px;
     padding: 5px 2px;
 }
 
@@ -153,11 +182,11 @@ html, body {
 /* Column widths */
 .main-table .sl-col { width: 6%; }
 .main-table .adm-col { width: 8%; }
-.main-table .name-col { width: 20%; text-align: left; padding-left: 4px; }
+.main-table .name-col { width: 22%; text-align: left; padding-left: 4px; }
 .main-table .uid-col { width: 15%; }
-.main-table .parent-col { width: 22%; text-align: left; padding-left: 4px; }
+.main-table .parent-col { width: 24%; text-align: left; padding-left: 4px; }
 .main-table .qty-col { width: 10%; }
-.main-table .sign-col { width: 19%; }
+.main-table .sign-col { width: 15%; }
 
 /* Bottom Section */
 .bottom-section {
@@ -174,12 +203,12 @@ html, body {
 }
 
 .signature-left {
-    font-size: 10px;
+    font-size: 9px;
     font-weight: bold;
 }
 
 .signature-right {
-    font-size: 10px;
+    font-size: 9px;
     font-weight: bold;
     text-align: right;
 }
@@ -193,38 +222,42 @@ html, body {
 
 /* Footer */
 .footer {
-    padding-top: 8px;
+    padding-top: 6px;
     border-top: 1px solid #000;
-    font-size: 10px;
+    font-size: 9px;
     text-align: center;
     font-weight: bold;
+    overflow: hidden;
 }
 
 .page-number {
     text-align: center;
+    float: right;
 }
 
 .total-students {
     float: left;
     font-weight: 700;
-    font-size: 9px;
+    font-size: 8px;
 }
 
 .generated-info {
     float: right;
-    font-size: 8px;
+    font-size: 7px;
+    color: #666;
 }
 
 /* Print optimization */
 @media print {
     html, body {
         width: 210mm;
+        height: 297mm;
         margin: 0;
         padding: 0;
     }
     
     th {
-        background: #f0f0f0 !important;
+        background: transparent !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
@@ -242,7 +275,7 @@ html, body {
         page-break-after: always;
     }
     
-    .watermark {
+    .logo-watermark {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
@@ -258,7 +291,8 @@ const totalPages = Math.ceil(students.length / studentsPerPage);
 const displayAcademicYear = typeof academicYear !== 'undefined' ? academicYear : '2025-2026';
 const displayClassName = typeof className !== 'undefined' ? className : '8 A';
 const displayMonth = typeof month !== 'undefined' ? month : 'March 2026';
-const displaySchoolName = typeof schoolName !== 'undefined' ? schoolName : 'PPMHSS KOTTUKKARA';
+const displaySchoolName = typeof schoolName !== 'undefined' ? schoolName : 'P.P.M.H.S.S. KOTTUKKARA';
+const displaySchoolLogo = typeof schoolLogo !== 'undefined' ? schoolLogo : '';
 
 for (let page = 0; page < totalPages; page++) {
     const startIndex = page * studentsPerPage;
@@ -270,8 +304,13 @@ for (let page = 0; page < totalPages; page++) {
 
 <div class="page-container">
     
-    <div class="watermark">
-        PPM HSS KOTTUKKARA
+    <!-- Logo Watermark - Centered -->
+    <div class="logo-watermark">
+        <% if (displaySchoolLogo) { %>
+            <img src="<%= displaySchoolLogo %>" alt="Watermark">
+        <% } else { %>
+            <div class="watermark-text"><%= displaySchoolName %></div>
+        <% } %>
     </div>
     
     <div class="content-layer">
@@ -279,15 +318,20 @@ for (let page = 0; page < totalPages; page++) {
         <div class="main-content">
             
             <div class="header-section">
-                <div class="main-title">Special Rice Distribution</div>
+                <% if (isFirstPage && displaySchoolLogo) { %>
+                <div class="school-logo">
+                    <img src="<%= displaySchoolLogo %>" alt="School Logo">
+                </div>
+                <% } %>
                 <div class="school-name"><%= displaySchoolName %></div>
+                <div class="main-title">Special Rice Distribution</div>
             </div>
             
             <table class="header-row">
                 <tr>
-                    <td colspan="12">For the Month of <%= displayMonth %></td>
+                    <td colspan="7">For the Month of <%= displayMonth %></td>
                     <td colspan="5">Class & Division : <%= displayClassName %></td>
-                    <td colspan="7"><%= displayAcademicYear %></td>
+                    <td colspan="4"><%= displayAcademicYear %></td>
                 </tr>
             </table>
             
@@ -299,7 +343,7 @@ for (let page = 0; page < totalPages; page++) {
                         <th class="name-col">Name of Student</th>
                         <th class="uid-col">UID</th>
                         <th class="parent-col">Name of Parent</th>
-                        <th class="qty-col">Quantity of Rice</th>
+                        <th class="qty-col">Quantity<br>of Rice</th>
                         <th class="sign-col">Signature</th>
                     </tr>
                 </thead>
@@ -313,25 +357,10 @@ for (let page = 0; page < totalPages; page++) {
                         <td style="text-align: left; padding-left: 4px;"><%= student.name %></td>
                         <td><%= student.uid || '-' %></td>
                         <td style="text-align: left; padding-left: 4px;"><%= student.parentName %></td>
-                        <td></td>
-                        <td></td>
+                        <td>&nbsp;</td>
+                        <td>&nbsp;</td>
                     </tr>
                     <% }); %>
-                    
-                    <% 
-                    const remainingRows = studentsPerPage - pageStudents.length;
-                    for (let i = 0; i < remainingRows; i++) {
-                    %>
-                    <!-- <tr>
-                        <td>-</td>
-                        <td>-</td>
-                        <td style="text-align: left;">-</td>
-                        <td>-</td>
-                        <td style="text-align: left;">-</td>
-                        <td></td>
-                        <td></td>
-                    </tr> -->
-                    <% } %>
                 </tbody>
             </table>
             
@@ -352,8 +381,8 @@ for (let page = 0; page < totalPages; page++) {
         
         <div class="footer">
             <span class="total-students">Total Students: <%= students.length %></span>
+            <span class="generated-info"><%= new Date().toLocaleDateString('en-IN') %></span>
             <span class="page-number">Page <%= page + 1 %> of <%= totalPages %></span>
-            <span class="generated-info">Generated: <%= new Date().toLocaleDateString('en-IN') %></span>
         </div>
         
     </div>

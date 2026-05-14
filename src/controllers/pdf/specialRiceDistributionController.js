@@ -4,6 +4,9 @@ const AcademicYear = require('../../models/AcademicYear');
 const Class = require('../../models/Class');
 const { generateSpecialRiceDistributionPDF } = require('../../services/pdf/specialRiceDistributionPdfService');
 
+// School logo URL
+const SCHOOL_LOGO_URL = 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
+
 /**
  * Generate PDF for Special Rice Distribution
  * GET /api/special-rice-distribution/view/:classId/:month?/:year?
@@ -58,10 +61,11 @@ exports.generateSpecialRiceDistributionPDF = async (req, res) => {
     }));
 
     const templateData = {
+      schoolLogo: SCHOOL_LOGO_URL,
       academicYear: academicYearString,
       className: classDetails.displayName || `${classDetails.name} ${classDetails.section || ''}`,
       month: monthYear,
-      schoolName: 'PPMHSS KOTTUKKARA',
+      schoolName: 'P.P.M.H.S.S. KOTTUKKARA',
       students: studentList
     };
 
@@ -136,10 +140,11 @@ exports.downloadSpecialRiceDistributionPDF = async (req, res) => {
     }));
 
     const templateData = {
+      schoolLogo: SCHOOL_LOGO_URL,
       academicYear: academicYearString,
       className: classDetails.displayName || `${classDetails.name} ${classDetails.section || ''}`,
       month: monthYear,
-      schoolName: 'PPMHSS KOTTUKKARA',
+      schoolName: 'P.P.M.H.S.S. KOTTUKKARA',
       students: studentList
     };
 

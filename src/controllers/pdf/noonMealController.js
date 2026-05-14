@@ -4,6 +4,9 @@ const AcademicYear = require('../../models/AcademicYear');
 const Class = require('../../models/Class');
 const { generateNoonMealPDF } = require('../../services/pdf/noonMealPdfService');
 
+// School logo URL
+const SCHOOL_LOGO_URL = 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
+
 /**
  * Generate PDF for Noon Meal Programme Consolidation List
  * GET /api/noon-meal/pdf/:month?/:year?/:workingDays?
@@ -35,13 +38,16 @@ exports.generateNoonMealPDF = async (req, res) => {
     }
 
     // Divisions A to X
-    const divisions = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X'];
+    const divisions = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
 
     const templateData = {
+      schoolLogo: SCHOOL_LOGO_URL,
       academicYear: academicYearString,
       monthYear: monthYear,
       workingDays: parseInt(workingDays) || 25,
-      divisions: divisions
+      divisions: divisions,
+      schoolName: 'P.P.M.H.S.S. KOTTUKKARA',
+      schoolAddress: 'Kottukkara, Kondotty, Malappuram, Kerala - 673638'
     };
 
     const pdfBuffer = await generateNoonMealPDF(templateData);

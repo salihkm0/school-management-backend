@@ -15,9 +15,9 @@ const EXAM_TYPES = {
 };
 
 const SESSION_TIMES = {
-  BF: 'BF', // Before Noon (9 AM - 12 PM)
-  AF: 'AF', // After Noon (2 PM - 5 PM)
-  FULL: 'FULL' // Full Day (9 AM - 5 PM)
+  BF: 'BF',
+  AF: 'AF',
+  FULL: 'FULL'
 };
 
 const SUBMISSION_STATUS = {
@@ -27,7 +27,7 @@ const SUBMISSION_STATUS = {
   PUBLISHED: 'published'
 };
 
-// Enhanced Subject Schedule Schema with more details
+// Subject Schedule Schema
 const SubjectScheduleSchema = new mongoose.Schema({
   subjectId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -56,9 +56,8 @@ const SubjectScheduleSchema = new mongoose.Schema({
     type: String,
     default: '12:00 PM'
   },
-  duration: Number, // in minutes
+  duration: Number,
   
-  // Marking Scheme
   maxMarks: {
     type: Number,
     required: true,
@@ -69,8 +68,6 @@ const SubjectScheduleSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
-  
-  // Theory and Practical breakdown
   theoryMarks: {
     type: Number,
     default: 0,
@@ -86,7 +83,7 @@ const SubjectScheduleSchema = new mongoose.Schema({
     default: false
   },
   
-  // CE (Continuous Evaluation) details
+  // Subject-level CE
   ceEnabled: {
     type: Boolean,
     default: false
@@ -112,7 +109,12 @@ const SubjectScheduleSchema = new mongoose.Schema({
     max: 100
   },
   
-  // Exam logistics
+  ceComponents: [{
+    name: String,
+    maxMarks: Number,
+    weightage: Number
+  }],
+  
   roomNumber: String,
   building: String,
   invigilators: [{
@@ -121,8 +123,6 @@ const SubjectScheduleSchema = new mongoose.Schema({
   }],
   invigilatorNames: [String],
   notes: String,
-  
-  // Additional
   isAbsentAllowed: {
     type: Boolean,
     default: true
@@ -133,7 +133,7 @@ const SubjectScheduleSchema = new mongoose.Schema({
   }
 });
 
-// Simplified Subject Config Schema (for backward compatibility)
+// Subject Config Schema
 const SubjectConfigSchema = new mongoose.Schema({
   subjectId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -145,12 +145,12 @@ const SubjectConfigSchema = new mongoose.Schema({
     required: true
   },
   subjectCode: String,
-  maxMarks: {
+  termMaxMarks: {
     type: Number,
     required: true,
     min: 1
   },
-  passingMarks: {
+  termPassingMarks: {
     type: Number,
     required: true,
     min: 0
@@ -163,6 +163,31 @@ const SubjectConfigSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  ceEnabled: {
+    type: Boolean,
+    default: false
+  },
+  ceMaxMarks: {
+    type: Number,
+    default: 0
+  },
+  cePassingMarks: {
+    type: Number,
+    default: 0
+  },
+  ceComponents: [{
+    name: String,
+    maxMarks: Number,
+    weightage: Number
+  }],
+  totalMaxMarks: {
+    type: Number,
+    default: 0
+  },
+  totalPassingMarks: {
+    type: Number,
+    default: 0
+  },
   weightage: {
     type: Number,
     default: 100,
@@ -171,7 +196,7 @@ const SubjectConfigSchema = new mongoose.Schema({
   }
 });
 
-// Class-wise submission tracking
+// Class Submission Status Schema
 const ClassSubmissionStatusSchema = new mongoose.Schema({
   classId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -212,7 +237,6 @@ const ClassSubmissionStatusSchema = new mongoose.Schema({
 });
 
 const ExamSchema = new mongoose.Schema({
-  // Basic Information
   name: {
     type: String,
     required: true
@@ -237,15 +261,11 @@ const ExamSchema = new mongoose.Schema({
     enum: ['first', 'second', 'third', 'fourth'],
     default: 'first'
   },
-  
-  // Target Classes with details
   classIds: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Class',
     required: true
   }],
-  
-  // Detailed class information (denormalized for faster access)
   classDetails: [{
     classId: mongoose.Schema.Types.ObjectId,
     className: String,
@@ -253,35 +273,21 @@ const ExamSchema = new mongoose.Schema({
     displayName: String,
     totalStudents: Number
   }],
-  
-  // Subjects Configuration
   subjects: [SubjectConfigSchema],
-  
-  // Enhanced Schedule
   schedule: [SubjectScheduleSchema],
-  
-  // Scheduling mode
   schedulingMode: {
     type: String,
     enum: ['date_range', 'subject_schedule'],
     default: 'subject_schedule'
   },
-  
-  // Date range
   startDate: Date,
   endDate: Date,
-  
-  // Class-wise submission tracking
   classSubmissionStatus: [ClassSubmissionStatusSchema],
-  
-  // Overall status
   overallStatus: {
     type: String,
     enum: Object.values(SUBMISSION_STATUS),
     default: 'draft'
   },
-  
-  // Settings
   settings: {
     allowCalculator: { type: Boolean, default: false },
     isOpenBook: { type: Boolean, default: false },
@@ -295,9 +301,7 @@ const ExamSchema = new mongoose.Schema({
     allowAbsent: { type: Boolean, default: true },
     showRank: { type: Boolean, default: true }
   },
-  
-  // CE Configuration (global)
-  ceConfig: {
+  globalCeConfig: {
     enabled: { type: Boolean, default: false },
     maxMarks: { type: Number, default: 20 },
     passingMarks: { type: Number, default: 8 },
@@ -305,11 +309,8 @@ const ExamSchema = new mongoose.Schema({
       name: String,
       maxMarks: Number,
       weightage: Number
-    }],
-    subjectWise: { type: Boolean, default: true }
+    }]
   },
-  
-  // Results
   isPublished: {
     type: Boolean,
     default: false
@@ -323,8 +324,6 @@ const ExamSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
-  
-  // Metadata
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
@@ -333,14 +332,11 @@ const ExamSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
-  
-  // Deadlines
-  ceEntryDeadline: Date,
   termEntryDeadline: Date,
   resultDeclarationDate: Date
 }, { timestamps: true });
 
-// Virtual for display name
+// Virtuals
 ExamSchema.virtual('displayName').get(function() {
   const typeNames = {
     first: 'First Term', second: 'Second Term', final: 'Final',
@@ -356,75 +352,79 @@ ExamSchema.virtual('displayName').get(function() {
   return `${this.name} - ${this.academicYear}`;
 });
 
-// Virtual for total max marks
 ExamSchema.virtual('totalMaxMarks').get(function() {
-  return this.subjects.reduce((sum, s) => sum + s.maxMarks, 0);
+  return this.subjects.reduce((sum, s) => sum + (s.termMaxMarks || 0) + (s.ceMaxMarks || 0), 0);
 });
 
-// Virtual for class names
-ExamSchema.virtual('classNames').get(function() {
-  return this.classDetails.map(c => c.displayName).join(', ');
-});
-
-// Method to get subject config
+// Methods
 ExamSchema.methods.getSubjectConfig = function(subjectId) {
   return this.subjects.find(s => s.subjectId.toString() === subjectId.toString());
 };
 
-// Method to get subject schedule
 ExamSchema.methods.getSubjectSchedule = function(subjectId) {
   return this.schedule.find(s => s.subjectId.toString() === subjectId.toString());
 };
 
-// Method to update class submission stats
+ExamSchema.methods.getSubjectCeConfig = function(subjectId) {
+  const subjectConfig = this.getSubjectConfig(subjectId);
+  if (subjectConfig && subjectConfig.ceEnabled) {
+    return {
+      enabled: subjectConfig.ceEnabled,
+      maxMarks: subjectConfig.ceMaxMarks,
+      passingMarks: subjectConfig.cePassingMarks,
+      components: subjectConfig.ceComponents || []
+    };
+  }
+  return this.globalCeConfig || { enabled: false };
+};
+
+// FIX: Add the missing method
 ExamSchema.methods.updateClassSubmissionStats = async function(classId) {
-  const Mark = mongoose.model('Mark');
-  const Student = mongoose.model('Student');
-  
-  const classStatus = this.classSubmissionStatus.find(
-    cs => cs.classId.toString() === classId.toString()
-  );
-  
-  if (!classStatus) return;
-  
-  const totalStudents = await Student.countDocuments({ 
-    classId, 
-    status: 'active' 
-  });
-  
-  const termMarksEntered = await Mark.countDocuments({
-    examId: this._id,
-    classId,
-    'termMarks.isFinalized': true
-  });
-  
-  const ceMarksEntered = await Mark.countDocuments({
-    examId: this._id,
-    classId,
-    'ceMarks.isFinalized': true
-  });
-  
-  const totalExpectedTermMarks = totalStudents * this.subjects.length;
-  const totalExpectedCEMarks = this.ceConfig?.enabled ? totalStudents * this.subjects.length : 0;
-  
-  classStatus.totalStudents = totalStudents;
-  classStatus.marksEntryStats = {
-    totalStudents,
-    termMarksEntered,
-    ceMarksEntered,
-    marksPending: totalExpectedTermMarks - termMarksEntered,
-    completionPercentage: totalExpectedTermMarks > 0 
-      ? (termMarksEntered / totalExpectedTermMarks) * 100 
-      : 0
-  };
-  
-  await this.save();
-  return classStatus.marksEntryStats;
+  try {
+    const Mark = mongoose.model('Mark');
+    const Student = mongoose.model('Student');
+    
+    const classStatus = this.classSubmissionStatus.find(
+      cs => cs.classId.toString() === classId.toString()
+    );
+    
+    if (!classStatus) return null;
+    
+    const totalStudents = await Student.countDocuments({ 
+      classId, 
+      status: 'active' 
+    });
+    
+    const termMarksEntered = await Mark.countDocuments({
+      examId: this._id,
+      classId,
+      isFinalized: true
+    });
+    
+    const totalSubjects = this.subjects.length;
+    const totalExpectedTermMarks = totalStudents * totalSubjects;
+    
+    classStatus.totalStudents = totalStudents;
+    classStatus.marksEntryStats = {
+      totalStudents,
+      termMarksEntered,
+      ceMarksEntered: 0,
+      marksPending: totalExpectedTermMarks - termMarksEntered,
+      completionPercentage: totalExpectedTermMarks > 0 
+        ? (termMarksEntered / totalExpectedTermMarks) * 100 
+        : 0
+    };
+    
+    await this.save();
+    return classStatus.marksEntryStats;
+  } catch (error) {
+    console.error('Error updating class submission stats:', error);
+    return null;
+  }
 };
 
 // Pre-save middleware
 ExamSchema.pre('save', async function(next) {
-  // Update overall status based on class submissions
   if (this.classSubmissionStatus && this.classSubmissionStatus.length > 0) {
     const allSubmitted = this.classSubmissionStatus.every(
       cs => cs.status === 'submitted' || cs.status === 'reviewed'
@@ -443,10 +443,9 @@ ExamSchema.pre('save', async function(next) {
     }
   }
   
-  // Populate class details if not present
   if (this.classIds && this.classIds.length > 0 && (!this.classDetails || this.classDetails.length === 0)) {
     const Class = mongoose.model('Class');
-    const classes = await Class.find({ _id: { $in: this.classIds } }).populate('academicYearId');
+    const classes = await Class.find({ _id: { $in: this.classIds } });
     this.classDetails = classes.map(c => ({
       classId: c._id,
       className: c.name,

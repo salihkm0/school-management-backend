@@ -1,20 +1,7 @@
 // services/idCardListPdfService.js
 const ejs = require('ejs');
 const path = require('path');
-const puppeteer = require('puppeteer');
-
-let browserInstance = null;
-
-// Reuse browser (IMPORTANT for performance)
-const getBrowser = async () => {
-  if (!browserInstance) {
-    browserInstance = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
-  }
-  return browserInstance;
-};
+const { getBrowser } = require('./browserHelper');
 
 const generateIdCardListPDF = async (data) => {
   let page;
@@ -22,23 +9,20 @@ const generateIdCardListPDF = async (data) => {
   try {
     const templatePath = path.join(__dirname, '../../views/idCardList.ejs');
 
-    // Render HTML
     const html = await ejs.renderFile(templatePath, data);
 
     const browser = await getBrowser();
     page = await browser.newPage();
 
-    // Better rendering
     await page.setContent(html, {
       waitUntil: 'networkidle0'
     });
 
-    // IMPORTANT for print CSS
     await page.emulateMediaType('screen');
 
     const pdfBuffer = await page.pdf({
       format: 'A4',
-      orientation: 'portrait',  // ✅ Changed to portrait
+      orientation: 'portrait',
       printBackground: true,
       preferCSSPageSize: true,
       margin: {

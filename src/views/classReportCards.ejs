@@ -2,12 +2,12 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Progress Report - <%= student.name %></title>
+<title>Class Report Cards - <%= className %> <%= academicYear %></title>
 
 <style>
 @page {
     size: A4 portrait;
-    margin: 5mm;
+    margin: 0;
 }
 
 * {
@@ -33,10 +33,15 @@ html, body {
     padding: 10mm 8mm;
     border: 2px solid #000;
     position: relative;
+    page-break-after: always;
     box-sizing: border-box;
     background: #fff;
     display: flex;
     flex-direction: column;
+}
+
+.page-container:last-child {
+    page-break-after: auto;
 }
 
 /* Logo Watermark */
@@ -110,13 +115,22 @@ html, body {
     font-weight: 900;
     text-transform: uppercase;
     text-decoration: underline;
-    margin-bottom: 15px;
+    margin-bottom: 8px;
+}
+
+.class-info {
+    font-size: 12px;
+    font-weight: bold;
+    margin-bottom: 5px;
 }
 
 /* Student Info */
 .student-info {
     margin-bottom: 15px;
     font-size: 11px;
+    border: 1px solid #000;
+    padding: 5px;
+    background: #fafafa;
 }
 
 .info-row {
@@ -137,14 +151,14 @@ html, body {
 .marks-table {
     width: 100%;
     border-collapse: collapse;
-    margin: 15px 0;
-    font-size: 10px;
+    margin: 10px 0;
+    font-size: 9px;
 }
 
 .marks-table th,
 .marks-table td {
     border: 1.5px solid #000;
-    padding: 6px 4px;
+    padding: 4px 3px;
     text-align: center;
     vertical-align: middle;
 }
@@ -153,13 +167,13 @@ html, body {
     background: #f0f0f0;
     font-weight: 900;
     text-transform: uppercase;
-    font-size: 9px;
+    font-size: 8px;
 }
 
 .marks-table td:first-child {
     text-align: left;
     font-weight: 600;
-    padding-left: 8px;
+    padding-left: 6px;
 }
 
 /* Total Row */
@@ -174,8 +188,8 @@ html, body {
 
 /* Attendance Section */
 .attendance-section {
-    margin: 15px 0;
-    padding: 8px 10px;
+    margin: 10px 0;
+    padding: 5px 8px;
     border: 1.5px solid #000;
     background: #fff;
 }
@@ -183,32 +197,13 @@ html, body {
 .attendance-row {
     display: flex;
     justify-content: space-between;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
-}
-
-/* Remarks Section */
-.remarks-section {
-    margin-top: 15px;
-    font-size: 11px;
-    font-weight: bold;
-}
-
-.remarks-label {
-    display: inline-block;
-    width: 60px;
-}
-
-.remarks-line {
-    display: inline-block;
-    width: 620px;
-    border-bottom: 1px solid #000;
-    margin-left: 5px;
 }
 
 /* Signature Section */
 .signature-section {
-    margin-top: 20px;
+    margin-top: 15px;
     display: flex;
     justify-content: space-between;
     gap: 20px;
@@ -220,62 +215,15 @@ html, body {
 }
 
 .signature-label {
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 700;
-    margin-bottom: 20px;
+    margin-bottom: 15px;
 }
 
 .signature-line {
     border-top: 1.5px solid #000;
     width: 100%;
     margin-top: 5px;
-}
-
-/* Instructions Section */
-.instructions-section {
-    margin-top: 15px;
-    margin-bottom: 10px;
-    font-size: 8px;
-    color: #444;
-    line-height: 1.5;
-    border-top: 1px solid #ccc;
-    padding-top: 10px;
-}
-
-.instructions-title {
-    font-weight: 900;
-    text-decoration: underline;
-    margin-bottom: 5px;
-    font-size: 9px;
-}
-
-.instructions-list {
-    list-style-type: none;
-    padding-left: 0;
-}
-
-.instructions-list li {
-    margin-bottom: 2px;
-}
-
-/* Grade Legend */
-.grade-legend {
-    margin-top: 10px;
-    padding: 6px 10px;
-    border: 1.5px solid #000;
-    background: #fff;
-}
-
-.legend-title {
-    font-size: 9px;
-    font-weight: 900;
-    margin-bottom: 3px;
-}
-
-.legend-text {
-    font-size: 8px;
-    font-weight: 600;
-    line-height: 1.4;
 }
 
 /* Bottom Info Row */
@@ -285,7 +233,7 @@ html, body {
     align-items: flex-end;
     margin-top: 10px;
     border-top: 1px solid #000;
-    padding-top: 8px;
+    padding-top: 5px;
 }
 
 .grade-info {
@@ -298,6 +246,13 @@ html, body {
     font-size: 8px;
     color: #666;
     text-align: right;
+}
+
+.page-number {
+    text-align: center;
+    font-size: 9px;
+    margin-top: 5px;
+    font-weight: bold;
 }
 
 /* Print optimization */
@@ -324,6 +279,7 @@ html, body {
         border: 2px solid #000;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
+        page-break-after: always;
     }
     
     .logo-watermark {
@@ -335,6 +291,14 @@ html, body {
 </head>
 
 <body>
+
+<%
+let pageNum = 1;
+const totalStudents = students.length;
+
+students.forEach(function(student, index) {
+    const data = student;
+%>
 
 <div class="page-container">
     
@@ -354,32 +318,28 @@ html, body {
                 </div>
                 <div class="school-name">P.P.M.H.S.S. KOTTUKKARA</div>
                 <div class="report-title">PROGRESS REPORT - <%= academicYear %></div>
-                <!-- <div class="exam-info" style="font-size: 11px; font-weight: bold; margin-top: 3px;">Exam: <%= examName %></div> -->
-                <div class="report-title" style="font-size: 12px; margin-top: 1px;"><%= examName %></div>
+                <div class="exam-info" style="font-size: 11px; font-weight: bold; margin-top: 3px;"> <%= examName %></div>
+                <div class="class-info">Class: <%= className %></div>
             </div>
             
             <!-- Student Info -->
             <div class="student-info">
                 <div class="info-row">
                     <span class="info-label">Name</span>
-                    <span class="info-value">: <%= student.name %></span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Class & Division</span>
-                    <span class="info-value">: <%= student.class %></span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Admission No.</span>
-                    <span class="info-value">: <%= student.admissionNo %></span>
+                    <span class="info-value">: <%= data.student.name %></span>
                 </div>
                 <div class="info-row">
                     <span class="info-label">Roll Number</span>
-                    <span class="info-value">: <%= student.rollNumber %></span>
+                    <span class="info-value">: <%= data.student.rollNumber %></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Admission No.</span>
+                    <span class="info-value">: <%= data.student.admissionNo %></span>
                 </div>
             </div>
             
             <!-- Marks Table -->
-            <% if (subjects && subjects.length > 0) { %>
+            <% if (data.subjects && data.subjects.length > 0) { %>
             <table class="marks-table">
                 <thead>
                     <tr>
@@ -403,7 +363,7 @@ html, body {
                 let totalCE = 0;
                 let totalTE = 0;
                 
-                subjects.forEach(function(subject) {
+                data.subjects.forEach(function(subject) {
                     totalCEMax += subject.ceMax;
                     totalTEMax += subject.teMax;
                     totalCE += subject.ceMarks;
@@ -420,19 +380,14 @@ html, body {
                 </tr>
                 <% }); %>
                 
-                <% 
-                const grandTotal = totalCE + totalTE;
-                const grandMax = totalCEMax + totalTEMax;
-                const overallPercentage = grandMax > 0 ? Math.round((grandTotal / grandMax) * 100) : 0;
-                %>
                 <tr class="total-row">
                     <td><strong>TOTAL</strong></td>
-                    <td><strong><%= totalCEMax %></strong></td>
-                    <td><strong><%= totalTEMax %></strong></td>
-                    <td><strong><%= totalCE %></strong></td>
-                    <td><strong><%= totalTE %></strong></td>
-                    <td><strong><%= grandTotal %></strong></td>
-                    <td><strong><%= overallPercentage %>%</strong></td>
+                    <td><strong><%= data.totalCEMax %></strong></td>
+                    <td><strong><%= data.totalTEMax %></strong></td>
+                    <td><strong><%= data.totalCE %></strong></td>
+                    <td><strong><%= data.totalTE %></strong></td>
+                    <td><strong><%= data.grandTotal %></strong></td>
+                    <td><strong><%= data.overallPercentage %>%</strong></td>
                 </tr>
                 </tbody>
             </table>
@@ -445,16 +400,16 @@ html, body {
             <!-- Attendance -->
             <div class="attendance-section">
                 <div class="attendance-row">
-                    <span>No of Working Days: <%= attendance.totalDays %></span>
-                    <span>No of Days Present: <%= attendance.presentDays %></span>
-                    <span>Attendance Percentage: <%= attendance.percentage %>%</span>
+                    <span>Working Days: <%= data.attendance.totalDays %></span>
+                    <span>Days Present: <%= data.attendance.presentDays %></span>
+                    <span>Attendance: <%= data.attendance.percentage %>%</span>
                 </div>
             </div>
             
             <!-- Remarks Section -->
-            <div class="remarks-section">
-                <span class="remarks-label">Remarks :</span>
-                <span class="remarks-line"></span>
+            <div style="margin-top: 15px; font-size: 10px; font-weight: bold;">
+                <span style="display: inline-block; width: 60px;">Remarks :</span>
+                <span style="display: inline-block; width: 550px; border-bottom: 1px solid #000;"></span>
             </div>
             
         </div>
@@ -478,46 +433,26 @@ html, body {
                 </div>
             </div>
             
-            <!-- Instructions Section -->
-            <!-- <div class="instructions-section">
-                <div class="instructions-title">Instructions :</div>
-                <ul class="instructions-list">
-                    <li>1. This progress report is valid only with the school seal and authorized signature.</li>
-                    <li>2. Any corrections or overwriting must be authenticated by the Principal.</li>
-                    <li>3. This document should be preserved carefully for future reference.</li>
-                    <li>4. For any queries regarding marks, contact the school office within 10 working days.</li>
-                    <li>5. Duplicate progress report will be issued only on submission of proper application.</li>
-                    <li>6. Minimum attendance required for eligibility is 75%.</li>
-                    <li>7. Parents are requested to sign and return the acknowledgement copy to the class teacher.</li>
-                    <li>8. Parent-Teacher Meeting schedule will be communicated separately.</li>
-                </ul>
-            </div> -->
-            
-            <!-- Grade Legend -->
-            <!-- <div class="grade-legend">
-                <div class="legend-title">GRADE BOUNDARIES:</div>
-                <div class="legend-text">
-                    A+ (90-100) | A (80-89) | B+ (70-79) | B (60-69) | C+ (50-59) | C (40-49) | D+ (30-39) | D (20-29) | E (Below 20)
-                </div>
-                <div class="legend-text" style="margin-top: 3px;">
-                    CE: Continuous Evaluation (20%) | TE: Term Evaluation (80%) | Overall Grade: <%= overallGrade %>
-                </div>
-            </div> -->
-            
             <!-- Bottom Info Row -->
             <div class="bottom-info-row">
                 <div class="grade-info">
-                    Promoted to next class on: ___________________
+                    Overall Grade: <%= data.overallGrade %> | Promoted to next class on: ___________________
                 </div>
                 <div class="generated-info">
-                    Generated on: <%= new Date().toLocaleDateString('en-IN') %>
+                    Generated: <%= new Date().toLocaleDateString('en-IN') %>
                 </div>
             </div>
             
         </div>
         
+        <div class="page-number">Page <%= pageNum %> of <%= totalStudents %></div>
     </div>
 </div>
+
+<% 
+    pageNum++;
+}); 
+%>
 
 </body>
 </html>

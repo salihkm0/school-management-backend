@@ -63,14 +63,15 @@ async function formatExamResponse(exam) {
         FULL: 'Full Day (9:00 AM - 5:00 PM)'
       }[s.session] || s.session,
       hasPractical: (s.practicalMarks || 0) > 0,
-      hasCE: s.ceEnabled || false
+      hasCE: s.ceEnabled || false,
+      ceComponents: s.ceComponents || []
     }));
   }
   
   return examObj;
 }
 
-// Helper to auto-populate subjects from selected classes
+// Helper function: Auto-populate subjects from classes
 async function autoPopulateSubjectsFromClasses(classIds, providedSchedule = null) {
   const classes = await Class.find({ _id: { $in: classIds } })
     .populate('subjects', 'name code type department');
@@ -95,15 +96,19 @@ async function autoPopulateSubjectsFromClasses(classIds, providedSchedule = null
           ceEnabled: false,
           ceMaxMarks: 0,
           cePassingMarks: 0,
+          ceComponents: [],
           termWeightage: 80,
           ceWeightage: 20,
           isLanguageSubject: isLanguage,
-          hasPractical: false
+          hasPractical: false,
+          totalMaxMarks: isLanguage ? 50 : 80,
+          totalPassingMarks: isLanguage ? 20 : 32
         });
       }
     });
   });
   
+  // Override with provided schedule if available
   if (providedSchedule && providedSchedule.length > 0) {
     providedSchedule.forEach(s => {
       const subjectId = s.subjectId.toString();
@@ -116,7 +121,10 @@ async function autoPopulateSubjectsFromClasses(classIds, providedSchedule = null
         subject.ceEnabled = s.ceEnabled || false;
         subject.ceMaxMarks = s.ceMaxMarks || 0;
         subject.cePassingMarks = s.cePassingMarks || 0;
+        subject.ceComponents = s.ceComponents || [];
         subject.hasPractical = (s.practicalMarks || 0) > 0;
+        subject.totalMaxMarks = (subject.termMaxMarks || 0) + (subject.ceMaxMarks || 0);
+        subject.totalPassingMarks = (subject.termPassingMarks || 0) + (subject.cePassingMarks || 0);
       }
     });
   }
@@ -179,7 +187,7 @@ async function buildScheduleWithSubjects(schedule, classIds) {
   return enrichedSchedule;
 }
 
-// Helper to get class names for submission status
+// Helper: Get class names for status
 async function getClassNamesForStatus(classIds) {
   const classes = await Class.find({ _id: { $in: classIds } }).select('name section displayName');
   const classMap = new Map();
@@ -391,8 +399,7 @@ exports.getExam = async (req, res) => {
   }
 };
 
-
-// Create new exam - FIXED VERSION
+// Create new exam - COMPLETE VERSION with subject-level CE
 exports.createExam = async (req, res) => {
   try {
     const {
@@ -408,23 +415,25 @@ exports.createExam = async (req, res) => {
       startDate,
       endDate,
       settings,
-      ceConfig,
-      ceEntryDeadline,
+      globalCeConfig,
       termEntryDeadline,
       resultDeclarationDate
     } = req.body;
 
+    // Validate academic year
     const academicYear = await AcademicYear.findById(academicYearId);
     if (!academicYear) {
       return res.status(404).json({ message: 'Academic year not found' });
     }
 
+    // Validate schedule for subject-wise scheduling
     if (schedulingMode === 'subject_schedule' || !schedulingMode) {
       if (!schedule || schedule.length === 0) {
         return res.status(400).json({ message: 'Schedule is required for subject-wise scheduling' });
       }
     }
 
+    // Prepare exam data
     const examData = {
       name: examType === 'custom' ? name : `${examType}_exam`,
       examType,
@@ -436,72 +445,94 @@ exports.createExam = async (req, res) => {
       schedulingMode: schedulingMode || 'subject_schedule',
       settings: settings || {},
       createdBy: req.user.id,
-      ceEntryDeadline: ceEntryDeadline ? new Date(ceEntryDeadline) : null,
       termEntryDeadline: termEntryDeadline ? new Date(termEntryDeadline) : null,
-      resultDeclarationDate: resultDeclarationDate ? new Date(resultDeclarationDate) : null
+      resultDeclarationDate: resultDeclarationDate ? new Date(resultDeclarationDate) : null,
+      globalCeConfig: globalCeConfig || { enabled: false }
     };
 
-    if (ceConfig) {
-      examData.ceConfig = {
-        enabled: ceConfig.enabled || false,
-        maxMarks: ceConfig.maxMarks || 20,
-        passingMarks: ceConfig.passingMarks || 8,
-        components: ceConfig.components || [
-          { name: 'Assignment', maxMarks: 5, weightage: 25 },
-          { name: 'Attendance', maxMarks: 5, weightage: 25 },
-          { name: 'Class Test', maxMarks: 5, weightage: 25 },
-          { name: 'Project', maxMarks: 5, weightage: 25 }
-        ],
-        subjectWise: ceConfig.subjectWise !== false
-      };
-    }
-
+    // Handle date range scheduling
     if (schedulingMode === 'date_range') {
       examData.startDate = new Date(startDate);
       examData.endDate = new Date(endDate);
       
+      // Auto-populate subjects from classes
       if (!subjects || subjects.length === 0) {
         examData.subjects = await autoPopulateSubjectsFromClasses(classIds);
       } else {
         examData.subjects = subjects;
       }
       examData.schedule = [];
-    } else {
-      // FIX: Use the schedule directly without modifying it
-      // The schedule from frontend already has all required fields
+    } 
+    // Handle subject-wise scheduling with subject-level CE
+    else {
       const enrichedSchedule = [];
       
       for (const s of schedule) {
-        // Get subject details for name and code if not provided
+        // Get subject details if not provided
         let subject = null;
         if (!s.subjectName) {
           subject = await Subject.findById(s.subjectId);
         }
         
+        // Parse marks
+        const maxMarks = parseInt(s.maxMarks) || 100;
+        const passingMarks = parseInt(s.passingMarks) || Math.floor(maxMarks * 0.4);
+        const practicalMarks = parseInt(s.practicalMarks) || 0;
+        const theoryMarks = maxMarks - practicalMarks;
+        
+        // Validate exam date
+        let examDate = new Date(s.examDate);
+        if (isNaN(examDate.getTime())) {
+          return res.status(400).json({ 
+            message: `Invalid exam date for subject ${subject?.name || s.subjectName}` 
+          });
+        }
+        
+        // Subject-level CE configuration (PER SUBJECT)
+        const ceEnabled = s.ceEnabled || false;
+        const ceMaxMarks = ceEnabled ? (parseInt(s.ceMaxMarks) || 20) : 0;
+        const cePassingMarks = ceEnabled ? (parseInt(s.cePassingMarks) || 8) : 0;
+        
+        // CE Components for this specific subject
+        const ceComponents = (s.ceComponents || [])
+          .filter(c => c.name && c.name.trim())
+          .map(comp => ({
+            name: comp.name,
+            maxMarks: parseInt(comp.maxMarks) || 0,
+            weightage: parseInt(comp.weightage) || 0
+          }));
+        
         const scheduleItem = {
-          // Required fields - USE VALUES FROM FRONTEND
+          // Basic subject info
           subjectId: s.subjectId,
-          subjectName: s.subjectName || subject?.name,
-          subjectCode: s.subjectCode || subject?.code,
-          examDate: new Date(s.examDate),
-          session: s.session || 'BF',
-          maxMarks: s.maxMarks,  // Use the value from frontend
-          passingMarks: s.passingMarks,  // Use the value from frontend
+          subjectName: subject?.name || s.subjectName,
+          subjectCode: subject?.code || s.subjectCode,
           
-          // Optional fields
+          // Schedule details
+          examDate: examDate,
+          session: s.session || 'BF',
           startTime: s.startTime || (s.session === 'BF' ? '09:00 AM' : s.session === 'AF' ? '02:00 PM' : '09:00 AM'),
           endTime: s.endTime || (s.session === 'BF' ? '12:00 PM' : s.session === 'AF' ? '05:00 PM' : '05:00 PM'),
           duration: s.duration || (s.session === 'FULL' ? 480 : 180),
-          theoryMarks: s.theoryMarks || (s.maxMarks - (s.practicalMarks || 0)),
-          practicalMarks: s.practicalMarks || 0,
-          hasPractical: (s.practicalMarks || 0) > 0,
-          ceEnabled: s.ceEnabled || ceConfig?.enabled || false,
-          ceMaxMarks: s.ceMaxMarks || ceConfig?.maxMarks || 0,
-          cePassingMarks: s.cePassingMarks || ceConfig?.passingMarks || 0,
-          ceWeightage: s.ceWeightage || 20,
-          termWeightage: s.termWeightage || 80,
-          termMaxMarks: s.termMaxMarks || s.maxMarks,
-          termPassingMarks: s.termPassingMarks || s.passingMarks,
+          
+          // Term marks configuration
+          maxMarks: maxMarks,
+          passingMarks: passingMarks,
+          theoryMarks: theoryMarks,
+          practicalMarks: practicalMarks,
+          hasPractical: practicalMarks > 0,
+          termMaxMarks: maxMarks,
+          termPassingMarks: passingMarks,
+          termWeightage: 80,
+          
+          // Subject-level CE configuration
+          ceEnabled: ceEnabled,
+          ceMaxMarks: ceMaxMarks,
+          cePassingMarks: cePassingMarks,
+          ceComponents: ceComponents,
+          ceWeightage: 20,
+          
+          // Logistics
           roomNumber: s.roomNumber || '',
           building: s.building || '',
           invigilators: s.invigilators || [],
@@ -511,30 +542,17 @@ exports.createExam = async (req, res) => {
           graceTime: s.graceTime || 0
         };
         
-        // Validate required fields
-        if (scheduleItem.maxMarks === undefined || scheduleItem.maxMarks === null) {
-          console.error('maxMarks missing for subject:', scheduleItem.subjectName);
-          return res.status(400).json({ 
-            message: `maxMarks is required for subject ${scheduleItem.subjectName}` 
-          });
-        }
-        if (scheduleItem.passingMarks === undefined || scheduleItem.passingMarks === null) {
-          console.error('passingMarks missing for subject:', scheduleItem.subjectName);
-          return res.status(400).json({ 
-            message: `passingMarks is required for subject ${scheduleItem.subjectName}` 
-          });
-        }
-        
         enrichedSchedule.push(scheduleItem);
       }
       
       examData.schedule = enrichedSchedule;
       
-      const dates = enrichedSchedule.map(s => s.examDate);
+      // Calculate exam date range from schedule
+      const dates = enrichedSchedule.map(s => new Date(s.examDate));
       examData.startDate = new Date(Math.min(...dates));
       examData.endDate = new Date(Math.max(...dates));
       
-      // Build subjects array from schedule
+      // Build subjects array from schedule with subject-level CE
       const subjectMap = new Map();
       for (const s of enrichedSchedule) {
         const subjectKey = s.subjectId.toString();
@@ -545,47 +563,54 @@ exports.createExam = async (req, res) => {
             subjectId: s.subjectId,
             subjectName: s.subjectName,
             subjectCode: s.subjectCode,
-            maxMarks: s.maxMarks,
-            passingMarks: s.passingMarks,
             termMaxMarks: s.maxMarks,
             termPassingMarks: s.passingMarks,
             theoryMaxMarks: s.theoryMarks,
             practicalMaxMarks: s.practicalMarks,
+            hasPractical: s.practicalMarks > 0,
+            // Subject-level CE
             ceEnabled: s.ceEnabled,
             ceMaxMarks: s.ceMaxMarks,
             cePassingMarks: s.cePassingMarks,
+            ceComponents: s.ceComponents || [],
+            totalMaxMarks: (s.maxMarks || 0) + (s.ceMaxMarks || 0),
+            totalPassingMarks: (s.passingMarks || 0) + (s.cePassingMarks || 0),
+            weightage: 100,
             termWeightage: 80,
             ceWeightage: 20,
-            isLanguageSubject: isLanguage,
-            hasPractical: s.practicalMarks > 0,
-            totalMaxMarks: s.maxMarks + (s.ceMaxMarks || 0),
-            totalPassingMarks: s.passingMarks + (s.cePassingMarks || 0)
+            isLanguageSubject: isLanguage
           });
         }
       }
       examData.subjects = Array.from(subjectMap.values());
     }
 
+    // Build class submission status
     const classNamesMap = await getClassNamesForStatus(classIds);
-
     examData.classSubmissionStatus = await Promise.all(classIds.map(async (classId) => {
       const totalStudents = await Student.countDocuments({ classId, status: 'active' });
+      const totalSubjects = examData.subjects.length;
       
       return {
         classId,
         className: classNamesMap.get(classId.toString()) || 'Unknown',
+        classDisplayName: classNamesMap.get(classId.toString()) || 'Unknown',
         status: 'draft',
-        marksEntryStats: { 
-          totalStudents, 
-          termMarksEntered: 0, 
-          ceMarksEntered: 0, 
-          marksPending: totalStudents * examData.subjects.length 
+        totalStudents: totalStudents,
+        marksEntryStats: {
+          totalStudents: totalStudents,
+          termMarksEntered: 0,
+          ceMarksEntered: 0,
+          marksPending: totalStudents * totalSubjects,
+          completionPercentage: 0
         }
       };
     }));
 
+    // Create the exam
     const exam = await Exam.create(examData);
 
+    // Populate references for response
     const populatedExam = await Exam.findById(exam._id)
       .populate('classIds', 'name section displayName')
       .populate('academicYearId', 'year name')
@@ -603,7 +628,10 @@ exports.createExam = async (req, res) => {
         } else {
           const subjectCount = exam.schedule.length;
           const practicalCount = exam.schedule.filter(s => s.practicalMarks > 0).length;
-          message = `${exam.displayName} has been scheduled with ${subjectCount} subjects. ${practicalCount > 0 ? `Includes ${practicalCount} practical exams.` : ''}`;
+          const ceEnabledCount = exam.schedule.filter(s => s.ceEnabled).length;
+          message = `${exam.displayName} has been scheduled with ${subjectCount} subjects.`;
+          if (practicalCount > 0) message += ` Includes ${practicalCount} practical exams.`;
+          if (ceEnabledCount > 0) message += ` ${ceEnabledCount} subjects have CE components.`;
         }
         
         await sendExamNotificationToClass(
@@ -620,7 +648,7 @@ exports.createExam = async (req, res) => {
             schedulingMode,
             subjectCount: exam.subjects.length,
             hasPractical: exam.schedule.some(s => s.practicalMarks > 0),
-            hasCE: exam.ceConfig?.enabled || exam.subjects.some(s => s.ceEnabled)
+            hasCE: exam.schedule.some(s => s.ceEnabled)
           }
         );
         
@@ -637,26 +665,29 @@ exports.createExam = async (req, res) => {
       }
     }
 
+    // Broadcast to admin
     broadcastToRole('admin', 'exam:created', {
       examId: exam._id,
       examName: exam.displayName,
       examType: exam.examType,
       classCount: exam.classIds.length,
       subjectCount: exam.subjects.length,
-      hasCE: exam.ceConfig?.enabled || exam.subjects.some(s => s.ceEnabled),
+      hasCE: exam.schedule.some(s => s.ceEnabled),
       hasPractical: exam.schedule.some(s => s.practicalMarks > 0),
       timestamp: new Date()
     });
 
+    // Format response
     const formattedExam = await formatExamResponse(populatedExam);
     
-    // Add schedule with practical and CE info
+    // Add schedule with CE details
     const scheduleWithDetails = exam.schedule.map(s => ({
       ...s.toObject(),
       hasPractical: s.practicalMarks > 0,
       hasCE: s.ceEnabled,
       practicalMarks: s.practicalMarks,
-      ceMaxMarks: s.ceMaxMarks
+      ceMaxMarks: s.ceMaxMarks,
+      ceComponents: s.ceComponents || []
     }));
     
     const response = {
@@ -667,15 +698,17 @@ exports.createExam = async (req, res) => {
         totalSubjects: exam.subjects.length,
         languageSubjects: exam.subjects.filter(s => s.isLanguageSubject).length,
         coreSubjects: exam.subjects.filter(s => !s.isLanguageSubject).length,
-        hasCE: exam.ceConfig?.enabled || exam.subjects.some(s => s.ceEnabled),
+        hasCE: exam.schedule.some(s => s.ceEnabled),
         hasPractical: exam.schedule.some(s => s.practicalMarks > 0),
         ceTotalMarks: exam.subjects.reduce((sum, s) => sum + (s.ceMaxMarks || 0), 0),
         termTotalMarks: exam.subjects.reduce((sum, s) => sum + (s.termMaxMarks || 0), 0),
-        grandTotalMarks: exam.subjects.reduce((sum, s) => sum + (s.totalMaxMarks || 0), 0)
+        grandTotalMarks: exam.subjects.reduce((sum, s) => sum + (s.totalMaxMarks || 0), 0),
+        subjectsWithCE: exam.subjects.filter(s => s.ceEnabled).length
       }
     };
 
     res.status(201).json(response);
+    
   } catch (error) {
     console.error('Error creating exam:', error);
     res.status(500).json({ message: error.message });

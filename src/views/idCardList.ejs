@@ -31,11 +31,14 @@ html, body {
     width: 200mm;
     min-height: 287mm;
     margin: 0 auto 5mm auto;
-    padding: 5mm;
+    padding: 10mm 8mm;
     border: 2px solid #000;
     position: relative;
     page-break-after: always;
     box-sizing: border-box;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
 }
 
 /* Last page doesn't need page break after */
@@ -44,32 +47,37 @@ html, body {
     margin-bottom: 0;
 }
 
-/* Watermark */
-.watermark {
+/* Logo Watermark */
+.logo-watermark {
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%) rotate(-45deg);
-    font-size: 70px;
-    font-weight: bold;
-    color: rgba(0, 0, 0, 0.04);
-    white-space: nowrap;
-    pointer-events: none;
+    transform: translate(-50%, -50%);
+    width: 140mm;
+    height: 140mm;
+    opacity: 0.04;
     z-index: 1;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    font-family: 'Times New Roman', serif;
-    width: 100%;
-    text-align: center;
+    pointer-events: none;
 }
 
-/* Content Layer - Above watermark */
+.logo-watermark img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
 .content-layer {
     position: relative;
     z-index: 2;
     height: 100%;
     display: flex;
     flex-direction: column;
+    flex: 1;
+}
+
+/* Main content area */
+.main-content {
+    flex: 1;
 }
 
 /* Header */
@@ -80,12 +88,31 @@ html, body {
     border-bottom: 2px solid #000;
 }
 
+.school-logo {
+    width: 25mm;
+    height: 25mm;
+    margin: 0 auto 5px;
+}
+
+.school-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
 .school-name {
-    font-size: 20px;
+    font-size: 14px;
     font-weight: 900;
     text-transform: uppercase;
-    letter-spacing: 2px;
+    letter-spacing: 1px;
     margin-bottom: 3px;
+}
+
+.arabic-text {
+    font-size: 12px;
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: #333;
 }
 
 .school-address {
@@ -105,17 +132,6 @@ html, body {
     font-weight: 700;
 }
 
-.page-number {
-    float: right;
-    font-size: 9px;
-    margin-top: 3px;
-    font-weight: bold;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #8e8e8e;
-}
-
 /* Table */
 .table-container {
     margin-top: 8px;
@@ -130,33 +146,33 @@ table {
 
 th, td {
     border: 1.5px solid #000;
-    padding: 4px 2px;
+    padding: 5px 3px;
     text-align: left;
     vertical-align: middle;
     word-break: break-word;
 }
 
 th {
-    background: #f0f0f0;
+    background: #f0f0f000;
     font-weight: 900;
     text-align: center;
     text-transform: uppercase;
-    font-size: 8.5px;
-    padding: 5px 2px;
+    font-size: 8px;
+    padding: 6px 2px;
 }
 
 td {
-    background: #fff;
+    background: #ffffff00;
 }
 
 /* Column widths for portrait */
-th:nth-child(1), td:nth-child(1) { width: 5%; text-align: center; }
+th:nth-child(1), td:nth-child(1) { width: 6%; text-align: center; }
 th:nth-child(2), td:nth-child(2) { width: 8%; text-align: center; }
-th:nth-child(3), td:nth-child(3) { width: 16%; font-weight: 600; }
-th:nth-child(4), td:nth-child(4) { width: 16%; }
-th:nth-child(5), td:nth-child(5) { width: 11%; text-align: center; }
-th:nth-child(6), td:nth-child(6) { width: 11%; text-align: center; }
-th:nth-child(7), td:nth-child(7) { width: 33%; }
+th:nth-child(3), td:nth-child(3) { width: 18%; font-weight: 600; }
+th:nth-child(4), td:nth-child(4) { width: 18%; }
+th:nth-child(5), td:nth-child(5) { width: 10%; text-align: center; }
+th:nth-child(6), td:nth-child(6) { width: 10%; text-align: center; }
+th:nth-child(7), td:nth-child(7) { width: 30%; }
 
 .text-center { 
     text-align: center; 
@@ -164,7 +180,7 @@ th:nth-child(7), td:nth-child(7) { width: 33%; }
 
 /* Zebra striping for readability */
 tbody tr:nth-child(even) td {
-    background-color: #f9f9f9;
+    background-color: #f9f9f900;
 }
 
 /* Footer */
@@ -186,6 +202,13 @@ tbody tr:nth-child(even) td {
     font-size: 9px;
 }
 
+.page-number {
+    text-align: center;
+    font-size: 9px;
+    margin-top: 5px;
+    color: #666;
+}
+
 /* Print optimization */
 @media print {
     html, body {
@@ -195,13 +218,13 @@ tbody tr:nth-child(even) td {
     }
     
     th {
-        background: #f0f0f0 !important;
+        background: #f0f0f000 !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
     
     tbody tr:nth-child(even) td {
-        background-color: #f9f9f9 !important;
+        background-color: #f9f9f900 !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
@@ -213,7 +236,7 @@ tbody tr:nth-child(even) td {
         page-break-after: always;
     }
     
-    .watermark {
+    .logo-watermark {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
@@ -225,8 +248,12 @@ tbody tr:nth-child(even) td {
 
 <%
 // Calculate pagination
-const studentsPerPage = 40; // Adjust based on how many fit on one page
+const studentsPerPage = 35;
 const totalPages = Math.ceil(students.length / studentsPerPage);
+const displayAcademicYear = typeof academicYear !== 'undefined' ? academicYear : '2025-2026';
+const displayClassName = typeof className !== 'undefined' ? className : '8 A';
+const displaySchoolName = typeof schoolName !== 'undefined' ? schoolName : 'P.P.M.H.S.S. KOTTUKKARA';
+const displaySchoolLogo = typeof schoolLogo !== 'undefined' ? schoolLogo : '';
 
 for (let page = 0; page < totalPages; page++) {
     const startIndex = page * studentsPerPage;
@@ -237,94 +264,88 @@ for (let page = 0; page < totalPages; page++) {
 
 <div class="page-container">
     
-    <!-- Watermark -->
-    <div class="watermark">
-        PPM HSS KOTTUKKARA
+    <!-- Logo Watermark -->
+    <div class="logo-watermark">
+        <% if (displaySchoolLogo) { %>
+            <img src="<%= displaySchoolLogo %>" alt="Watermark">
+        <% } else { %>
+            <div style="font-size: 40px; font-weight: bold; text-align: center; color: rgba(0,0,0,0.04);">
+                <%= displaySchoolName %>
+            </div>
+        <% } %>
     </div>
     
-    <!-- Content Layer -->
     <div class="content-layer">
         
-        <!-- Header (Only on first page) -->
-        <% if (isFirstPage) { %>
-        <div class="header">
-            <div class="school-name">PPM HSS KOTTUKKARA</div>
-            <div class="school-address">Kottukkara, Kondotty, Malappuram, Kerala - 673638</div>
-            <div class="title">LIST FOR ID CARD</div>
-            <!-- <div class="class-info"><%= className %> - <%= academicYear %></div> -->
-        </div>
-        <% } else { %>
-        <!-- Continued header for subsequent pages -->
-        <div class="header" style="margin-bottom: 5px; padding-bottom: 5px;">
-            <div class="school-name" style="font-size: 16px;">PPM HSS KOTTUKKARA</div>
-            <div class="title" style="font-size: 14px;">LIST FOR ID CARD (Continued)</div>
-            <div class="class-info" style="font-size: 12px;"><%= className %> - <%= academicYear %></div>
-        </div>
-        <% } %>
-        
-       
-        
-        <!-- Table -->
-        <div class="table-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Sl No</th>
-                        <th>Admn No</th>
-                        <th>Name of Student</th>
-                        <th>Name of Parent</th>
-                        <th>Phone 1</th>
-                        <th>Phone 2</th>
-                        <th>Street Name</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <% 
-                    pageStudents.forEach(function(student, index) { 
-                        const slNo = startIndex + index + 1;
-                    %>
-                    <tr>
-                        <td class="text-center"><%= slNo %></td>
-                        <td class="text-center"><%= student.admissionNo %></td>
-                        <td><%= student.name %></td>
-                        <td><%= student.parentName %></td>
-                        <td class="text-center"><%= student.phone1 %></td>
-                        <td class="text-center"><%= student.phone2 %></td>
-                        <td><%= student.street %></td>
-                    </tr>
-                    <% }); %>
-                    
-                    <% 
-                    // Fill remaining rows with empty cells if needed (optional)
-                    const remainingRows = studentsPerPage - pageStudents.length;
-                    for (let i = 0; i < remainingRows; i++) {
-                    %>
-                    <!-- <tr>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td>-</td>
-                        <td>-</td>
-                        <td class="text-center">-</td>
-                        <td class="text-center">-</td>
-                        <td>-</td>
-                    </tr> -->
-                    <% } %>
-                </tbody>
-            </table>
+        <div class="main-content">
+            
+            <!-- Header (Only on first page) -->
+            <% if (isFirstPage) { %>
+            <div class="header">
+                <% if (displaySchoolLogo) { %>
+                <div class="school-logo">
+                    <img src="<%= displaySchoolLogo %>" alt="School Logo">
+                </div>
+                <% } %>
+                <div class="school-name"><%= displaySchoolName %></div>
+                <div class="school-address">Kottukkara, Kondotty, Malappuram, Kerala - 673638</div>
+                <div class="title">ID CARD LIST</div>
+                <div class="class-info"><%= displayClassName %> - <%= displayAcademicYear %></div>
+            </div>
+            <% } else { %>
+            <!-- Continued header for subsequent pages -->
+            <div class="header" style="margin-bottom: 5px; padding-bottom: 5px;">
+                <div class="school-name" style="font-size: 14px;"><%= displaySchoolName %></div>
+                <div class="title" style="font-size: 14px;">ID CARD LIST (Continued)</div>
+                <div class="class-info" style="font-size: 12px;"><%= displayClassName %> - <%= displayAcademicYear %></div>
+            </div>
+            <% } %>
+            
+            <!-- Table -->
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Sl No</th>
+                            <th>Admn No</th>
+                            <th>Name of Student</th>
+                            <th>Name of Parent</th>
+                            <th>Phone 1</th>
+                            <th>Phone 2</th>
+                            <th>Address</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% 
+                        pageStudents.forEach(function(student, index) { 
+                            const slNo = startIndex + index + 1;
+                        %>
+                        <tr>
+                            <td class="text-center"><%= slNo %></td>
+                            <td class="text-center"><%= student.admissionNo %></td>
+                            <td><%= student.name %></td>
+                            <td><%= student.parentName %></td>
+                            <td class="text-center"><%= student.phone1 %></td>
+                            <td class="text-center"><%= student.phone2 %></td>
+                            <td><%= student.street %></td>
+                        </tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            </div>
+            
         </div>
         
-        <!-- Footer (Only on last page or all pages) -->
+        <!-- Footer (Only on last page) -->
         <% if (page === totalPages - 1) { %>
         <div class="footer">
             <span class="total-students">Total Students: <%= students.length %></span>
             <span class="generated-info">Generated on: <%= new Date().toLocaleDateString('en-IN') %></span>
         </div>
-        <% } else { %>
-        <div class="footer" style="border-top: none;">
-            <!-- <span class="total-students">Continued on next page...</span> -->
-        </div>
         <% } %>
+        
         <div class="page-number">Page <%= page + 1 %> of <%= totalPages %></div>
+        
     </div>
 </div>
 

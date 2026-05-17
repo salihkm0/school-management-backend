@@ -57,7 +57,6 @@ const dashboardRoutes = require('./src/routes/dashboardRoutes');
 const reportCardRoutes = require('./src/routes/pdf/reportCardRoutes');
 
 
-
 const app = express();
 const server = http.createServer(app);
 

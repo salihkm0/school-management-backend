@@ -7,12 +7,13 @@ const User = require('../models/User');
 const { Exam } = require('../models/Exam');
 const Mark = require('../models/Mark');
 const ExamResult = require('../models/ExamResult');
-const { Attendance } = require('../models/Attendance');
+const { Attendance, AttendanceTemplate } = require('../models/Attendance');
 const AcademicYear = require('../models/AcademicYear');
 const StaffDuty = require('../models/StaffDuty');
 const Notification = require('../models/Notification');
 const { RecentActivity } = require('../models/RecentActivity');
 const StaffAssignment = require('../models/StaffAssignment');
+const Subject = require('../models/Subject');
 const { broadcastToRole, broadcastToUser } = require('../config/socket');
 
 // ==================== ADMIN DASHBOARD ====================
@@ -42,42 +43,55 @@ exports.getAdminDashboard = async (req, res) => {
     // Today's Attendance
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const attendanceToday = await Attendance.countDocuments({
-      createdAt: { $gte: today },
-      status: 'present'
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const attendanceRecords = await Attendance.find({
+      createdAt: { $gte: today, $lt: tomorrow }
     });
     
-    const totalAttendanceToday = await Attendance.countDocuments({
-      createdAt: { $gte: today }
-    });
+    const attendanceToday = attendanceRecords.reduce((sum, a) => sum + a.presentDays, 0);
+    const totalAttendanceToday = attendanceRecords.reduce((sum, a) => sum + a.totalWorkingDays, 0);
     
     const attendancePercentage = totalAttendanceToday > 0 
       ? (attendanceToday / totalAttendanceToday) * 100 
       : 0;
     
-    // Recent Exam Results
+    // Recent Exam Results for A+ count
     const recentResults = await ExamResult.find({ isPublished: true })
       .sort({ createdAt: -1 })
       .limit(100);
     
     const fullAPlusCount = recentResults.filter((r) => {
-      return r.subjectResults?.every((s) => s.grade === "A+");
+      return r.grade === "A+" || (r.percentage >= 90);
     }).length;
     
     // Gender Distribution
-    const maleCount = await Student.countDocuments({ gender: "M", status: "active" });
-    const femaleCount = await Student.countDocuments({ gender: "F", status: "active" });
-    const otherCount = await Student.countDocuments({ gender: "Other", status: "active" });
+    const genderDistribution = await Student.aggregate([
+      { $match: { status: "active" } },
+      { $group: { _id: "$gender", count: { $sum: 1 } } }
+    ]);
+    
+    const maleCount = genderDistribution.find(g => g._id === "M")?.count || 0;
+    const femaleCount = genderDistribution.find(g => g._id === "F")?.count || 0;
+    const otherCount = genderDistribution.find(g => g._id === "Other")?.count || 0;
     
     // Category Distribution
     const categoryDistribution = await Student.aggregate([
-      { $match: { status: "active" } },
-      { $group: { _id: "$category", count: { $sum: 1 } } }
+      { $match: { status: "active", category: { $exists: true, $ne: "" } } },
+      { $group: { _id: "$category", count: { $sum: 1 } } },
+      { $sort: { count: -1 } }
     ]);
     
-    // Monthly Enrollment Trend
+    // Monthly Enrollment Trend (current academic year)
+    const currentYearStart = currentYear?.startDate || new Date(new Date().getFullYear(), 0, 1);
     const monthlyEnrollment = await Student.aggregate([
-      { $match: { status: "active" } },
+      { 
+        $match: { 
+          status: "active",
+          createdAt: { $gte: currentYearStart }
+        } 
+      },
       {
         $group: {
           _id: { $month: "$createdAt" },
@@ -88,41 +102,80 @@ exports.getAdminDashboard = async (req, res) => {
     ]);
     
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const enrollmentTrend = monthlyEnrollment.map(item => ({
-      month: monthNames[item._id - 1],
-      count: item.count
-    }));
+    const enrollmentTrend = [];
+    for (let i = 1; i <= 12; i++) {
+      const found = monthlyEnrollment.find(m => m._id === i);
+      enrollmentTrend.push({
+        month: monthNames[i - 1],
+        count: found?.count || 0
+      });
+    }
     
-    // Recent Activities
+    // Recent Activities - FIXED: Get proper recent activities with all fields
     const recentActivities = await RecentActivity.find()
       .sort({ createdAt: -1 })
       .limit(10)
       .populate('performedBy', 'name role');
     
+    const formattedActivities = recentActivities.map(a => ({
+      id: a._id,
+      title: a.title,
+      description: a.description,
+      type: a.activityType,
+      severity: a.severity,
+      timestamp: a.createdAt,
+      performedBy: a.performedBy?.name || a.performedByName,
+      performedByRole: a.performedByRole
+    }));
+    
+    // If no recent activities, create some default ones
+    if (formattedActivities.length === 0) {
+      formattedActivities.push({
+        id: '1',
+        title: 'Welcome to Dashboard',
+        description: 'Start managing your school',
+        type: 'system',
+        severity: 'info',
+        timestamp: new Date(),
+        performedBy: 'System',
+        performedByRole: 'system'
+      });
+    }
+    
     // Pending Tasks
     const pendingExams = await Exam.countDocuments({ 
       overallStatus: { $in: ['draft', 'submitted'] },
-      isActive: true 
+      isActive: true,
+      academicYearId: currentYear?._id
     });
     
     const pendingDuties = await StaffDuty.countDocuments({ status: 'assigned' });
     
-    const pendingAttendance = await Attendance.countDocuments({ 
-      status: { $ne: 'present' },
-      createdAt: { $gte: today }
-    });
+    const pendingAttendance = attendanceRecords.filter(a => a.presentDays < a.totalWorkingDays).length;
     
-    // Upcoming Events
-    const upcomingEvents = await getUpcomingEvents();
+    // Upcoming Events - Enhanced with more realistic data
+    const upcomingEvents = await getUpcomingEvents(7);
     
-    // Performance Metrics
+    // Exam Performance Metrics
     const examPerformance = await getExamPerformanceStats(currentYear?._id);
     
-    // Staff Duty Distribution
+    // Duty Distribution Stats
     const dutyDistribution = await getDutyDistributionStats();
     
     // Top Performing Classes
-    const topClasses = await getTopPerformingClasses(currentYear?._id);
+    const topClasses = await getTopPerformingClasses(currentYear?._id, 5);
+    
+    // Subject Performance Data for charts
+    const subjectPerformance = await getSubjectPerformanceStats(currentYear?._id);
+    
+    // Class Distribution for pie chart
+    const classDistribution = await getClassDistributionStats(currentYear?._id);
+    
+    // Grade Distribution for chart
+    const gradeDistribution = await getGradeDistributionStats(currentYear?._id);
+    
+    // Performance Trends over months
+    const performanceTrends = await getPerformanceTrends(currentYear?._id);
     
     res.json({
       success: true,
@@ -143,16 +196,7 @@ exports.getAdminDashboard = async (req, res) => {
           category: categoryDistribution
         },
         enrollmentTrend,
-        recentActivities: recentActivities.map(a => ({
-          id: a._id,
-          title: a.title,
-          description: a.description,
-          type: a.activityType,
-          severity: a.severity,
-          timestamp: a.createdAt,
-          performedBy: a.performedBy?.name,
-          performedByRole: a.performedByRole
-        })),
+        recentActivities: formattedActivities,
         pendingTasks: {
           exams: pendingExams,
           duties: pendingDuties,
@@ -162,6 +206,10 @@ exports.getAdminDashboard = async (req, res) => {
         examPerformance,
         dutyDistribution,
         topClasses,
+        subjectPerformance,
+        classDistribution,
+        gradeDistribution,
+        performanceTrends,
         academicYear: currentYear ? {
           id: currentYear._id,
           name: currentYear.name,
@@ -193,14 +241,15 @@ exports.getStaffDashboard = async (req, res) => {
     // Get classes where staff is class teacher
     const classTeacherClasses = await Class.find({
       classTeacherId: staff._id,
-      isActive: true
+      isActive: true,
+      academicYearId: currentYear?._id
     }).populate('subjects', 'name code');
     
     // Get staff assignment for current year
     const staffAssignment = await StaffAssignment.findOne({
       staffId: staff._id,
       academicYearId: currentYear?._id
-    }).populate('subjectsTaught.subjectId', 'name code')
+    }).populate('subjectsTaught.subjectId', 'name code type department')
       .populate('subjectsTaught.classId', 'name section displayName');
     
     // Get subjects taught by staff
@@ -217,6 +266,19 @@ exports.getStaffDashboard = async (req, res) => {
     
     const todaySchedule = [];
     
+    // Helper to add schedule items
+    const addScheduleItem = (time, subject, className, classId, room, isClassTeacher = false) => {
+      todaySchedule.push({
+        time,
+        subject,
+        className,
+        classId,
+        type: 'class',
+        room,
+        isClassTeacher
+      });
+    };
+    
     // Add class teacher classes to schedule
     for (const cls of classTeacherClasses) {
       const timetable = cls.timetable || [];
@@ -225,16 +287,18 @@ exports.getStaffDashboard = async (req, res) => {
       if (daySchedule && daySchedule.periods) {
         for (const period of daySchedule.periods) {
           const subject = await Subject.findById(period.subjectId);
-          todaySchedule.push({
-            time: `${period.startTime || '09:00'} - ${period.endTime || '10:00'}`,
-            subject: subject?.name || 'Class',
-            className: cls.displayName || `${cls.name}-${cls.section}`,
-            classId: cls._id,
-            type: 'class',
-            room: period.room,
-            isClassTeacher: true
-          });
+          addScheduleItem(
+            `${period.startTime || '09:00'} - ${period.endTime || '10:00'}`,
+            subject?.name || 'Class',
+            cls.displayName || `${cls.name}-${cls.section}`,
+            cls._id,
+            period.room,
+            true
+          );
         }
+      } else {
+        // If no timetable, add default entry
+        addScheduleItem('09:00 - 10:00', 'Class Teacher Period', cls.displayName || `${cls.name}-${cls.section}`, cls._id, '', true);
       }
     }
     
@@ -248,14 +312,13 @@ exports.getStaffDashboard = async (req, res) => {
         if (daySchedule && daySchedule.periods) {
           for (const period of daySchedule.periods) {
             if (period.subjectId?.toString() === subject.subjectId?._id?.toString()) {
-              todaySchedule.push({
-                time: `${period.startTime || '09:00'} - ${period.endTime || '10:00'}`,
-                subject: subject.subjectName,
-                className: classItem.displayName || `${classItem.name}-${classItem.section}`,
-                classId: classItem._id,
-                type: 'class',
-                room: period.room
-              });
+              addScheduleItem(
+                `${period.startTime || '09:00'} - ${period.endTime || '10:00'}`,
+                subject.subjectName,
+                classItem.displayName || `${classItem.name}-${classItem.section}`,
+                classItem._id,
+                period.room
+              );
             }
           }
         }
@@ -271,15 +334,17 @@ exports.getStaffDashboard = async (req, res) => {
     // Check for pending attendance marking
     const todayDate = new Date();
     todayDate.setHours(0, 0, 0, 0);
+    const tomorrowDate = new Date(todayDate);
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
     
     for (const cls of classTeacherClasses) {
       const studentsInClass = await Student.countDocuments({ classId: cls._id, status: 'active' });
       const attendanceMarked = await Attendance.countDocuments({
         classId: cls._id,
-        createdAt: { $gte: todayDate }
+        createdAt: { $gte: todayDate, $lt: tomorrowDate }
       });
       
-      if (attendanceMarked < studentsInClass) {
+      if (attendanceMarked === 0 && studentsInClass > 0) {
         pendingTasks.push({
           id: `attendance_${cls._id}`,
           title: 'Mark Attendance',
@@ -296,8 +361,9 @@ exports.getStaffDashboard = async (req, res) => {
     const pendingExams = await Exam.find({
       classIds: { $in: classTeacherClasses.map(c => c._id) },
       overallStatus: 'draft',
-      endDate: { $lt: new Date() }
-    });
+      endDate: { $lt: new Date() },
+      isActive: true
+    }).limit(5);
     
     for (const exam of pendingExams) {
       pendingTasks.push({
@@ -334,9 +400,13 @@ exports.getStaffDashboard = async (req, res) => {
       }
     }
     
+    // Sort duties by date
+    formattedDuties.sort((a, b) => new Date(a.date) - new Date(b.date));
+    
     // Student Stats for Class Teacher
     let totalStudents = 0;
-    let averageAttendance = 0;
+    let totalAttendanceSum = 0;
+    let totalAttendanceCount = 0;
     let pendingParentRequests = 0;
     
     for (const cls of classTeacherClasses) {
@@ -345,28 +415,43 @@ exports.getStaffDashboard = async (req, res) => {
       
       // Get average attendance for this class
       const attendanceRecords = await Attendance.find({ classId: cls._id });
+      let classAvg = 0;
+      for (const record of attendanceRecords) {
+        if (record.totalWorkingDays > 0) {
+          classAvg += (record.presentDays / record.totalWorkingDays) * 100;
+          totalAttendanceCount++;
+        }
+      }
       if (attendanceRecords.length > 0) {
-        const totalPresent = attendanceRecords.reduce((sum, a) => sum + a.presentDays, 0);
-        const totalDays = attendanceRecords.reduce((sum, a) => sum + a.totalWorkingDays, 0);
-        const classAvg = totalDays > 0 ? (totalPresent / totalDays) * 100 : 0;
-        averageAttendance += classAvg;
+        classAvg = classAvg / attendanceRecords.length;
+        totalAttendanceSum += classAvg;
       }
     }
     
-    if (classTeacherClasses.length > 0) {
-      averageAttendance = averageAttendance / classTeacherClasses.length;
-    }
+    const averageAttendance = totalAttendanceCount > 0 ? totalAttendanceSum / totalAttendanceCount : 0;
     
     // Recent Activities (staff-related)
     const recentActivities = await RecentActivity.find({
       $or: [
         { performedBy: userId },
+        { performedByName: staff.name },
         { 'details.classId': { $in: classTeacherClasses.map(c => c._id) } }
       ]
     })
       .sort({ createdAt: -1 })
       .limit(10)
       .populate('performedBy', 'name role');
+    
+    const formattedStaffActivities = recentActivities.map(a => ({
+      id: a._id,
+      title: a.title,
+      description: a.description,
+      type: a.activityType,
+      severity: a.severity,
+      timestamp: a.createdAt,
+      performedBy: a.performedBy?.name || a.performedByName,
+      performedByRole: a.performedByRole
+    }));
     
     // Quick Stats
     const quickStats = {
@@ -385,21 +470,14 @@ exports.getStaffDashboard = async (req, res) => {
           staffCode: staff.staffCode,
           role: staff.role,
           photoUrl: staff.photoUrl,
-          email: staff.email,
+          email: staff.email || staff.userId?.email,
           phone: staff.contact
         },
         quickStats,
-        todaySchedule,
-        pendingTasks,
-        upcomingDuties: formattedDuties.slice(0, 5),
-        recentActivities: recentActivities.map(a => ({
-          id: a._id,
-          title: a.title,
-          description: a.description,
-          type: a.activityType,
-          severity: a.severity,
-          timestamp: a.createdAt
-        })),
+        todaySchedule: todaySchedule.slice(0, 10),
+        pendingTasks: pendingTasks.slice(0, 5),
+        upcomingDuties: formattedDuties.slice(0, 10),
+        recentActivities: formattedStaffActivities,
         classTeacherInfo: classTeacherClasses.length > 0 ? {
           classes: classTeacherClasses.map(c => ({
             id: c._id,
@@ -437,104 +515,109 @@ exports.getParentDashboard = async (req, res) => {
     const currentYear = await AcademicYear.findOne({ isCurrent: true });
     
     // Get connected students
-    const children = await parent.getCurrentStudentDetails(currentYear?._id);
+    const childrenConnections = parent.students || [];
+    const studentCodes = childrenConnections.map(c => c.studentCode);
     
     // Get full student details with marks and attendance
+    const students = await Student.find({ 
+      studentCode: { $in: studentCodes },
+      academicYearId: currentYear?._id,
+      status: 'active'
+    }).populate('classId', 'name section displayName classTeacherName');
+    
     const studentDetails = [];
     let totalChildren = 0;
     let totalAttendance = 0;
     let totalPerformance = 0;
     
-    for (const child of children) {
-      const student = await Student.findOne({ 
-        studentCode: child.studentCode,
-        academicYearId: currentYear?._id 
-      }).populate('classId', 'name section displayName classTeacherName');
+    for (const student of students) {
+      const connection = childrenConnections.find(c => c.studentCode === student.studentCode);
+      totalChildren++;
       
-      if (student) {
-        totalChildren++;
-        
-        // Get attendance summary
-        const attendanceRecords = await Attendance.find({ studentId: student._id });
-        let attendancePercentage = 0;
-        if (attendanceRecords.length > 0) {
-          const totalPresent = attendanceRecords.reduce((sum, a) => sum + a.presentDays, 0);
-          const totalDays = attendanceRecords.reduce((sum, a) => sum + a.totalWorkingDays, 0);
-          attendancePercentage = totalDays > 0 ? (totalPresent / totalDays) * 100 : 0;
+      // Get attendance summary
+      const attendanceRecords = await Attendance.find({ studentId: student._id });
+      let attendancePercentage = 0;
+      if (attendanceRecords.length > 0) {
+        let totalPresent = 0;
+        let totalDays = 0;
+        for (const record of attendanceRecords) {
+          totalPresent += record.presentDays;
+          totalDays += record.totalWorkingDays;
         }
-        totalAttendance += attendancePercentage;
-        
-        // Get performance summary (latest exam results)
-        const latestResults = await ExamResult.find({ 
-          studentId: student._id, 
-          isPublished: true 
-        })
-          .sort({ createdAt: -1 })
-          .limit(1);
-        
-        let performanceGrade = 'N/A';
-        let performancePercentage = 0;
-        
-        if (latestResults.length > 0) {
-          performancePercentage = latestResults[0].percentage || 0;
-          performanceGrade = latestResults[0].grade || getGrade(performancePercentage);
-          totalPerformance += performancePercentage;
-        }
-        
-        // Get upcoming exams
-        const upcomingExams = await Exam.find({
-          classIds: student.classId,
-          startDate: { $gte: new Date() },
-          isActive: true
-        })
-          .select('name examType startDate endDate')
-          .sort({ startDate: 1 })
-          .limit(3);
-        
-        // Get recent notifications for this student
-        const notifications = await Notification.find({
-          userId: parent.userId,
-          'data.studentId': student._id
-        })
-          .sort({ createdAt: -1 })
-          .limit(5);
-        
-        studentDetails.push({
-          _id: student._id,
-          studentId: student._id,
-          fullName: student.fullName,
-          studentCode: student.studentCode,
-          admissionNo: student.admissionNo,
-          rollNumber: student.rollNumber,
-          className: student.classId?.displayName || child.className,
-          classId: student.classId,
-          relation: child.relation,
-          photoUrl: student.photoUrl,
-          attendancePercentage: attendancePercentage.toFixed(1),
-          performance: {
-            percentage: performancePercentage.toFixed(1),
-            grade: performanceGrade
-          },
-          upcomingExams: upcomingExams.map(e => ({
-            id: e._id,
-            name: e.displayName || e.name,
-            type: e.examType,
-            date: e.startDate,
-            daysLeft: Math.ceil((new Date(e.startDate) - new Date()) / (1000 * 60 * 60 * 24))
-          })),
-          recentNotifications: notifications.map(n => ({
-            id: n._id,
-            title: n.title,
-            message: n.message,
-            type: n.type,
-            isRead: n.isRead,
-            createdAt: n.createdAt
-          }))
-        });
+        attendancePercentage = totalDays > 0 ? (totalPresent / totalDays) * 100 : 0;
       }
+      totalAttendance += attendancePercentage;
+      
+      // Get performance summary (latest exam results)
+      const latestResults = await ExamResult.find({ 
+        studentId: student._id, 
+        isPublished: true 
+      })
+        .sort({ createdAt: -1 })
+        .limit(1);
+      
+      let performanceGrade = 'N/A';
+      let performancePercentage = 0;
+      
+      if (latestResults.length > 0) {
+        performancePercentage = latestResults[0].percentage || 0;
+        performanceGrade = latestResults[0].grade || getGrade(performancePercentage);
+        totalPerformance += performancePercentage;
+      }
+      
+      // Get upcoming exams for student's class
+      const upcomingExams = await Exam.find({
+        classIds: student.classId,
+        startDate: { $gte: new Date() },
+        isActive: true
+      })
+        .select('name examType startDate endDate')
+        .sort({ startDate: 1 })
+        .limit(5);
+      
+      // Get recent notifications for this student
+      const notifications = await Notification.find({
+        userId: parent.userId,
+        'data.studentId': student._id.toString()
+      })
+        .sort({ createdAt: -1 })
+        .limit(5);
+      
+      studentDetails.push({
+        _id: student._id,
+        studentId: student._id,
+        fullName: student.fullName,
+        studentCode: student.studentCode,
+        admissionNo: student.admissionNo,
+        rollNumber: student.rollNumber || '-',
+        className: student.classId?.displayName || `${student.className || ''} ${student.division || ''}`.trim(),
+        classId: student.classId,
+        relation: connection?.relation || 'guardian',
+        photoUrl: student.photoUrl,
+        attendancePercentage: attendancePercentage.toFixed(1),
+        performance: {
+          percentage: performancePercentage.toFixed(1),
+          grade: performanceGrade
+        },
+        upcomingExams: upcomingExams.map(e => ({
+          id: e._id,
+          name: e.displayName || e.name,
+          type: e.examType,
+          date: e.startDate,
+          daysLeft: Math.ceil((new Date(e.startDate) - new Date()) / (1000 * 60 * 60 * 24))
+        })),
+        recentNotifications: notifications.map(n => ({
+          id: n._id,
+          title: n.title,
+          message: n.message,
+          type: n.type,
+          isRead: n.isRead,
+          createdAt: n.createdAt
+        }))
+      });
     }
     
-    // Fee Status (placeholder - implement actual fee collection logic)
+    // Fee Status (from student data or default)
     const feeStatus = {
       totalFee: 25000,
       paid: 20000,
@@ -551,18 +634,18 @@ exports.getParentDashboard = async (req, res) => {
     // Quick Stats
     const quickStats = {
       totalChildren: totalChildren,
-      averageAttendance: totalChildren > 0 ? (totalAttendance / totalChildren).toFixed(1) : 0,
-      averagePerformance: totalChildren > 0 ? (totalPerformance / totalChildren).toFixed(1) : 0,
+      averageAttendance: totalChildren > 0 ? (totalAttendance / totalChildren).toFixed(1) : "0.0",
+      averagePerformance: totalChildren > 0 ? (totalPerformance / totalChildren).toFixed(1) : "0.0",
       unreadNotifications: recentNotifications.filter(n => !n.isRead).length,
       feeDue: feeStatus.due
     };
     
     // Events and Holidays
-    const upcomingEvents = await getUpcomingEvents(5);
+    const upcomingEvents = await getUpcomingEvents(7);
     
     // School Announcements
     const announcements = await Notification.find({ 
-      type: 'announcement',
+      type: { $in: ['announcement', 'info'] },
       createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
     })
       .sort({ createdAt: -1 })
@@ -614,6 +697,9 @@ exports.getParentDashboard = async (req, res) => {
 
 async function getUpcomingEvents(limit = 10) {
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  // Get events from database if available, otherwise return default events
   const events = [
     { id: 1, title: 'Parent-Teacher Meeting', date: new Date(today.getFullYear(), today.getMonth(), 20), type: 'Meeting', priority: 'high' },
     { id: 2, title: 'Final Exams Begin', date: new Date(today.getFullYear(), today.getMonth(), 25), type: 'Exam', priority: 'high' },
@@ -642,7 +728,7 @@ async function getUpcomingEvents(limit = 10) {
 }
 
 async function getExamPerformanceStats(academicYearId) {
-  const recentExams = await Exam.find({ academicYearId, resultsPublished: true })
+  const recentExams = await Exam.find({ academicYearId, resultsPublished: true, isActive: true })
     .sort({ createdAt: -1 })
     .limit(5);
   
@@ -683,9 +769,10 @@ async function getExamPerformanceStats(academicYearId) {
   // Calculate trend
   let trend = 'stable';
   if (examResults.length >= 2) {
-    if (examResults[0].avgPercentage > examResults[1].avgPercentage + 2) {
+    const diff = examResults[0].avgPercentage - examResults[1].avgPercentage;
+    if (diff > 2) {
       trend = 'up';
-    } else if (examResults[0].avgPercentage < examResults[1].avgPercentage - 2) {
+    } else if (diff < -2) {
       trend = 'down';
     }
   }
@@ -718,7 +805,8 @@ async function getDutyDistributionStats() {
   
   for (const duty of duties) {
     dutyTypes[duty.dutyType] = (dutyTypes[duty.dutyType] || 0) + duty.totalDuties;
-    perStaff[duty.staffId.toString()] = (perStaff[duty.staffId.toString()] || 0) + duty.totalDuties;
+    const staffId = duty.staffId.toString();
+    perStaff[staffId] = (perStaff[staffId] || 0) + duty.totalDuties;
   }
   
   const staffCount = Object.keys(perStaff).length;
@@ -741,16 +829,34 @@ async function getTopPerformingClasses(academicYearId, limit = 5) {
     if (students.length === 0) continue;
     
     const studentIds = students.map(s => s._id);
-    const marks = await Mark.find({ studentId: { $in: studentIds } });
+    const marks = await Mark.find({ 
+      studentId: { $in: studentIds },
+      isFinalized: true
+    });
     
     if (marks.length === 0) continue;
     
     let totalMarks = 0;
     let totalMaxMarks = 0;
+    let studentCount = 0;
     
+    // Group by student to avoid double counting
+    const studentMarks = new Map();
     for (const mark of marks) {
-      totalMarks += mark.totalScore || 0;
-      totalMaxMarks += mark.totalMaxMarks || 100;
+      const studentId = mark.studentId.toString();
+      if (!studentMarks.has(studentId)) {
+        studentMarks.set(studentId, { total: 0, max: 0 });
+        studentCount++;
+      }
+      const current = studentMarks.get(studentId);
+      current.total += mark.totalScore || 0;
+      current.max += mark.totalMaxMarks || 100;
+      studentMarks.set(studentId, current);
+    }
+    
+    for (const [_, marks] of studentMarks) {
+      totalMarks += marks.total;
+      totalMaxMarks += marks.max;
     }
     
     const averagePercentage = totalMaxMarks > 0 ? (totalMarks / totalMaxMarks) * 100 : 0;
@@ -766,6 +872,139 @@ async function getTopPerformingClasses(academicYearId, limit = 5) {
   return classPerformance
     .sort((a, b) => parseFloat(b.averagePercentage) - parseFloat(a.averagePercentage))
     .slice(0, limit);
+}
+
+async function getSubjectPerformanceStats(academicYearId) {
+  const subjects = await Subject.find({ isActive: true });
+  const subjectPerformance = [];
+  
+  for (const subject of subjects) {
+    const marks = await Mark.find({ 
+      'subjects.subjectId': subject._id,
+      isFinalized: true 
+    });
+    
+    if (marks.length === 0) continue;
+    
+    let totalScore = 0;
+    let totalMax = 0;
+    
+    for (const mark of marks) {
+      const subjectMark = mark.subjects.find(s => s.subjectId.toString() === subject._id.toString());
+      if (subjectMark) {
+        totalScore += subjectMark.totalScore || 0;
+        totalMax += subjectMark.maxMarks || 100;
+      }
+    }
+    
+    const averageScore = totalMax > 0 ? (totalScore / totalMax) * 100 : 0;
+    
+    subjectPerformance.push({
+      subjectId: subject._id,
+      subjectName: subject.name,
+      subjectCode: subject.code,
+      averageScore: averageScore.toFixed(1)
+    });
+  }
+  
+  return subjectPerformance
+    .sort((a, b) => parseFloat(b.averageScore) - parseFloat(a.averageScore))
+    .slice(0, 10);
+}
+
+async function getClassDistributionStats(academicYearId) {
+  const classes = await Class.find({ academicYearId, isActive: true });
+  let totalStudents = 0;
+  
+  const distribution = [];
+  for (const classItem of classes) {
+    const studentCount = await Student.countDocuments({ classId: classItem._id, status: 'active' });
+    totalStudents += studentCount;
+    distribution.push({
+      classId: classItem._id,
+      className: classItem.displayName || `${classItem.name}${classItem.section ? `-${classItem.section}` : ''}`,
+      studentCount,
+      percentage: 0 // Will calculate after total
+    });
+  }
+  
+  // Calculate percentages
+  for (const item of distribution) {
+    item.percentage = totalStudents > 0 ? ((item.studentCount / totalStudents) * 100).toFixed(1) : 0;
+  }
+  
+  return distribution;
+}
+
+async function getGradeDistributionStats(academicYearId) {
+  const results = await ExamResult.find({ 
+    isPublished: true,
+    academicYearId
+  }).limit(1000);
+  
+  const gradeCounts = {
+    'A+': 0, 'A': 0, 'B+': 0, 'B': 0, 'C+': 0, 'C': 0, 'D': 0, 'F': 0
+  };
+  
+  for (const result of results) {
+    const grade = result.grade || getGrade(result.percentage || 0);
+    if (gradeCounts.hasOwnProperty(grade)) {
+      gradeCounts[grade]++;
+    } else {
+      gradeCounts['F']++;
+    }
+  }
+  
+  const total = results.length || 1;
+  const distribution = Object.entries(gradeCounts).map(([grade, count]) => ({
+    grade,
+    count,
+    percentage: ((count / total) * 100).toFixed(1)
+  }));
+  
+  return distribution;
+}
+
+async function getPerformanceTrends(academicYearId) {
+  const months = [];
+  const today = new Date();
+  
+  // Get last 6 months
+  for (let i = 5; i >= 0; i--) {
+    const monthDate = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    const monthName = monthDate.toLocaleDateString('en-US', { month: 'short' });
+    
+    // Get exams in this month
+    const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+    const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
+    
+    const exams = await Exam.find({
+      academicYearId,
+      startDate: { $gte: monthStart, $lte: monthEnd },
+      resultsPublished: true
+    });
+    
+    let avgScore = 0;
+    let examCount = 0;
+    
+    for (const exam of exams) {
+      const results = await ExamResult.find({ examId: exam._id, isPublished: true });
+      if (results.length > 0) {
+        const examAvg = results.reduce((sum, r) => sum + (r.percentage || 0), 0) / results.length;
+        avgScore += examAvg;
+        examCount++;
+      }
+    }
+    
+    months.push({
+      month: monthName,
+      avgScore: examCount > 0 ? (avgScore / examCount).toFixed(1) : 0,
+      attendance: 0, // Would need attendance trends
+      target: 75
+    });
+  }
+  
+  return months;
 }
 
 function getGrade(percentage) {

@@ -2,31 +2,42 @@
 const express = require('express');
 const router = express.Router();
 const { protect, authorize } = require('../middleware/auth');
-const {
-  filterStudents,
-  getTopPerformers,
-  getStudentsBySubjectGrade,
-  getStudentsByMixedGrades,
-  getStudentsByRank,
-  getStudentsByPercentage,
-  exportFilteredStudents,
-  getFilterOptions
-} = require('../controllers/studentFilterController');
+const studentFilterController = require('../controllers/studentFilterController');
 
+// ============================================================
+// ALL ROUTES REQUIRE AUTHENTICATION
+// ============================================================
 router.use(protect);
 
-// Filter options
-router.get('/options/:examId', getFilterOptions);
+// ============================================================
+// FILTER OPTIONS
+// ============================================================
+router.get('/options/:examId', studentFilterController.getFilterOptions);
 
-// Filter endpoints
-router.post('/filter', authorize('staff', 'admin'), filterStudents);
-router.post('/export', authorize('staff', 'admin'), exportFilteredStudents);
+// ============================================================
+// MAIN FILTER ENDPOINTS
+// ============================================================
+router.post('/filter', authorize('staff', 'admin'), studentFilterController.filterStudents);
+router.post('/export', authorize('staff', 'admin'), studentFilterController.exportFilteredStudents);
+router.post('/bulk', authorize('staff', 'admin'), studentFilterController.bulkFilterStudents);
 
-// Specific filters
-router.get('/top-performers', getTopPerformers);
-router.get('/by-subject-grade', getStudentsBySubjectGrade);
-router.post('/by-mixed-grades', getStudentsByMixedGrades);
-router.get('/by-rank', getStudentsByRank);
-router.get('/by-percentage', getStudentsByPercentage);
+// ============================================================
+// BASIC FILTERS
+// ============================================================
+router.get('/top-performers', authorize('staff', 'admin'), studentFilterController.getTopPerformers);
+router.get('/by-subject-grade', authorize('staff', 'admin'), studentFilterController.getStudentsBySubjectGrade);
+router.post('/by-mixed-grades', authorize('staff', 'admin'), studentFilterController.getStudentsByMixedGrades);
+router.get('/by-rank', authorize('staff', 'admin'), studentFilterController.getStudentsByRank);
+router.get('/by-percentage', authorize('staff', 'admin'), studentFilterController.getStudentsByPercentage);
+
+// ============================================================
+// ADVANCED ANALYSIS ENDPOINTS
+// ============================================================
+router.get('/grade-difference-analysis', authorize('staff', 'admin'), studentFilterController.getGradeDifferenceAnalysis);
+router.get('/ce-component-analysis', authorize('staff', 'admin'), studentFilterController.getCEComponentAnalysis);
+
+router.post('/create-sample-marks', authorize('admin'), studentFilterController.createSampleMarks);
+// In studentFilterRoutes.js
+router.get('/debug-transform', authorize('admin'), studentFilterController.debugTransform);
 
 module.exports = router;

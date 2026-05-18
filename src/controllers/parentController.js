@@ -6,6 +6,9 @@ const AcademicYear = require('../models/AcademicYear');
 const Notification = require('../models/Notification');
 const { broadcastToUser } = require('../config/socket');
 const { sendEmail } = require('../services/emailService');
+const Attendance = require('../models/Attendance');
+const { Exam } = require("../models/Exam");
+const Mark = require('../models/Mark');
 
 // Helper: Send notification to parent
 async function sendParentNotification(userId, title, message, type, data) {
@@ -278,7 +281,7 @@ exports.getParentProfile = async (req, res) => {
   }
 };
 
-// Get parent's current children (for logged-in parent)
+// Get parent's current children (for logged-in parent) - ENHANCED with attendance & exam performance
 exports.getMyChildren = async (req, res) => {
   try {
     const parent = await Parent.findOne({ userId: req.user.id });
@@ -290,37 +293,330 @@ exports.getMyChildren = async (req, res) => {
     // Get current academic year
     const currentYear = await AcademicYear.findOne({ isCurrent: true });
     
+    if (!currentYear) {
+      return res.status(404).json({ message: 'Current academic year not found' });
+    }
+    
     // Get current student details
     let children = [];
     if (parent.getCurrentStudentDetails) {
-      children = await parent.getCurrentStudentDetails(currentYear?._id);
+      children = await parent.getCurrentStudentDetails(currentYear._id);
     }
     
-    // Get full student details with marks, attendance, etc.
+    // Get full student details
     const studentCodes = children.map(c => c.studentCode);
     const fullStudents = await Student.find({
       studentCode: { $in: studentCodes },
-      academicYearId: currentYear?._id
+      academicYearId: currentYear._id
     })
       .populate('classId', 'name section classTeacherName')
       .select('-__v');
     
-    // Merge with relation info
-    const enrichedChildren = fullStudents.map(student => {
+    // Import Attendance model
+    const { Attendance } = require('../models/Attendance');
+    
+    // Merge with relation info, attendance, and exam performance
+    const enrichedChildren = await Promise.all(fullStudents.map(async (student) => {
       const child = children.find(c => c.studentCode === student.studentCode);
+      
+      // Calculate attendance percentage - aggregate across all months
+      let attendancePercentage = 0;
+      let totalWorkingDays = 0;
+      let totalPresentDays = 0;
+      let monthlyAttendance = [];
+      
+      try {
+        // Get attendance records for this student for the current academic year
+        const attendanceRecords = await Attendance.find({
+          studentId: student._id,
+          academicYearId: currentYear._id
+        }).sort({ year: 1, month: 1 });
+        
+        if (attendanceRecords.length > 0) {
+          // Calculate totals across all months
+          totalWorkingDays = attendanceRecords.reduce((sum, record) => sum + (record.totalWorkingDays || 0), 0);
+          totalPresentDays = attendanceRecords.reduce((sum, record) => sum + (record.presentDays || 0), 0);
+          attendancePercentage = totalWorkingDays > 0 ? (totalPresentDays / totalWorkingDays) * 100 : 0;
+          
+          // Prepare monthly breakdown
+          monthlyAttendance = attendanceRecords.map(record => ({
+            month: record.month,
+            year: record.year,
+            presentDays: record.presentDays,
+            absentDays: record.absentDays,
+            totalWorkingDays: record.totalWorkingDays,
+            percentage: record.percentage,
+            holidays: record.holidays || []
+          }));
+        }
+      } catch (error) {
+        console.error(`Error fetching attendance for student ${student._id}:`, error);
+      }
+      
+      // Calculate exam performance from Mark model
+      let examPerformance = {
+        overallPercentage: 0,
+        examCount: 0,
+        bestExam: null,
+        recentExams: [],
+        subjectWisePerformance: {},
+        trend: 'stable',
+        grade: 'F',
+        totalMarks: 0,
+        totalMaxMarks: 0
+      };
+      
+      try {
+        // Get all marksheets for this student (published or finalized)
+        const marksheets = await Mark.find({
+          studentId: student._id,
+          academicYearId: currentYear._id,
+          status: { $in: ['published', 'reviewed'] }
+        }).populate('examId', 'displayName examType term startDate');
+        
+        if (marksheets.length > 0) {
+          // Calculate overall average across all exams
+          const totalPercentage = marksheets.reduce((sum, mark) => sum + (mark.percentage || 0), 0);
+          examPerformance.overallPercentage = totalPercentage / marksheets.length;
+          examPerformance.examCount = marksheets.length;
+          examPerformance.totalMarks = marksheets.reduce((sum, mark) => sum + (mark.totalMarks || 0), 0);
+          examPerformance.totalMaxMarks = marksheets.reduce((sum, mark) => sum + (mark.totalMaxMarks || 0), 0);
+          
+          // Find best exam
+          const bestResult = [...marksheets].sort((a, b) => (b.percentage || 0) - (a.percentage || 0))[0];
+          if (bestResult) {
+            examPerformance.bestExam = {
+              examName: bestResult.examName,
+              examId: bestResult.examId,
+              percentage: bestResult.percentage,
+              grade: bestResult.grade,
+              rank: bestResult.rank,
+              totalMarks: bestResult.totalMarks,
+              totalMaxMarks: bestResult.totalMaxMarks
+            };
+          }
+          
+          // Get recent exams (last 3 by date)
+          const sortedMarksheets = [...marksheets].sort((a, b) => 
+            new Date(b.createdAt || b.updatedAt) - new Date(a.createdAt || a.updatedAt)
+          );
+          
+          examPerformance.recentExams = sortedMarksheets.slice(0, 3).map(mark => ({
+            examId: mark.examId,
+            examName: mark.examName,
+            examType: mark.examType,
+            term: mark.term,
+            percentage: mark.percentage,
+            grade: mark.grade,
+            rank: mark.rank,
+            totalMarks: mark.totalMarks,
+            totalMaxMarks: mark.totalMaxMarks,
+            status: mark.status,
+            completedAt: mark.finalizedAt || mark.submittedAt || mark.createdAt
+          }));
+          
+          // Calculate subject-wise performance across all exams
+          const subjectPerformanceMap = new Map();
+          
+          for (const marksheet of marksheets) {
+            if (marksheet.subjects && Array.isArray(marksheet.subjects)) {
+              for (const subject of marksheet.subjects) {
+                const subjectKey = subject.subjectId?.toString() || subject.subjectName;
+                if (!subjectPerformanceMap.has(subjectKey)) {
+                  subjectPerformanceMap.set(subjectKey, {
+                    subjectId: subject.subjectId,
+                    subjectName: subject.subjectName,
+                    subjectCode: subject.subjectCode,
+                    totalPercentage: 0,
+                    totalScore: 0,
+                    totalMaxMarks: 0,
+                    count: 0,
+                    bestPercentage: 0,
+                    lastPercentage: 0,
+                    lastScore: 0
+                  });
+                }
+                
+                const perf = subjectPerformanceMap.get(subjectKey);
+                perf.totalPercentage += subject.percentage || 0;
+                perf.totalScore += subject.totalScore || 0;
+                perf.totalMaxMarks += subject.maxMarks || 0;
+                perf.count++;
+                perf.bestPercentage = Math.max(perf.bestPercentage, subject.percentage || 0);
+                perf.lastPercentage = subject.percentage || 0;
+                perf.lastScore = subject.totalScore || 0;
+              }
+            }
+          }
+          
+          // Calculate averages
+          for (const [key, perf] of subjectPerformanceMap) {
+            examPerformance.subjectWisePerformance[key] = {
+              subjectId: perf.subjectId,
+              subjectName: perf.subjectName,
+              subjectCode: perf.subjectCode,
+              averagePercentage: perf.totalPercentage / perf.count,
+              averageScore: perf.totalScore / perf.count,
+              averageMaxMarks: perf.totalMaxMarks / perf.count,
+              bestPercentage: perf.bestPercentage,
+              lastPercentage: perf.lastPercentage,
+              lastScore: perf.lastScore,
+              examCount: perf.count
+            };
+          }
+          
+          // Determine performance trend (improving/declining/stable)
+          if (sortedMarksheets.length >= 2) {
+            const recentAvg = sortedMarksheets.slice(0, 2).reduce((sum, m) => sum + (m.percentage || 0), 0) / 2;
+            const previousAvg = sortedMarksheets.slice(2, 4).reduce((sum, m) => sum + (m.percentage || 0), 0) / (Math.min(2, sortedMarksheets.length - 2));
+            
+            if (previousAvg > 0) {
+              const change = recentAvg - previousAvg;
+              if (change > 5) examPerformance.trend = 'improving';
+              else if (change < -5) examPerformance.trend = 'declining';
+              else examPerformance.trend = 'stable';
+            }
+          }
+          
+          // Calculate overall grade based on overall percentage
+          const overallPct = examPerformance.overallPercentage;
+          if (overallPct >= 90) examPerformance.grade = 'A+';
+          else if (overallPct >= 80) examPerformance.grade = 'A';
+          else if (overallPct >= 70) examPerformance.grade = 'B+';
+          else if (overallPct >= 60) examPerformance.grade = 'B';
+          else if (overallPct >= 50) examPerformance.grade = 'C+';
+          else if (overallPct >= 40) examPerformance.grade = 'C';
+          else if (overallPct >= 33) examPerformance.grade = 'D';
+          else examPerformance.grade = 'F';
+        }
+      } catch (error) {
+        console.error(`Error fetching marks for student ${student._id}:`, error);
+      }
+      
+      // Calculate attendance grade
+      let attendanceGrade = 'Good';
+      if (attendancePercentage >= 90) attendanceGrade = 'Excellent';
+      else if (attendancePercentage >= 75) attendanceGrade = 'Good';
+      else if (attendancePercentage >= 60) attendanceGrade = 'Average';
+      else attendanceGrade = 'Poor';
+      
       return {
         ...student.toObject(),
         relation: child?.relation || 'guardian',
-        connectedSince: child?.connectedSince
+        connectedSince: child?.connectedSince,
+        attendance: {
+          percentage: Math.round(attendancePercentage * 100) / 100,
+          totalWorkingDays,
+          totalPresentDays,
+          totalAbsentDays: totalWorkingDays - totalPresentDays,
+          grade: attendanceGrade,
+          monthlyBreakdown: monthlyAttendance
+        },
+        examPerformance,
+        academicSummary: {
+          attendancePercentage: Math.round(attendancePercentage * 100) / 100,
+          examAverage: Math.round(examPerformance.overallPercentage * 100) / 100,
+          examsTaken: examPerformance.examCount,
+          overallGrade: examPerformance.grade,
+          trend: examPerformance.trend,
+          totalMarksObtained: examPerformance.totalMarks,
+          totalMaxMarks: examPerformance.totalMaxMarks
+        }
       };
-    });
+    }));
+    
+    // Calculate class-level statistics for comparison
+    let classAverages = {};
+    if (enrichedChildren.length > 0 && enrichedChildren[0].classId) {
+      const classId = enrichedChildren[0].classId;
+      const allStudentsInClass = await Student.find({ 
+        classId: classId, 
+        status: 'active',
+        academicYearId: currentYear._id
+      }).select('_id');
+      
+      // Get all marks for students in this class
+      const allMarks = await Mark.find({
+        studentId: { $in: allStudentsInClass.map(s => s._id) },
+        academicYearId: currentYear._id,
+        status: { $in: ['published', 'reviewed'] }
+      });
+      
+      if (allMarks.length > 0) {
+        // Calculate average percentage per student
+        const studentAverages = new Map();
+        for (const mark of allMarks) {
+          const studentId = mark.studentId.toString();
+          if (!studentAverages.has(studentId)) {
+            studentAverages.set(studentId, { totalPct: 0, count: 0 });
+          }
+          const stats = studentAverages.get(studentId);
+          stats.totalPct += mark.percentage || 0;
+          stats.count++;
+        }
+        
+        let totalStudentAvg = 0;
+        for (const stats of studentAverages.values()) {
+          totalStudentAvg += stats.totalPct / stats.count;
+        }
+        const classAvgPercentage = studentAverages.size > 0 ? totalStudentAvg / studentAverages.size : 0;
+        
+        classAverages = {
+          examPercentage: Math.round(classAvgPercentage * 100) / 100,
+          totalStudents: allStudentsInClass.length,
+          totalExamsTaken: Math.round(allMarks.length / allStudentsInClass.length),
+          totalMarksheets: allMarks.length
+        };
+        
+        // Add class rank for each student
+        for (const child of enrichedChildren) {
+          const studentMarks = allMarks.filter(m => m.studentId.toString() === child._id.toString());
+          if (studentMarks.length > 0) {
+            const studentAvg = studentMarks.reduce((sum, m) => sum + (m.percentage || 0), 0) / studentMarks.length;
+            
+            // Calculate how many students have higher average
+            let higherCount = 0;
+            for (const [otherStudentId, stats] of studentAverages.entries()) {
+              if (otherStudentId !== child._id.toString()) {
+                const otherAvg = stats.totalPct / stats.count;
+                if (otherAvg > studentAvg) {
+                  higherCount++;
+                }
+              }
+            }
+            
+            child.examPerformance.classRank = higherCount + 1;
+            child.examPerformance.totalStudentsInClass = allStudentsInClass.length;
+            child.examPerformance.classAverage = classAvgPercentage;
+          }
+        }
+      }
+    }
     
     res.json({
       success: true,
       data: {
         children: enrichedChildren,
         count: enrichedChildren.length,
-        academicYear: currentYear?.year || 'Current'
+        academicYear: currentYear.year || 'Current',
+        classAverages,
+        summary: {
+          averageAttendance: enrichedChildren.length > 0 
+            ? enrichedChildren.reduce((sum, c) => sum + (c.attendance?.percentage || 0), 0) / enrichedChildren.length 
+            : 0,
+          averageExamScore: enrichedChildren.length > 0 
+            ? enrichedChildren.reduce((sum, c) => sum + (c.examPerformance?.overallPercentage || 0), 0) / enrichedChildren.length 
+            : 0,
+          totalExamsTaken: enrichedChildren.reduce((sum, c) => sum + (c.examPerformance?.examCount || 0), 0),
+          childrenNeedingAttention: enrichedChildren.filter(c => 
+            (c.attendance?.percentage || 0) < 75 || (c.examPerformance?.overallPercentage || 0) < 50
+          ).length,
+          topPerformer: enrichedChildren.length > 0 
+            ? enrichedChildren.reduce((best, current) => 
+                (current.examPerformance?.overallPercentage || 0) > (best.examPerformance?.overallPercentage || 0) ? current : best
+              , enrichedChildren[0])
+            : null
+        }
       }
     });
   } catch (error) {
@@ -483,8 +779,6 @@ exports.getParentStudents = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
-
 
 exports.getParentByUserId = async (req, res) => {
   try {

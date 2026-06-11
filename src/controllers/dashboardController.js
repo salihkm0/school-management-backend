@@ -82,6 +82,65 @@ exports.getAdminDashboard = async (req, res) => {
       { $group: { _id: "$category", count: { $sum: 1 } } },
       { $sort: { count: -1 } }
     ]);
+
+    // Standard-wise Gender Distribution
+    const standardGenderDistribution = await Student.aggregate([
+      { $match: { status: "active" } },
+      { $group: {
+          _id: { className: "$className", gender: "$gender" },
+          count: { $sum: 1 }
+      } }
+    ]);
+    
+    const standardGenderMap = {};
+    for (const item of standardGenderDistribution) {
+      const className = item._id.className || 'Unknown';
+      const gender = item._id.gender || 'Unknown';
+      if (!standardGenderMap[className]) {
+        standardGenderMap[className] = { className, male: 0, female: 0, other: 0, total: 0 };
+      }
+      if (gender === 'M') standardGenderMap[className].male = item.count;
+      else if (gender === 'F') standardGenderMap[className].female = item.count;
+      else standardGenderMap[className].other = item.count;
+      standardGenderMap[className].total += item.count;
+    }
+    const standardGender = Object.values(standardGenderMap).sort((a, b) => {
+      const aNum = parseInt(a.className);
+      const bNum = parseInt(b.className);
+      if (!isNaN(aNum) && !isNaN(bNum)) {
+        return aNum - bNum;
+      }
+      return a.className.localeCompare(b.className, undefined, { numeric: true, sensitivity: 'base' });
+    });
+
+    // Standard-wise Category Distribution
+    const standardCategoryDistribution = await Student.aggregate([
+      { $match: { status: "active" } },
+      { $group: {
+          _id: { className: "$className", category: "$category" },
+          count: { $sum: 1 }
+      } }
+    ]);
+
+    const standardCategoryMap = {};
+    for (const item of standardCategoryDistribution) {
+      const className = item._id.className || 'Unknown';
+      const category = item._id.category || 'General';
+      if (!standardCategoryMap[className]) {
+        standardCategoryMap[className] = { className, categories: {}, total: 0 };
+      }
+      const categoryLabel = category || 'General';
+      standardCategoryMap[className].categories[categoryLabel] = item.count;
+      standardCategoryMap[className].total += item.count;
+    }
+    const standardCategory = Object.values(standardCategoryMap).sort((a, b) => {
+      const aNum = parseInt(a.className);
+      const bNum = parseInt(b.className);
+      if (!isNaN(aNum) && !isNaN(bNum)) {
+        return aNum - bNum;
+      }
+      return a.className.localeCompare(b.className, undefined, { numeric: true, sensitivity: 'base' });
+    });
     
     // Monthly Enrollment Trend (current academic year)
     const currentYearStart = currentYear?.startDate || new Date(new Date().getFullYear(), 0, 1);
@@ -193,7 +252,9 @@ exports.getAdminDashboard = async (req, res) => {
         },
         demographics: {
           gender: { male: maleCount, female: femaleCount, other: otherCount },
-          category: categoryDistribution
+          category: categoryDistribution,
+          standardGender,
+          standardCategory
         },
         enrollmentTrend,
         recentActivities: formattedActivities,

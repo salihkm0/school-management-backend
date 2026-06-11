@@ -41,7 +41,9 @@ exports.getStaff = async (req, res) => {
 
     const query = {};
     if (role) query.role = role;
-    if (isActive !== undefined) query.isActive = isActive === "true";
+    if (isActive !== undefined) {
+      query.isActive = isActive === "true" ? { $ne: false } : false;
+    }
     if (search) {
       query.$or = [
         { name: { $regex: search, $options: 'i' } },
@@ -120,6 +122,7 @@ exports.createStaff = async (req, res) => {
       shortName,  // Add this
       phone,
       role,
+      employeeType,
       qualification,
       contact,
       dateOfJoining,
@@ -152,6 +155,7 @@ exports.createStaff = async (req, res) => {
       name,
       shortName: shortName || null,  // Add shortName from form
       role,
+      employeeType: employeeType || 'Permanent',
       qualification,
       contact,
       dateOfJoining: new Date(dateOfJoining),
@@ -778,11 +782,11 @@ exports.promoteStaffToNextYear = async (req, res) => {
 // Get staff dashboard stats
 exports.getStaffDashboardStats = async (req, res) => {
   try {
-    const totalStaff = await Staff.countDocuments({ isActive: true });
-    const teachers = await Staff.countDocuments({ role: 'teacher', isActive: true });
+    const totalStaff = await Staff.countDocuments({ isActive: { $ne: false } });
+    const teachers = await Staff.countDocuments({ role: 'teacher', isActive: { $ne: false } });
     const nonTeachingStaff = await Staff.countDocuments({ 
       role: { $ne: 'teacher' }, 
-      isActive: true 
+      isActive: { $ne: false } 
     });
     
     const currentYear = await AcademicYear.findOne({ isCurrent: true });
@@ -803,7 +807,7 @@ exports.getStaffDashboardStats = async (req, res) => {
     
     // Role distribution
     const roleDistribution = await Staff.aggregate([
-      { $match: { isActive: true } },
+      { $match: { isActive: { $ne: false } } },
       { $group: { _id: '$role', count: { $sum: 1 } } }
     ]);
     

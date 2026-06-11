@@ -322,12 +322,23 @@ exports.getAttendanceByClass = async (req, res) => {
     const { classId } = req.params;
     const { year, month } = req.query;
 
-    console.log('getAttendanceByClass called:', { classId, year, month });
-
-    // Get all students in the class
-    const allStudents = await Student.find({ classId, status: 'active' })
-      .select('_id fullName studentCode admissionNo rollNumber')
-      .sort({ rollNumber: 1, fullName: 1 });
+    // Run all 3 independent queries in parallel
+    const [allStudents, attendanceRecords, template] = await Promise.all([
+      Student.find({ classId, status: 'active' })
+        .select('_id fullName studentCode admissionNo rollNumber')
+        .sort({ rollNumber: 1, fullName: 1 }),
+      Attendance.find({
+        classId,
+        year: parseInt(year),
+        month: parseInt(month)
+      }),
+      AttendanceTemplate.findOne({
+        $or: [{ classId: classId }, { classId: null }],
+        year: parseInt(year),
+        month: parseInt(month),
+        isActive: true
+      }),
+    ]);
 
     if (!allStudents || allStudents.length === 0) {
       return res.json({
@@ -339,26 +350,6 @@ exports.getAttendanceByClass = async (req, res) => {
         message: 'No students found in this class'
       });
     }
-
-    // Get attendance records for this class/month/year
-    const attendanceRecords = await Attendance.find({
-      classId,
-      year: parseInt(year),
-      month: parseInt(month)
-    });
-
-    console.log('Found attendance records:', attendanceRecords.length);
-
-    // Get template for this class and month
-    const template = await AttendanceTemplate.findOne({
-      $or: [
-        { classId: classId },
-        { classId: null }
-      ],
-      year: parseInt(year),
-      month: parseInt(month),
-      isActive: true
-    });
 
     const workingDays = template?.totalWorkingDays || 25;
     const holidayCount = template?.holidays?.length || 0;
@@ -458,13 +449,18 @@ exports.createAttendance = async (req, res) => {
   try {
     const { studentId, classId, year, month, presentDays, absentDays, totalWorkingDays, remarks } = req.body;
 
-    const template = await AttendanceTemplate.findOne({
-      $or: [{ classId: classId }, { classId: null }],
-      year: parseInt(year),
-      month: parseInt(month),
-      isActive: true
-    });
-    
+    // Parallel lookups — template, student, and class fetched concurrently
+    const [template, student, classItem] = await Promise.all([
+      AttendanceTemplate.findOne({
+        $or: [{ classId: classId }, { classId: null }],
+        year: parseInt(year),
+        month: parseInt(month),
+        isActive: true
+      }),
+      Student.findById(studentId),
+      Class.findById(classId),
+    ]);
+
     const workingDays = template?.totalWorkingDays || totalWorkingDays || 25;
 
     const existingAttendance = await Attendance.findOne({
@@ -483,9 +479,9 @@ exports.createAttendance = async (req, res) => {
 
     const attendance = await Attendance.create({
       studentId,
-      studentName: (await Student.findById(studentId))?.fullName,
+      studentName: student?.fullName,
       classId,
-      academicYearId: (await Class.findById(classId))?.academicYearId,
+      academicYearId: classItem?.academicYearId,
       year,
       month,
       totalWorkingDays: workingDays,
@@ -496,189 +492,202 @@ exports.createAttendance = async (req, res) => {
       remarks
     });
 
-    const student = await Student.findById(studentId);
-    if (student && percentage < 75) {
-      await sendAttendanceWarning(student, month, year, percentage, classId);
-    }
-    
-    const classItem = await Class.findById(classId);
-    if (classItem && classItem.classTeacherId) {
-      broadcastToUser(classItem.classTeacherId, 'attendance:updated', {
-        studentId,
-        studentName: student?.fullName,
-        month,
-        year,
-        attendancePercentage: percentage,
-        classId
-      });
-    }
-
+    // Respond immediately, then fire side-effects
     res.status(201).json(attendance);
+
+    // Async: warnings + socket broadcast
+    setImmediate(async () => {
+      try {
+        if (student && percentage < 75) {
+          await sendAttendanceWarning(student, month, year, percentage, classId);
+        }
+        if (classItem?.classTeacherId) {
+          broadcastToUser(classItem.classTeacherId, 'attendance:updated', {
+            studentId,
+            studentName: student?.fullName,
+            month,
+            year,
+            attendancePercentage: percentage,
+            classId
+          });
+        }
+      } catch (err) {
+        console.error('Error in createAttendance side effects:', err.message);
+      }
+    });
+
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
+
 exports.bulkCreateAttendance = async (req, res) => {
   try {
     const { attendanceList } = req.body;
-    
+    if (!attendanceList || attendanceList.length === 0) {
+      return res.status(400).json({ message: 'No attendance data provided' });
+    }
+
     const firstItem = attendanceList[0];
+
+    // Single query to get template (not inside loop)
     const template = await AttendanceTemplate.findOne({
       $or: [{ classId: firstItem.classId }, { classId: null }],
       year: firstItem.year,
       month: firstItem.month,
       isActive: true
     });
-    
+
     const workingDays = template?.totalWorkingDays || 25;
-    
-    const results = {
-      success: [],
-      failed: [],
-      warnings: []
-    };
 
-    for (const attendanceData of attendanceList) {
-      try {
-        let attendance = await Attendance.findOne({
-          studentId: attendanceData.studentId,
-          year: attendanceData.year,
-          month: attendanceData.month
-        });
+    // ── Build bulkWrite operations (1 round-trip for all students) ──
+    const bulkOps = attendanceList.map((attendanceData) => {
+      let presentDays = attendanceData.presentDays;
+      let absentDays = attendanceData.absentDays;
 
-        // IMPORTANT FIX: Use the values directly from attendanceData
-        // Don't recalculate using fallback logic that might change 0 to workingDays
-        let presentDays = attendanceData.presentDays;
-        let absentDays = attendanceData.absentDays;
-        
-        // Validate that absentDays + presentDays equals workingDays
-        // If not, calculate based on which one is provided
-        if (absentDays !== undefined && presentDays === undefined) {
-          presentDays = workingDays - absentDays;
-        } else if (presentDays !== undefined && absentDays === undefined) {
-          absentDays = workingDays - presentDays;
-        } else if (absentDays !== undefined && presentDays !== undefined) {
-          // Both provided, use them as is
-          // Just ensure they're valid
-          presentDays = Math.min(Math.max(presentDays, 0), workingDays);
-          absentDays = workingDays - presentDays;
-        } else {
-          // Neither provided - default to all absent
-          absentDays = workingDays;
-          presentDays = 0;
-        }
-        
-        // Ensure values are within valid range
-        absentDays = Math.min(Math.max(absentDays, 0), workingDays);
+      if (absentDays !== undefined && presentDays === undefined) {
         presentDays = workingDays - absentDays;
-        
-        const percentage = workingDays > 0 ? (presentDays / workingDays) * 100 : 0;
+      } else if (presentDays !== undefined && absentDays === undefined) {
+        absentDays = workingDays - presentDays;
+      } else if (absentDays !== undefined && presentDays !== undefined) {
+        presentDays = Math.min(Math.max(presentDays, 0), workingDays);
+        absentDays = workingDays - presentDays;
+      } else {
+        absentDays = workingDays;
+        presentDays = 0;
+      }
 
-        if (attendance) {
-          // Update existing - preserve the values we calculated
-          attendance.presentDays = presentDays;
-          attendance.absentDays = absentDays;
-          attendance.totalWorkingDays = workingDays;
-          attendance.percentage = percentage;
-          if (template?.holidays) attendance.holidays = template.holidays;
-          if (template?._id) attendance.templateId = template._id;
-          await attendance.save();
-          results.success.push(attendance);
-        } else {
-          // Create new
-          attendance = await Attendance.create({
+      absentDays = Math.min(Math.max(absentDays, 0), workingDays);
+      presentDays = workingDays - absentDays;
+      const percentage = workingDays > 0 ? (presentDays / workingDays) * 100 : 0;
+
+      return {
+        updateOne: {
+          filter: {
             studentId: attendanceData.studentId,
-            studentName: attendanceData.studentName,
-            classId: attendanceData.classId,
-            academicYearId: attendanceData.academicYearId,
             year: attendanceData.year,
             month: attendanceData.month,
-            totalWorkingDays: workingDays,
-            presentDays: presentDays,
-            absentDays: absentDays,
-            percentage: percentage,
-            holidays: template?.holidays || [],
-            templateId: template?._id
-          });
-          results.success.push(attendance);
-        }
-        
-        if (percentage < 75 && percentage > 0) {
-          const student = await Student.findById(attendance.studentId);
-          if (student) {
-            await sendAttendanceWarning(student, attendance.month, attendance.year, percentage, attendance.classId);
-            results.warnings.push({
-              studentId: student._id,
-              studentName: student.fullName,
-              percentage: percentage
-            });
-          }
-        }
-        
-      } catch (error) {
-        console.error('Error processing attendance:', error);
-        results.failed.push({
-          data: attendanceData,
-          error: error.message
-        });
-      }
-    }
+          },
+          update: {
+            $set: {
+              studentId: attendanceData.studentId,
+              studentName: attendanceData.studentName,
+              classId: attendanceData.classId,
+              academicYearId: attendanceData.academicYearId,
+              year: attendanceData.year,
+              month: attendanceData.month,
+              totalWorkingDays: workingDays,
+              presentDays,
+              absentDays,
+              percentage,
+              holidays: template?.holidays || [],
+              templateId: template?._id || null,
+            },
+          },
+          upsert: true,
+        },
+      };
+    });
 
-    if (results.success.length > 0) {
-      const classId = attendanceList[0]?.classId;
-      if (classId) {
-        broadcastToClass(classId, 'attendance:bulk-updated', {
-          total: results.success.length,
-          warnings: results.warnings.length,
-          timestamp: new Date()
-        });
-      }
+    // Single DB round-trip for ALL students
+    const bulkResult = await Attendance.bulkWrite(bulkOps, { ordered: false });
+
+    // ── Respond immediately ──────────────────────────────────────────
+    const classId = firstItem.classId;
+    if (classId) {
+      broadcastToClass(classId, 'attendance:bulk-updated', {
+        total: bulkResult.upsertedCount + bulkResult.modifiedCount,
+        timestamp: new Date()
+      });
     }
 
     res.json({
-      message: `Saved ${results.success.length} attendance records, ${results.failed.length} failed, ${results.warnings.length} warnings sent`,
-      results
+      message: `Saved ${bulkResult.upsertedCount + bulkResult.modifiedCount} attendance records`,
+      results: {
+        success: bulkResult.upsertedCount + bulkResult.modifiedCount,
+        failed: 0,
+        warnings: 0
+      }
     });
+
+    // ── Fire attendance warnings ASYNC (non-blocking, after response) ──
+    setImmediate(async () => {
+      try {
+        const warningStudents = attendanceList.filter(a => {
+          const present = a.presentDays ?? (workingDays - (a.absentDays || 0));
+          const pct = workingDays > 0 ? (present / workingDays) * 100 : 0;
+          return pct < 75 && pct > 0;
+        });
+
+        // Batch-fetch students who need warnings
+        if (warningStudents.length > 0) {
+          const studentIds = warningStudents.map(a => a.studentId);
+          const students = await Student.find({ _id: { $in: studentIds } }).select('fullName parentIds');
+          const studentMap = new Map(students.map(s => [s._id.toString(), s]));
+
+          for (const a of warningStudents) {
+            const student = studentMap.get(a.studentId.toString());
+            if (!student) continue;
+            const present = a.presentDays ?? (workingDays - (a.absentDays || 0));
+            const pct = workingDays > 0 ? (present / workingDays) * 100 : 0;
+            await sendAttendanceWarning(student, a.month, a.year, pct, a.classId);
+          }
+        }
+      } catch (err) {
+        console.error('Error sending attendance warnings (async):', err.message);
+      }
+    });
+
   } catch (error) {
     console.error('Error in bulkCreateAttendance:', error);
     res.status(500).json({ message: error.message });
   }
 };
 
+
 exports.updateAttendance = async (req, res) => {
   try {
     const { presentDays, absentDays, totalWorkingDays } = req.body;
-    
+
     const attendance = await Attendance.findById(req.params.id);
     if (!attendance) {
       return res.status(404).json({ message: 'Attendance record not found' });
     }
-    
+
     const workingDays = totalWorkingDays || attendance.totalWorkingDays || 25;
     const finalPresentDays = presentDays !== undefined ? presentDays : (workingDays - (absentDays || attendance.absentDays));
     const finalAbsentDays = absentDays !== undefined ? absentDays : (workingDays - finalPresentDays);
     const percentage = workingDays > 0 ? (finalPresentDays / workingDays) * 100 : 0;
-    
+
     attendance.presentDays = finalPresentDays;
     attendance.absentDays = finalAbsentDays;
     attendance.totalWorkingDays = workingDays;
     attendance.percentage = percentage;
-    
+
     await attendance.save();
 
-    if (percentage < 75 && percentage > 0) {
-      const student = await Student.findById(attendance.studentId);
-      if (student) {
-        await sendAttendanceWarning(student, attendance.month, attendance.year, percentage, attendance.classId);
-      }
-    }
-
+    // Respond immediately
     res.json(attendance);
+
+    // Fire warning async (non-blocking)
+    if (percentage < 75 && percentage > 0) {
+      setImmediate(async () => {
+        try {
+          const student = await Student.findById(attendance.studentId);
+          if (student) {
+            await sendAttendanceWarning(student, attendance.month, attendance.year, percentage, attendance.classId);
+          }
+        } catch (err) {
+          console.error('Error sending attendance warning (update):', err.message);
+        }
+      });
+    }
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 exports.deleteAttendance = async (req, res) => {
   try {

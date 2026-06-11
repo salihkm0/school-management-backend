@@ -129,7 +129,12 @@ AttendanceSchema.pre('save', function(next) {
   next();
 });
 
-// Indexes
+// ── Indexes ──────────────────────────────────────────────────────────
+// AttendanceTemplate: the most frequent query pattern
+AttendanceTemplateSchema.index({ classId: 1, year: 1, month: 1, isActive: 1 });
+AttendanceTemplateSchema.index({ academicYearId: 1 });
+
+// Attendance: already has unique index on studentId+year+month
 AttendanceSchema.index({ studentId: 1, year: 1, month: 1 }, { unique: true });
 AttendanceSchema.index({ classId: 1, year: 1, month: 1 });
 AttendanceSchema.index({ academicYearId: 1 });

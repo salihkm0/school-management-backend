@@ -17,7 +17,9 @@ const {
   cloneExam,
   getExamClasses,
   getExamSubjects,
-  getExamScheduleDetails
+  getExamScheduleDetails,
+  getStaffExams,
+  createStaffExam
 } = require('../controllers/examController');
 
 router.use(protect);
@@ -27,6 +29,12 @@ router.get('/types', getExamTypes);
 router.get('/session-times', getSessionTimes);
 router.get('/upcoming', getUpcomingExams);
 router.get('/schedule/:classId', getExamSchedule);
+
+// Get exams for staff (class teacher only)
+router.get('/staff/exams', protect, authorize('staff'), getStaffExams);
+
+// Create exam as staff (class teacher)
+router.post('/staff/exams', protect, authorize('staff'), createStaffExam);
 
 // IMPORTANT: Specific routes with :id must come BEFORE the generic /:id route
 router.get('/:id/classes', authorize('admin', 'principal', 'staff'), getExamClasses);

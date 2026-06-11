@@ -257,6 +257,8 @@ exports.getParentProfile = async (req, res) => {
         studentCode: conn.studentCode,
         relation: conn.relation,
         connectedSince: conn.connectedSince,
+        studentFullName: conn.studentFullName,
+        className: conn.className,
         currentDetails: current || null,
         hasCurrentData: !!current
       };
@@ -795,6 +797,49 @@ exports.getParentByUserId = async (req, res) => {
     });
   } catch (error) {
     console.error('Error in getParentByUserId:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.updateParent = async (req, res) => {
+  try {
+    const { fullName, email, phone, alternatePhone, address, occupation } = req.body;
+    
+    const parent = await Parent.findById(req.params.id);
+    if (!parent) {
+      return res.status(404).json({ message: 'Parent not found' });
+    }
+    
+    // Update User model name/phone/email if they are changed
+    const userUpdates = {};
+    if (fullName) userUpdates.name = fullName;
+    if (phone) userUpdates.phone = phone;
+    if (email) userUpdates.email = email;
+    
+    if (Object.keys(userUpdates).length > 0) {
+      await User.findByIdAndUpdate(parent.userId, userUpdates);
+    }
+    
+    // Update parent
+    parent.fullName = fullName || parent.fullName;
+    parent.email = email !== undefined ? email : parent.email;
+    parent.phone = phone || parent.phone;
+    parent.alternatePhone = alternatePhone !== undefined ? alternatePhone : parent.alternatePhone;
+    parent.occupation = occupation !== undefined ? occupation : parent.occupation;
+    
+    if (address) {
+      parent.address = typeof address === 'string' ? { street: address } : address;
+    }
+    
+    await parent.save();
+    
+    res.json({
+      success: true,
+      message: 'Parent updated successfully',
+      data: parent
+    });
+  } catch (error) {
+    console.error('Update parent error:', error);
     res.status(500).json({ message: error.message });
   }
 };

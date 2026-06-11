@@ -6,8 +6,18 @@ const connectDB = async () => {
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
+      // ── Connection Pool ──────────────────────────────────────────
+      maxPoolSize: 20,          // max concurrent connections (was default 5)
+      minPoolSize: 5,           // keep at least 5 alive
+      maxIdleTimeMS: 30000,     // close idle connections after 30s
+      // ── Timeouts ────────────────────────────────────────────────
+      serverSelectionTimeoutMS: 8000,
+      socketTimeoutMS: 60000,
+      connectTimeoutMS: 10000,
+      // ── Heartbeat ───────────────────────────────────────────────
+      heartbeatFrequencyMS: 10000,
+      // ── Disable command buffering; fail fast when disconnected ──
+      bufferCommands: false,
     });
 
     logger.info(`MongoDB Connected: ${conn.connection.host}`);

@@ -77,119 +77,106 @@ async function createRecentActivity({
 
 async function broadcastDashboardUpdate() {
   try {
-    const totalStudents = await Student.countDocuments({ status: "active" });
-    const totalStaff = await Staff.countDocuments({ isActive: true });
-    const totalClasses = await Class.countDocuments({ isActive: true });
-    const currentYear = await AcademicYear.findOne({ isCurrent: true });
-    const currentExams = await Exam.countDocuments({
-      academicYearId: currentYear?._id,
-    });
-
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const attendanceToday = await Attendance.countDocuments({
-      createdAt: { $gte: today },
-      status: "present",
-    });
 
-    broadcastToRole("admin", "dashboard:updated", {
-      totalStudents,
-      totalStaff,
-      totalClasses,
-      currentExams,
-      attendanceToday,
-      timestamp: new Date(),
-    });
-    broadcastToRole("staff", "dashboard:updated", {
-      totalStudents,
-      totalStaff,
-      totalClasses,
-      currentExams,
-      attendanceToday,
-      timestamp: new Date(),
-    });
+    const [totalStudents, totalStaff, totalClasses, currentYear, attendanceToday] = await Promise.all([
+      Student.countDocuments({ status: 'active' }),
+      Staff.countDocuments({ isActive: true }),
+      Class.countDocuments({ isActive: true }),
+      AcademicYear.findOne({ isCurrent: true }),
+      Attendance.countDocuments({ createdAt: { $gte: today }, status: 'present' }),
+    ]);
+
+    const currentExams = currentYear
+      ? await Exam.countDocuments({ academicYearId: currentYear._id })
+      : 0;
+
+    const payload = { totalStudents, totalStaff, totalClasses, currentExams, attendanceToday, timestamp: new Date() };
+    broadcastToRole('admin', 'dashboard:updated', payload);
+    broadcastToRole('staff', 'dashboard:updated', payload);
   } catch (error) {
-    console.error("Error broadcasting dashboard update:", error);
+    console.error('Error broadcasting dashboard update:', error);
   }
 }
+
 
 // ==================== DASHBOARD ANALYTICS ====================
 
 exports.getDashboardAnalytics = async (req, res) => {
   try {
-    const totalStudents = await Student.countDocuments({ status: "active" });
-    const totalStaff = await Staff.countDocuments({ isActive: true });
-    const totalClasses = await Class.countDocuments({ isActive: true });
-
-    const currentYear = await AcademicYear.findOne({ isCurrent: true });
-    const currentExams = await Exam.countDocuments({
-      academicYearId: currentYear?._id,
-      isActive: true,
-    });
-
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const attendanceToday = await Attendance.countDocuments({
-      createdAt: { $gte: today },
-      status: "present",
-    });
 
-    const recentMarks = await Mark.find()
-      .sort({ createdAt: -1 })
-      .limit(100);
+    // Run all independent queries in parallel
+    const [
+      totalStudents,
+      totalStaff,
+      totalClasses,
+      currentYear,
+      maleCount,
+      femaleCount,
+      otherCount,
+      categoryDistribution,
+      monthlyEnrollment,
+      recentMarks,
+      recentActivities,
+      pendingExams,
+      pendingDuties,
+      pendingAttendance,
+      attendanceToday,
+    ] = await Promise.all([
+      Student.countDocuments({ status: 'active' }),
+      Staff.countDocuments({ isActive: true }),
+      Class.countDocuments({ isActive: true }),
+      AcademicYear.findOne({ isCurrent: true }),
+      Student.countDocuments({ gender: 'M', status: 'active' }),
+      Student.countDocuments({ gender: 'F', status: 'active' }),
+      Student.countDocuments({ gender: 'Other', status: 'active' }),
+      Student.aggregate([
+        { $match: { status: 'active' } },
+        { $group: { _id: '$category', count: { $sum: 1 } } }
+      ]),
+      Student.aggregate([
+        { $match: { status: 'active' } },
+        { $group: { _id: { $month: '$createdAt' }, count: { $sum: 1 } } },
+        { $sort: { _id: 1 } }
+      ]),
+      Mark.find().sort({ createdAt: -1 }).limit(100),
+      RecentActivity.find().sort({ createdAt: -1 }).limit(10).populate('performedBy', 'name role'),
+      Exam.countDocuments({ overallStatus: { $in: ['draft', 'submitted'] }, isActive: true }),
+      StaffDuty?.countDocuments({ status: 'assigned' }).catch(() => 0) || Promise.resolve(0),
+      Attendance.countDocuments({ status: { $ne: 'present' }, createdAt: { $gte: today } }),
+      Attendance.countDocuments({ createdAt: { $gte: today }, status: 'present' }),
+    ]);
+
+    // currentExams depends on currentYear, but it's fast so we do it after
+    const currentExams = currentYear
+      ? await Exam.countDocuments({ academicYearId: currentYear._id, isActive: true })
+      : 0;
 
     const fullAPlusCount = recentMarks.filter((m) => {
       const subjects = m.subjects || [];
       if (subjects.length === 0) return false;
-      return subjects.every((s) => s.grade === "A+");
+      return subjects.every((s) => s.grade === 'A+');
     }).length;
-
-    const recentActivities = await RecentActivity.find()
-      .sort({ createdAt: -1 })
-      .limit(10)
-      .populate('performedBy', 'name role');
 
     let activities = recentActivities;
     if (activities.length === 0) {
-      const recentStudents = await Student.find()
-        .sort({ createdAt: -1 })
-        .limit(3)
-        .select("fullName createdAt");
-      const recentStaff = await Staff.find()
-        .sort({ createdAt: -1 })
-        .limit(2)
-        .select("name createdAt");
-      const recentExams = await Exam.find()
-        .sort({ createdAt: -1 })
-        .limit(2)
-        .select("name createdAt");
+      const [recentStudents, recentStaff, recentExams] = await Promise.all([
+        Student.find().sort({ createdAt: -1 }).limit(3).select('fullName createdAt'),
+        Staff.find().sort({ createdAt: -1 }).limit(2).select('name createdAt'),
+        Exam.find().sort({ createdAt: -1 }).limit(2).select('name createdAt'),
+      ]);
 
       const sampleActivities = [
-        ...recentStudents.map((s) => ({
-          type: "student_added",
-          description: `New student added: ${s.fullName}`,
-          timestamp: s.createdAt,
-          performedByRole: "admin",
-        })),
-        ...recentStaff.map((s) => ({
-          type: "staff_added",
-          description: `New staff member: ${s.name}`,
-          timestamp: s.createdAt,
-          performedByRole: "admin",
-        })),
-        ...recentExams.map((e) => ({
-          type: "exam_created",
-          description: `New exam created: ${e.name}`,
-          timestamp: e.createdAt,
-          performedByRole: "admin",
-        })),
+        ...recentStudents.map((s) => ({ type: 'student_added', description: `New student added: ${s.fullName}`, timestamp: s.createdAt, performedByRole: 'admin' })),
+        ...recentStaff.map((s) => ({ type: 'staff_added', description: `New staff member: ${s.name}`, timestamp: s.createdAt, performedByRole: 'admin' })),
+        ...recentExams.map((e) => ({ type: 'exam_created', description: `New exam created: ${e.name}`, timestamp: e.createdAt, performedByRole: 'admin' })),
       ];
-      
-      activities = sampleActivities
-        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-        .slice(0, 10);
+      activities = sampleActivities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 10);
     } else {
-      activities = activities.map(activity => ({
+      activities = activities.map((activity) => ({
         type: activity.activityType,
         description: activity.description,
         timestamp: activity.createdAt,
@@ -198,41 +185,8 @@ exports.getDashboardAnalytics = async (req, res) => {
       }));
     }
 
-    const maleCount = await Student.countDocuments({ gender: "M", status: "active" });
-    const femaleCount = await Student.countDocuments({ gender: "F", status: "active" });
-    const otherCount = await Student.countDocuments({ gender: "Other", status: "active" });
-
-    const categoryDistribution = await Student.aggregate([
-      { $match: { status: "active" } },
-      { $group: { _id: "$category", count: { $sum: 1 } } }
-    ]);
-
-    const monthlyEnrollment = await Student.aggregate([
-      { $match: { status: "active" } },
-      {
-        $group: {
-          _id: { $month: "$createdAt" },
-          count: { $sum: 1 }
-        }
-      },
-      { $sort: { _id: 1 } }
-    ]);
-
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const enrollmentTrend = monthlyEnrollment.map(item => ({
-      month: monthNames[item._id - 1],
-      count: item.count
-    }));
-
-    const pendingExams = await Exam.countDocuments({ 
-      overallStatus: { $in: ['draft', 'submitted'] },
-      isActive: true 
-    });
-    const pendingDuties = await StaffDuty?.countDocuments({ status: 'assigned' }) || 0;
-    const pendingAttendance = await Attendance.countDocuments({ 
-      status: { $ne: 'present' },
-      createdAt: { $gte: today }
-    });
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const enrollmentTrend = monthlyEnrollment.map((item) => ({ month: monthNames[item._id - 1], count: item.count }));
 
     res.json({
       success: true,
@@ -246,26 +200,19 @@ exports.getDashboardAnalytics = async (req, res) => {
         academicYear: currentYear?.year,
         recentActivities: activities,
         demographics: {
-          gender: {
-            male: maleCount,
-            female: femaleCount,
-            other: otherCount
-          },
+          gender: { male: maleCount, female: femaleCount, other: otherCount },
           category: categoryDistribution
         },
         enrollmentTrend,
-        pendingTasks: {
-          exams: pendingExams,
-          duties: pendingDuties,
-          attendance: pendingAttendance
-        }
+        pendingTasks: { exams: pendingExams, duties: pendingDuties, attendance: pendingAttendance }
       },
     });
   } catch (error) {
-    console.error("Error in getDashboardAnalytics:", error);
+    console.error('Error in getDashboardAnalytics:', error);
     res.status(500).json({ message: error.message });
   }
 };
+
 
 // ==================== GRADE ANALYSIS (USING MARK MODEL) ====================
 
@@ -283,8 +230,6 @@ exports.getGradeAnalysis = async (req, res) => {
     const marks = await Mark.find(query)
       .populate("studentId", "fullName admissionNo rollNumber studentCode")
       .sort({ percentage: -1 });
-
-    console.log(`Found ${marks.length} mark records`);
 
     // Default empty response
     const emptyResponse = {
@@ -625,46 +570,50 @@ exports.getTopPerformingClasses = async (req, res) => {
   try {
     const { examId, academicYearId, limit = 10 } = req.query;
 
-    const classes = await Class.find({ isActive: true });
-    const classPerformance = [];
+    // Build match stage
+    const matchStage = {};
+    if (examId) matchStage.examId = require('mongoose').Types.ObjectId.createFromHexString(examId);
+    if (academicYearId) matchStage.academicYearId = require('mongoose').Types.ObjectId.createFromHexString(academicYearId);
 
-    for (const classItem of classes) {
-      const query = {};
-      if (examId) query.examId = examId;
-      if (academicYearId) query.academicYearId = academicYearId;
-      query.classId = classItem._id;
+    // Single aggregate instead of N Mark.find() calls in a loop
+    const [classStats, classes] = await Promise.all([
+      Mark.aggregate([
+        { $match: matchStage },
+        {
+          $group: {
+            _id: '$classId',
+            totalMarks: { $sum: '$totalMarks' },
+            totalMaxMarks: { $sum: '$totalMaxMarks' },
+            studentCount: { $sum: 1 },
+          },
+        },
+      ]),
+      Class.find({ isActive: true }).select('_id name section'),
+    ]);
 
-      const marks = await Mark.find(query);
+    const classMap = new Map(classes.map((c) => [c._id.toString(), c]));
 
-      if (marks.length === 0) continue;
+    const classPerformance = classStats
+      .map((stat) => {
+        const classItem = classMap.get(stat._id.toString());
+        if (!classItem || stat.studentCount === 0) return null;
+        const averagePercentage = stat.totalMaxMarks > 0 ? (stat.totalMarks / stat.totalMaxMarks) * 100 : 0;
+        return {
+          classId: stat._id,
+          className: classItem.section ? `${classItem.name}-${classItem.section}` : classItem.name,
+          averagePercentage,
+          totalStudents: stat.studentCount,
+          totalMarks: stat.totalMarks,
+          totalMaxMarks: stat.totalMaxMarks,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.averagePercentage - a.averagePercentage)
+      .slice(0, parseInt(limit));
 
-      let totalMarks = 0;
-      let totalMaxMarks = 0;
-      
-      for (const mark of marks) {
-        totalMarks += mark.totalMarks || 0;
-        totalMaxMarks += mark.totalMaxMarks || 0;
-      }
-      
-      const averagePercentage = totalMaxMarks > 0 ? (totalMarks / totalMaxMarks) * 100 : 0;
-
-      classPerformance.push({
-        classId: classItem._id,
-        className: classItem.section
-          ? `${classItem.name}-${classItem.section}`
-          : classItem.name,
-        averagePercentage,
-        totalStudents: marks.length,
-        totalMarks,
-        totalMaxMarks,
-      });
-    }
-
-    classPerformance.sort((a, b) => b.averagePercentage - a.averagePercentage);
-
-    res.json(classPerformance.slice(0, parseInt(limit)));
+    res.json(classPerformance);
   } catch (error) {
-    console.error("Error in getTopPerformingClasses:", error);
+    console.error('Error in getTopPerformingClasses:', error);
     res.status(500).json({ message: error.message });
   }
 };

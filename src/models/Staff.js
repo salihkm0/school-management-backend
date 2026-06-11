@@ -43,6 +43,11 @@ const StaffSchema = new mongoose.Schema({
     required: true,
     enum: ['teacher', 'principal', 'vice_principal', 'librarian', 'administrator', 'office_staff', 'support_staff']
   },
+  employeeType: {
+    type: String,
+    enum: ['Permanent', 'Contract', 'Temporary', 'Part-time', 'Guest'],
+    default: 'Permanent'
+  },
   qualification: {
     type: String,
     required: true

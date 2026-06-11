@@ -53,7 +53,7 @@ exports.getStudents = async (req, res) => {
     const students = await Student.find(query)
       .populate('classId', 'name section displayName')
       .populate('academicYearId', 'year name')
-      .populate('parentIds', 'name email phone')
+      .populate('parentIds', 'fullName email phone')
       .skip((page - 1) * limit)
       .limit(parseInt(limit))
       .sort({ className: 1, division: 1, fullName: 1 });
@@ -80,7 +80,7 @@ exports.getStudent = async (req, res) => {
     const student = await Student.findById(req.params.id)
       .populate('classId', 'name section displayName classTeacherName')
       .populate('academicYearId', 'year name')
-      .populate('parentIds', 'name email phone')
+      .populate('parentIds', 'fullName email phone')
       .populate('firstLanguagePaper1', 'name code department')
       .populate('firstLanguagePaper2', 'name code department')
       .populate('thirdLanguage', 'name code department')

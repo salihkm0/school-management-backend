@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Staff Duty List - PPMHSS KOTTUKKARA</title>
+
+<style>
+@page {
+    size: A4 portrait;
+    margin: 5mm;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 210mm;
+    font-family: "Times New Roman", serif;
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.page-container {
+    width: 200mm;
+    min-height: 277mm;
+    margin: 0 auto 5mm auto;
+    padding: 8mm 5mm;
+    border: 2px solid #000;
+    position: relative;
+    page-break-after: always;
+    box-sizing: border-box;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+}
+
+.page-container:last-child {
+    page-break-after: auto;
+    margin-bottom: 0;
+}
+
+/* Logo Watermark */
+.logo-watermark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.logo-watermark img {
+    width: 120mm;
+    height: 120mm;
+    object-fit: contain;
+    opacity: 0.06;
+}
+
+.content-layer {
+    position: relative;
+    z-index: 2;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+/* Main content */
+.main-content {
+    flex: 1;
+}
+
+/* Header Section */
+.header-section {
+    text-align: center;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 2px solid #000;
+}
+
+.school-logo {
+    width: 20mm;
+    height: 20mm;
+    margin: 0 auto 5px;
+}
+
+.school-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.school-name {
+    font-size: 14px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+}
+
+.main-title {
+    font-size: 16px;
+    font-weight: 900;
+    text-transform: uppercase;
+    text-decoration: underline;
+    margin: 5px 0;
+}
+
+.filter-info {
+    font-size: 10px;
+    color: #444;
+    margin-bottom: 5px;
+    font-style: italic;
+    text-align: left;
+}
+
+.page-number {
+    text-align: right;
+    font-size: 9px;
+    margin: 3px 0 5px;
+    font-weight: bold;
+}
+
+/* Main Table */
+.main-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9px;
+    margin-top: 5px;
+}
+
+.main-table th,
+.main-table td {
+    border: 1.5px solid #000;
+    padding: 5px 4px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.main-table th {
+    background: #f0f0f0;
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: 8px;
+}
+
+.main-table td {
+    background: transparent;
+}
+
+/* Column widths */
+.main-table .sl-col { width: 5%; }
+.main-table .name-col { width: 25%; text-align: left; padding-left: 5px; }
+.main-table .designation-col { width: 16%; text-align: left; padding-left: 5px; }
+.main-table .type-col { width: 12%; text-align: center; text-transform: capitalize; }
+.main-table .duties-col { width: 32%; text-align: left; padding-left: 5px; font-size: 8.5px; }
+.main-table .count-col { width: 5%; }
+
+.duty-slot-item {
+    margin-bottom: 2px;
+}
+.duty-slot-item:last-child {
+    margin-bottom: 0;
+}
+
+/* Bottom Section */
+.bottom-section {
+    margin-top: auto;
+    padding-top: 15px;
+}
+
+/* Footer */
+.footer {
+    margin-top: 10px;
+    padding-top: 5px;
+    border-top: 1px solid #000;
+    overflow: hidden;
+    font-size: 9px;
+}
+
+.total-summary {
+    float: left;
+    font-weight: 700;
+}
+
+.generated-info {
+    float: right;
+}
+
+/* Print optimization */
+@media print {
+    html, body {
+        width: 210mm;
+        margin: 0;
+        padding: 0;
+    }
+    
+    th {
+        background: #f0f0f0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    td {
+        background: transparent !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .page-container {
+        border: 2px solid #000;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        page-break-after: always;
+    }
+    
+    .logo-watermark img {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<%
+const itemsPerPage = 12; // Fewer items per page since duties details can be multi-line
+const totalPages = Math.ceil(dutyList.length / itemsPerPage);
+const schoolLogo = typeof schoolLogoUrl !== 'undefined' ? schoolLogoUrl : 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
+
+for (let page = 0; page < totalPages; page++) {
+    const startIndex = page * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, dutyList.length);
+    const pageDuties = dutyList.slice(startIndex, endIndex);
+%>
+
+<div class="page-container">
+    
+    <!-- Logo Watermark -->
+    <div class="logo-watermark">
+        <img src="<%= schoolLogo %>" alt="Watermark">
+    </div>
+    
+    <div class="content-layer">
+        
+        <div class="main-content">
+            
+            <!-- Header -->
+            <div class="header-section">
+                <div class="school-logo">
+                    <img src="<%= schoolLogo %>" alt="School Logo">
+                </div>
+                <div class="school-name">P.P.M.H.S.S. KOTTUKKARA</div>
+                <div class="main-title">STAFF DUTY ASSIGNMENT LIST</div>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="filter-info">
+                    <% if (typeof filterInfo !== 'undefined') { %>
+                        <%= filterInfo %>
+                    <% } %>
+                </div>
+                <div class="page-number"><%= page + 1 %> of <%= totalPages %></div>
+            </div>
+            
+            <!-- Main Table -->
+            <table class="main-table">
+                <thead>
+                    <tr>
+                        <th class="sl-col">Sl No</th>
+                        <th class="name-col">Staff Name</th>
+                        <th class="designation-col">Designation</th>
+                        <th class="type-col">Duty Type</th>
+                        <th class="duties-col">Assigned Duties (Date | Shift | Room)</th>
+                        <th class="count-col">Total Duties</th>
+                        <th class="count-col">Total Hours</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% pageDuties.forEach(function(item, index) { 
+                        const slNo = startIndex + index + 1;
+                    %>
+                    <tr>
+                        <td><%= slNo %></td>
+                        <td style="text-align: left; padding-left: 5px; font-weight: bold;"><%= item.staffName %></td>
+                        <td style="text-align: left; padding-left: 5px;"><%= item.designation || '-' %></td>
+                        <td style="text-transform: capitalize;"><%= item.dutyType.replace('_', ' ') %></td>
+                        <td style="text-align: left; padding-left: 5px;">
+                            <% item.duties.forEach(function(d) { %>
+                                <div class="duty-slot-item">
+                                    • <%= new Date(d.date).toLocaleDateString('en-IN') %> | 
+                                    <span style="text-transform: capitalize;"><%= d.shift %></span> | 
+                                    <span style="font-weight: bold;"><%= d.room || 'N/A' %></span>
+                                </div>
+                            <% }); %>
+                        </td>
+                        <td style="font-weight: bold;"><%= item.totalDuties %></td>
+                        <td><%= item.totalHours %> hrs</td>
+                    </tr>
+                    <% }); %>
+                </tbody>
+            </table>
+            
+        </div>
+        
+        <!-- Bottom Section -->
+        <div class="bottom-section">
+            
+            <!-- Footer -->
+            <div class="footer">
+                <span class="total-summary">Total Assignments: <%= dutyList.length %></span>
+                <span class="generated-info">Generated on: <%= new Date().toLocaleString('en-IN') %></span>
+            </div>
+            
+        </div>
+        
+    </div>
+</div>
+
+<% } %>
+
+</body>
+</html>

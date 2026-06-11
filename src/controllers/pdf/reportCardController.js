@@ -4,6 +4,7 @@ const AcademicYear = require('../../models/AcademicYear');
 const Class = require('../../models/Class');
 const { Exam } = require('../../models/Exam');
 const Mark = require('../../models/Mark');
+const Staff = require('../../models/Staff');
 const { Attendance } = require('../../models/Attendance');
 const { generateReportCardPDF, generateMultiReportCardPDF } = require('../../services/pdf/reportCardService');
 
@@ -301,6 +302,21 @@ exports.generateClassReportCardsPDF = async (req, res) => {
       return res.status(404).json({ message: "Class not found" });
     }
 
+    // ── Authorization: only class teacher or admin ──
+    const userId = req.user._id || req.user.id;
+    const staff = await Staff.findOne({ userId });
+    const userRole = req.user.role;
+    const isSystemAdmin = userRole === 'admin';
+    const isStaffAdmin = staff && ['principal', 'administrator', 'manager', 'admin'].includes(staff.role);
+    const isClassTeacherOfThis = staff && classDetails.classTeacherId &&
+      classDetails.classTeacherId.toString() === staff._id.toString();
+
+    if (!isSystemAdmin && !isStaffAdmin && !isClassTeacherOfThis) {
+      return res.status(403).json({
+        message: "Only the class teacher or an administrator can download class report cards."
+      });
+    }
+
     // Get exam name if provided
     let examName = 'Latest Exam';
     if (examId && examId.match(/^[0-9a-fA-F]{24}$/)) {
@@ -322,18 +338,41 @@ exports.generateClassReportCardsPDF = async (req, res) => {
     // Get all active students in the class
     const students = await Student.find({ 
       classId: classId,
-      isActive: true 
+      status: 'active'
     }).populate('classId', 'name section displayName').sort({ rollNumber: 1, fullName: 1 });
 
     if (students.length === 0) {
       return res.status(404).json({ message: "No students found in this class" });
     }
 
+    // ── Completion check: all student marks must be entered ──
+    if (examId && examId.match(/^[0-9a-fA-F]{24}$/)) {
+      const marksheets = await Mark.find({ classId, examId });
+      const marksheetMap = new Map(marksheets.map(m => [m.studentId.toString(), m]));
+
+      const incomplete = [];
+      for (const student of students) {
+        const ms = marksheetMap.get(student._id.toString());
+        if (!ms) {
+          incomplete.push(student.fullName);
+          continue;
+        }
+        const hasUnEntered = ms.subjects.some(s => !s.isEntered);
+        if (hasUnEntered) incomplete.push(student.fullName);
+      }
+
+      if (incomplete.length > 0) {
+        return res.status(400).json({
+          message: `Marks are not fully entered for all students. Please complete marks for: ${incomplete.slice(0, 5).join(', ')}${incomplete.length > 5 ? ` and ${incomplete.length - 5} more` : ''}.`,
+          pendingStudents: incomplete
+        });
+      }
+    }
+
     console.log(`Found ${students.length} students in class ${classDetails.name}`);
 
     // Prepare report data for all students
     const allReportsData = [];
-    
     for (const student of students) {
       const reportData = await prepareStudentReportData(student, examId, academicYear);
       allReportsData.push(reportData);
@@ -354,10 +393,7 @@ exports.generateClassReportCardsPDF = async (req, res) => {
     
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Length", pdfBuffer.length);
-    res.setHeader(
-      "Content-Disposition",
-      `inline; filename="${filename}"`
-    );
+    res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
     res.setHeader("Cache-Control", "no-cache");
 
     res.end(pdfBuffer);
@@ -367,6 +403,7 @@ exports.generateClassReportCardsPDF = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 /**
  * Download Report Cards for entire class (PDF with multiple pages)
@@ -391,6 +428,21 @@ exports.downloadClassReportCardsPDF = async (req, res) => {
       return res.status(404).json({ message: "Class not found" });
     }
 
+    // ── Authorization: only class teacher or admin ──
+    const userId = req.user._id || req.user.id;
+    const staff = await Staff.findOne({ userId });
+    const userRole = req.user.role;
+    const isSystemAdmin = userRole === 'admin';
+    const isStaffAdmin = staff && ['principal', 'administrator', 'manager', 'admin'].includes(staff.role);
+    const isClassTeacherOfThis = staff && classDetails.classTeacherId &&
+      classDetails.classTeacherId.toString() === staff._id.toString();
+
+    if (!isSystemAdmin && !isStaffAdmin && !isClassTeacherOfThis) {
+      return res.status(403).json({
+        message: "Only the class teacher or an administrator can download class report cards."
+      });
+    }
+
     // Get exam name if provided
     let examName = 'Latest Exam';
     if (examId && examId.match(/^[0-9a-fA-F]{24}$/)) {
@@ -410,16 +462,39 @@ exports.downloadClassReportCardsPDF = async (req, res) => {
 
     const students = await Student.find({ 
       classId: classId,
-      isActive: true 
+      status: 'active'
     }).populate('classId', 'name section displayName').sort({ rollNumber: 1, fullName: 1 });
 
     if (students.length === 0) {
       return res.status(404).json({ message: "No students found in this class" });
     }
 
+    // ── Completion check: all student marks must be entered ──
+    if (examId && examId.match(/^[0-9a-fA-F]{24}$/)) {
+      const marksheets = await Mark.find({ classId, examId });
+      const marksheetMap = new Map(marksheets.map(m => [m.studentId.toString(), m]));
+
+      const incomplete = [];
+      for (const student of students) {
+        const ms = marksheetMap.get(student._id.toString());
+        if (!ms) {
+          incomplete.push(student.fullName);
+          continue;
+        }
+        const hasUnEntered = ms.subjects.some(s => !s.isEntered);
+        if (hasUnEntered) incomplete.push(student.fullName);
+      }
+
+      if (incomplete.length > 0) {
+        return res.status(400).json({
+          message: `Marks are not fully entered for all students. Please complete marks for: ${incomplete.slice(0, 5).join(', ')}${incomplete.length > 5 ? ` and ${incomplete.length - 5} more` : ''}.`,
+          pendingStudents: incomplete
+        });
+      }
+    }
+
     // Prepare report data for all students
     const allReportsData = [];
-    
     for (const student of students) {
       const reportData = await prepareStudentReportData(student, examId, academicYear);
       allReportsData.push(reportData);
@@ -440,10 +515,7 @@ exports.downloadClassReportCardsPDF = async (req, res) => {
     
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Length", pdfBuffer.length);
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${filename}"`
-    );
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.setHeader("Cache-Control", "no-cache");
 
     res.end(pdfBuffer);

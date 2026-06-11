@@ -15,7 +15,8 @@ const DutyRecordSchema = new mongoose.Schema({
   duration: {
     type: Number,
     default: 8
-  }
+  },
+  room: String
 }, { _id: false });
 
 const StaffDutySchema = new mongoose.Schema({

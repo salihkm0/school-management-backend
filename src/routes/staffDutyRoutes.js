@@ -14,19 +14,23 @@ const {
   getStaffDutyCount,
   getAvailableDates,
   bulkDeleteDuties,
-  getStaffDutySummary
+  getStaffDutySummary,
+  generateStaffDutyPDF,
+  downloadStaffDutyPDF
 } = require('../controllers/staffDutyController');
 
 router.use(protect);
 
 // ==================== STAFF ACCESSIBLE ROUTES ====================
 // Staff can view their own duties
+router.get('/pdf/view', generateStaffDutyPDF);
+router.get('/pdf/download', downloadStaffDutyPDF);
 router.get('/', getDuties);
-router.get('/:id', getDutyById);
 router.get('/count/:staffId', getStaffDutyCount);
 router.get('/stats', getStaffDutyStats);
 router.get('/summary', getStaffDutySummary);
 router.get('/available-dates', getAvailableDates);
+router.get('/:id', getDutyById);
 router.put('/:id', updateDuty);
 
 // ==================== ADMIN ONLY ROUTES ====================

@@ -3,6 +3,17 @@ const StaffDutyStats = require("../models/StaffDutyStats");
 const Staff = require("../models/Staff");
 const Notification = require("../models/Notification");
 const { broadcastToUser, broadcastToRole } = require("../config/socket");
+const { generateStaffDutyPDF } = require("../services/pdf/staffDutyPdfService");
+
+const roleDesignationMap = {
+  'teacher': 'Teacher',
+  'principal': 'Principal',
+  'vice_principal': 'Vice Principal',
+  'librarian': 'Librarian',
+  'administrator': 'Administrator',
+  'office_staff': 'Office Staff',
+  'support_staff': 'Support Staff'
+};
 
 // Shift configurations
 const SHIFT_CONFIG = {
@@ -112,41 +123,100 @@ async function updateStaffDutyStats(staffId, staffName, dutyType, dutyCount, hou
 }
 
 // Enhanced Fair Distribution Algorithm with Shift Support
-const fairDistributionScheduleWithShifts = async (staff, dutySlots, dutyType, excludedStaffIds = []) => {
+const fairDistributionScheduleWithShifts = async (staff, dutySlots, dutyType, excludedStaffIds = [], excludedStaff = []) => {
   const availableStaff = staff.filter(
     (s) => !excludedStaffIds.includes(s._id.toString()),
   );
   
   if (availableStaff.length === 0) return { assignments: [], staffDutyCount: {}, staffSchedule: {} };
   
-  // Get existing duty counts for each staff member
+  // Get existing duty counts, shift counts, and assignments (for clash prevention) for each staff member
   const existingDutyCounts = {};
+  const existingShiftCounts = {};
+  const existingAssignments = {}; // staffId -> [{dateStr, shift}]
+  
   for (const staffMember of availableStaff) {
     const existingDuties = await StaffDuty.find({
       staffId: staffMember._id,
-      dutyType: dutyType,
-      status: { $in: ['assigned', 'confirmed'] }
+      status: { $ne: 'cancelled' }
     });
     
     let totalExisting = 0;
+    const shifts = { morning: 0, afternoon: 0, full: 0 };
+    const staffDBDuties = [];
+    
     for (const duty of existingDuties) {
-      totalExisting += duty.totalDuties;
+      const isSameType = duty.dutyType === dutyType;
+      if (isSameType) {
+        totalExisting += duty.duties ? duty.duties.length : 0;
+      }
+      for (const d of duty.duties) {
+        if (!d.date) continue;
+        const dDate = new Date(d.date);
+        if (isNaN(dDate.getTime())) continue;
+        
+        if (isSameType && shifts[d.shift] !== undefined) {
+          shifts[d.shift]++;
+        }
+        staffDBDuties.push({
+          dateStr: dDate.toISOString().split('T')[0],
+          shift: d.shift
+        });
+      }
     }
     existingDutyCounts[staffMember._id.toString()] = totalExisting;
+    existingShiftCounts[staffMember._id.toString()] = shifts;
+    existingAssignments[staffMember._id.toString()] = staffDBDuties;
   }
   
   const totalStaff = availableStaff.length;
   const totalDuties = dutySlots.length;
   
-  // Create queue with existing duty counts
-  const staffQueue = availableStaff.map((staffMember) => ({
-    staff: staffMember,
-    currentDuties: existingDutyCounts[staffMember._id.toString()] || 0,
-    assignedDuties: 0,
-  }));
+  // Create queue with existing duty and shift counts
+  const staffQueue = availableStaff.map((staffMember) => {
+    const sId = staffMember._id.toString();
+    const histShifts = existingShiftCounts[sId] || { morning: 0, afternoon: 0, full: 0 };
+    return {
+      staff: staffMember,
+      currentDuties: existingDutyCounts[sId] || 0,
+      assignedDuties: 0,
+      assignedShifts: { ...histShifts }
+    };
+  });
   
   const assignments = [];
   const dailyUsage = new Map(); // Map of date -> Map of shift -> Set of staff IDs
+
+  const isStaffExcluded = (staffId, date) => {
+    const targetDateStr = new Date(date).toISOString().split('T')[0];
+    const exclusion = excludedStaff.find(e => e.staffId.toString() === staffId.toString());
+    if (exclusion && exclusion.dates) {
+      return exclusion.dates.some(d => new Date(d).toISOString().split('T')[0] === targetDateStr);
+    }
+    return false;
+  };
+
+  const hasDBAssignmentOnDate = (sId, date, shift) => {
+    const targetDateStr = new Date(date).toISOString().split('T')[0];
+    const dbAssignments = existingAssignments[sId] || [];
+    
+    // Check if they already have the exact same shift on this date in DB
+    if (dbAssignments.some(a => a.dateStr === targetDateStr && a.shift === shift)) {
+      return true;
+    }
+    
+    // Check if they have a 'full' shift on this date in DB (can't do morning/afternoon)
+    if (shift !== 'full' && dbAssignments.some(a => a.dateStr === targetDateStr && a.shift === 'full')) {
+      return true;
+    }
+    
+    // Check if the current slot is 'full' and they have any shift on this date in DB (can't do full)
+    if (shift === 'full' && dbAssignments.some(a => a.dateStr === targetDateStr)) {
+      return true;
+    }
+    
+    return false;
+  };
   
   // Sort duty slots by date and shift priority
   const sortedSlots = [...dutySlots].sort((a, b) => {
@@ -168,43 +238,60 @@ const fairDistributionScheduleWithShifts = async (staff, dutySlots, dutyType, ex
     }
     const shiftUsage = dateUsage.get(slot.shift);
     
-    // Sort staff by total duties (least first)
-    staffQueue.sort((a, b) => (a.assignedDuties + a.currentDuties) - (b.assignedDuties + b.currentDuties));
+    // Filter staff queue to only those not excluded on this slot's date
+    // AND who do not have database assignment conflicts
+    const eligibleStaffQueue = staffQueue.filter(item => {
+      const sId = item.staff._id.toString();
+      return !isStaffExcluded(sId, slot.date) && !hasDBAssignmentOnDate(sId, slot.date, slot.shift);
+    });
+
+    // Sort eligible staff by total duties (least first) and then by specific shift count (least first)
+    eligibleStaffQueue.sort((a, b) => {
+      const aTotal = a.assignedDuties + a.currentDuties;
+      const bTotal = b.assignedDuties + b.currentDuties;
+      if (aTotal !== bTotal) return aTotal - bTotal;
+      
+      const aShift = a.assignedShifts[slot.shift] || 0;
+      const bShift = b.assignedShifts[slot.shift] || 0;
+      return aShift - bShift;
+    });
     
     let selectedItem = null;
     
-    // For full day shifts, check if staff already assigned any shift on this date
+    // For full day shifts, check if staff already assigned any shift on this date (locally)
     if (slot.shift === 'full') {
-      for (const item of staffQueue) {
+      for (const item of eligibleStaffQueue) {
+        const sId = item.staff._id.toString();
         const dateShiftUsage = dateUsage.get('morning');
         const dateShiftAfternoonUsage = dateUsage.get('afternoon');
-        const isAssignedMorning = dateShiftUsage?.has(item.staff._id.toString());
-        const isAssignedAfternoon = dateShiftAfternoonUsage?.has(item.staff._id.toString());
+        const isAssignedMorning = dateShiftUsage?.has(sId);
+        const isAssignedAfternoon = dateShiftAfternoonUsage?.has(sId);
         
-        if (!isAssignedMorning && !isAssignedAfternoon && !shiftUsage.has(item.staff._id.toString())) {
+        if (!isAssignedMorning && !isAssignedAfternoon && !shiftUsage.has(sId)) {
           selectedItem = item;
           break;
         }
       }
     } else {
-      // For morning/afternoon shifts, check if staff already assigned same shift on this date
-      // Also check if staff is assigned full day
-      for (const item of staffQueue) {
+      // For morning/afternoon shifts, check if staff already assigned same shift on this date (locally)
+      // Also check if staff is assigned full day (locally)
+      for (const item of eligibleStaffQueue) {
+        const sId = item.staff._id.toString();
         const fullDayUsage = dateUsage.get('full');
-        const isAssignedFullDay = fullDayUsage?.has(item.staff._id.toString());
+        const isAssignedFullDay = fullDayUsage?.has(sId);
         
-        if (!isAssignedFullDay && !shiftUsage.has(item.staff._id.toString())) {
+        if (!isAssignedFullDay && !shiftUsage.has(sId)) {
           selectedItem = item;
           break;
         }
       }
     }
     
-    // If all staff assigned, pick the one with least total duties
-    if (!selectedItem) {
-      selectedItem = staffQueue.reduce((min, item) => 
+    // If all eligible staff assigned, pick the one with least total duties
+    if (!selectedItem && eligibleStaffQueue.length > 0) {
+      selectedItem = eligibleStaffQueue.reduce((min, item) => 
         (item.assignedDuties + item.currentDuties) < (min.assignedDuties + min.currentDuties) ? item : min, 
-        staffQueue[0]
+        eligibleStaffQueue[0]
       );
     }
     
@@ -214,10 +301,18 @@ const fairDistributionScheduleWithShifts = async (staff, dutySlots, dutyType, ex
         staffName: selectedItem.staff.name,
         dutyDate: new Date(slot.date),
         dutyType: dutyType,
-        shift: slot.shift
+        shift: slot.shift,
+        room: slot.room
       });
       
-      selectedItem.assignedDuties++;
+      // We also update the item in staffQueue so their duty counts stay correct
+      const queueItem = staffQueue.find(qi => qi.staff._id.toString() === selectedItem.staff._id.toString());
+      if (queueItem) {
+        queueItem.assignedDuties++;
+        if (queueItem.assignedShifts[slot.shift] !== undefined) {
+          queueItem.assignedShifts[slot.shift]++;
+        }
+      }
       shiftUsage.add(selectedItem.staff._id.toString());
     }
   }
@@ -238,11 +333,12 @@ const fairDistributionScheduleWithShifts = async (staff, dutySlots, dutyType, ex
 // GET /staff-duty
 exports.getDuties = async (req, res) => {
   try {
-    const { staffId, dutyType, startDate, endDate, page = 1, limit = 50 } = req.query;
+    const { staffId, dutyType, startDate, endDate, page = 1, limit = 50, location } = req.query;
 
     const query = {};
     if (staffId) query.staffId = staffId;
     if (dutyType) query.dutyType = dutyType;
+    if (location) query.location = location;
     
     if (startDate || endDate) {
       query["duties.date"] = {};
@@ -295,7 +391,7 @@ exports.getDutyById = async (req, res) => {
 // POST /staff-duty/auto-assign - With Shift Support
 exports.autoAssignDuties = async (req, res) => {
   try {
-    const { dates, dutyType, excludedStaffIds = [], className = "School" } = req.body;
+    const { dates, dutyType, excludedStaffIds = [], excludedStaff = [], totalRooms = 1, rooms = [], className = "School" } = req.body;
     
     // Create duty slots for each date and shift
     // If shift is 'full', only one duty per day
@@ -311,15 +407,22 @@ exports.autoAssignDuties = async (req, res) => {
       // Default to both shifts if not specified
       return ['morning', 'afternoon'];
     };
+
+    const roomsList = rooms && rooms.length > 0
+      ? rooms.map((r, i) => (r && r.trim()) || `Room ${i + 1}`)
+      : Array.from({ length: totalRooms || 1 }, (_, i) => `Room ${i + 1}`);
     
     const dutySlots = [];
     for (const date of dates) {
       const shifts = getShiftsForDate(date);
       for (const shift of shifts) {
-        dutySlots.push({
-          date: typeof date === 'object' ? date.date : date,
-          shift: shift
-        });
+        for (const room of roomsList) {
+          dutySlots.push({
+            date: typeof date === 'object' ? date.date : date,
+            shift: shift,
+            room: room
+          });
+        }
       }
     }
     
@@ -327,7 +430,7 @@ exports.autoAssignDuties = async (req, res) => {
       return res.status(400).json({ message: "Please select at least one date and shift" });
     }
 
-    const allStaff = await Staff.find({ isActive: true });
+    const allStaff = await Staff.find({ isActive: { $ne: false } });
     if (allStaff.length === 0) {
       return res.status(400).json({ message: "No staff available for assignment" });
     }
@@ -336,63 +439,92 @@ exports.autoAssignDuties = async (req, res) => {
       allStaff, 
       dutySlots, 
       dutyType, 
-      excludedStaffIds
+      excludedStaffIds,
+      excludedStaff
     );
 
-    const savedAssignments = [];
+    const grouped = {};
     for (const assignment of assignments) {
-      const existingDuty = await StaffDuty.findOne({
-        staffId: assignment.staffId,
-        "duties.date": assignment.dutyDate,
-        "duties.shift": assignment.shift,
-        dutyType: assignment.dutyType,
-      });
-
-      if (!existingDuty) {
-        const duration = SHIFT_CONFIG[assignment.shift]?.duration || 8;
-        
-        const duty = new StaffDuty({
+      const sId = assignment.staffId.toString();
+      if (!grouped[sId]) {
+        grouped[sId] = {
           staffId: assignment.staffId,
           staffName: assignment.staffName,
           dutyType: assignment.dutyType,
-          duties: [{
-            date: assignment.dutyDate,
-            shift: assignment.shift,
+          slots: []
+        };
+      }
+      grouped[sId].slots.push({
+        date: assignment.dutyDate,
+        shift: assignment.shift,
+        room: assignment.room
+      });
+    }
+
+    const savedAssignments = [];
+    for (const [staffId, group] of Object.entries(grouped)) {
+      const dutyRecords = [];
+      for (const slot of group.slots) {
+        const existingDuty = await StaffDuty.findOne({
+          staffId: group.staffId,
+          dutyType: group.dutyType,
+          "duties.date": slot.date,
+          "duties.shift": slot.shift
+        });
+
+        if (!existingDuty) {
+          const duration = SHIFT_CONFIG[slot.shift]?.duration || 8;
+          dutyRecords.push({
+            date: slot.date,
+            shift: slot.shift,
             duration: duration,
-            startTime: SHIFT_CONFIG[assignment.shift]?.startTime || '09:00 AM',
-            endTime: SHIFT_CONFIG[assignment.shift]?.endTime || '05:00 PM',
-          }],
+            startTime: SHIFT_CONFIG[slot.shift]?.startTime || '09:00 AM',
+            endTime: SHIFT_CONFIG[slot.shift]?.endTime || '05:00 PM',
+            room: slot.room
+          });
+        }
+      }
+
+      if (dutyRecords.length > 0) {
+        const duty = new StaffDuty({
+          staffId: group.staffId,
+          staffName: group.staffName,
+          dutyType: group.dutyType,
+          duties: dutyRecords,
           assignedBy: req.user.id,
           location: className,
         });
-        
+
         await duty.save();
         savedAssignments.push(duty);
 
+        const totalHours = dutyRecords.reduce((sum, d) => sum + (d.duration || 0), 0);
         await updateStaffDutyStats(
-          assignment.staffId,
-          assignment.staffName,
-          assignment.dutyType,
-          1,
-          duration,
+          group.staffId,
+          group.staffName,
+          group.dutyType,
+          dutyRecords.length,
+          totalHours
         );
 
-        await sendDutyNotification(
-          assignment.staffId,
-          assignment.staffName,
-          dutyType,
-          assignment.dutyDate,
-          assignment.shift,
-          duty._id,
-          className
-        );
+        for (const record of dutyRecords) {
+          await sendDutyNotification(
+            group.staffId,
+            group.staffName,
+            group.dutyType,
+            record.date,
+            record.shift,
+            duty._id,
+            className
+          );
+        }
       }
     }
 
     const dutyCounts = Object.values(staffDutyCount).map(s => s.total);
-    const maxDuties = Math.max(...dutyCounts);
-    const minDuties = Math.min(...dutyCounts);
-    const avgDuties = dutyCounts.reduce((a, b) => a + b, 0) / dutyCounts.length;
+    const maxDuties = dutyCounts.length > 0 ? Math.max(...dutyCounts) : 0;
+    const minDuties = dutyCounts.length > 0 ? Math.min(...dutyCounts) : 0;
+    const avgDuties = dutyCounts.length > 0 ? dutyCounts.reduce((a, b) => a + b, 0) / dutyCounts.length : 0;
     const fairnessScore = maxDuties > 0 ? (minDuties / maxDuties) * 100 : 0;
     
     const distribution = {};
@@ -403,21 +535,31 @@ exports.autoAssignDuties = async (req, res) => {
     // Group assignments by date and shift for better visualization
     const assignmentsByDate = {};
     savedAssignments.forEach(assignment => {
-      const dateKey = assignment.duties[0].date.toISOString().split('T')[0];
-      if (!assignmentsByDate[dateKey]) {
-        assignmentsByDate[dateKey] = {};
-      }
-      const shift = assignment.duties[0].shift;
-      assignmentsByDate[dateKey][shift] = assignment;
+      assignment.duties.forEach(d => {
+        const dateKey = d.date.toISOString().split('T')[0];
+        if (!assignmentsByDate[dateKey]) {
+          assignmentsByDate[dateKey] = {};
+        }
+        if (!assignmentsByDate[dateKey][d.shift]) {
+          assignmentsByDate[dateKey][d.shift] = [];
+        }
+        assignmentsByDate[dateKey][d.shift].push({
+          staffId: assignment.staffId,
+          staffName: assignment.staffName,
+          dutyType: assignment.dutyType,
+          room: d.room,
+          _id: assignment._id
+        });
+      });
     });
 
     res.json({
       success: true,
-      message: `${savedAssignments.length} duties assigned for ${dutySlots.length} slots`,
+      message: `${assignments.length} duties assigned for ${dutySlots.length} slots`,
       statistics: {
         totalStaff: allStaff.length,
         totalSlots: dutySlots.length,
-        totalDuties: savedAssignments.length,
+        totalDuties: assignments.length,
         dutiesPerStaff: {
           min: minDuties,
           max: maxDuties,
@@ -445,7 +587,7 @@ exports.autoAssignDuties = async (req, res) => {
 // POST /staff-duty/manual
 exports.assignManualDuty = async (req, res) => {
   try {
-    const { staffId, dutyType, dates, shift = "full", duration = 8, location, remarks, className } = req.body;
+    const { staffId, dutyType, dates, shift = "full", duration = 8, location, room, remarks, className } = req.body;
 
     if (!staffId) {
       return res.status(400).json({ message: "Please select a staff member" });
@@ -480,6 +622,7 @@ exports.assignManualDuty = async (req, res) => {
           duration: duration || shiftConfig.duration,
           startTime: req.body.startTime || shiftConfig.startTime,
           endTime: req.body.endTime || shiftConfig.endTime,
+          room: room
         });
       }
     }
@@ -581,17 +724,19 @@ exports.getStaffDutyStats = async (req, res) => {
     let query = {};
     if (staffId) query.staffId = staffId;
     if (dutyType) query.dutyType = dutyType;
+    query.status = { $ne: 'cancelled' }; // Ignore cancelled duties!
 
     let duties = await StaffDuty.find(query)
       .populate("staffId", "name role")
       .sort({ assignedAt: -1 });
 
+    let filterStart = null;
+    let filterEnd = null;
     if (year) {
-      const startDate = new Date(year, (month || 1) - 1, 1);
-      const endDate = new Date(year, month ? month : 12, 0);
-      duties = duties.filter(duty =>
-        duty.duties.some(d => d.date >= startDate && d.date <= endDate)
-      );
+      filterStart = new Date(year, (month || 1) - 1, 1);
+      filterStart.setHours(0, 0, 0, 0);
+      filterEnd = new Date(year, month ? month : 12, 0);
+      filterEnd.setHours(23, 59, 59, 999);
     }
 
     const staffStats = {};
@@ -599,6 +744,17 @@ exports.getStaffDutyStats = async (req, res) => {
     duties.forEach((duty) => {
       const sid = duty.staffId?._id?.toString() || duty.staffId?.toString();
       if (!sid) return;
+
+      const filteredDuties = (filterStart || filterEnd)
+        ? duty.duties.filter(d => {
+            if (!d.date) return false;
+            const dDate = new Date(d.date);
+            if (isNaN(dDate.getTime())) return false;
+            return dDate >= filterStart && dDate <= filterEnd;
+          })
+        : duty.duties;
+
+      if (filteredDuties.length === 0) return;
       
       if (!staffStats[sid]) {
         staffStats[sid] = {
@@ -612,20 +768,28 @@ exports.getStaffDutyStats = async (req, res) => {
         };
       }
 
-      staffStats[sid].totalDuties += duty.totalDuties;
-      staffStats[sid].totalHours += duty.totalHours;
-      staffStats[sid].byType[duty.dutyType] =
-        (staffStats[sid].byType[duty.dutyType] || 0) + duty.totalDuties;
+      const totalDutiesCount = filteredDuties.length;
+      const totalHoursCount = filteredDuties.reduce((sum, d) => sum + (d.duration || 0), 0);
 
-      duty.duties.forEach((d) => {
-        const monthKey = `${d.date.getFullYear()}-${d.date.getMonth() + 1}`;
+      staffStats[sid].totalDuties += totalDutiesCount;
+      staffStats[sid].totalHours += totalHoursCount;
+      staffStats[sid].byType[duty.dutyType] =
+        (staffStats[sid].byType[duty.dutyType] || 0) + totalDutiesCount;
+
+      filteredDuties.forEach((d) => {
+        if (!d.date) return;
+        const dDate = new Date(d.date);
+        if (isNaN(dDate.getTime())) return;
+        const monthKey = `${dDate.getFullYear()}-${dDate.getMonth() + 1}`;
         staffStats[sid].byMonth[monthKey] = (staffStats[sid].byMonth[monthKey] || 0) + 1;
-        staffStats[sid].byShift[d.shift] = (staffStats[sid].byShift[d.shift] || 0) + 1;
+        if (d.shift) {
+          staffStats[sid].byShift[d.shift] = (staffStats[sid].byShift[d.shift] || 0) + 1;
+        }
       });
     });
 
-    const totalDuties = duties.reduce((sum, d) => sum + d.totalDuties, 0);
-    const totalHours = duties.reduce((sum, d) => sum + d.totalHours, 0);
+    const totalDuties = Object.values(staffStats).reduce((sum, s) => sum + s.totalDuties, 0);
+    const totalHours = Object.values(staffStats).reduce((sum, s) => sum + s.totalHours, 0);
     const totalStaff = Object.keys(staffStats).length;
 
     const dutyCounts = Object.values(staffStats).map(s => s.totalDuties);
@@ -661,19 +825,14 @@ exports.getStaffDutyCount = async (req, res) => {
 
     const query = { staffId };
     if (dutyType) query.dutyType = dutyType;
+    query.status = { $ne: 'cancelled' }; // Ignore cancelled duties!
 
     let duties = await StaffDuty.find(query);
 
-    if (startDate || endDate) {
-      duties = duties.filter(duty =>
-        duty.duties.some(d => {
-          let match = true;
-          if (startDate && d.date < new Date(startDate)) match = false;
-          if (endDate && d.date > new Date(endDate)) match = false;
-          return match;
-        })
-      );
-    }
+    let filterStart = startDate ? new Date(startDate) : null;
+    if (filterStart) filterStart.setHours(0, 0, 0, 0);
+    let filterEnd = endDate ? new Date(endDate) : null;
+    if (filterEnd) filterEnd.setHours(23, 59, 59, 999);
 
     let totalDuties = 0;
     let totalHours = 0;
@@ -681,12 +840,31 @@ exports.getStaffDutyCount = async (req, res) => {
     const byShift = {};
 
     duties.forEach((duty) => {
-      totalDuties += duty.totalDuties;
-      totalHours += duty.totalHours;
-      byType[duty.dutyType] = (byType[duty.dutyType] || 0) + duty.totalDuties;
+      const filteredDuties = (filterStart || filterEnd)
+        ? duty.duties.filter(d => {
+            if (!d.date) return false;
+            const dDate = new Date(d.date);
+            if (isNaN(dDate.getTime())) return false;
+            let match = true;
+            if (filterStart && dDate < filterStart) match = false;
+            if (filterEnd && dDate > filterEnd) match = false;
+            return match;
+          })
+        : duty.duties;
+
+      if (filteredDuties.length === 0) return;
+
+      const totalDutiesCount = filteredDuties.length;
+      const totalHoursCount = filteredDuties.reduce((sum, d) => sum + (d.duration || 0), 0);
+
+      totalDuties += totalDutiesCount;
+      totalHours += totalHoursCount;
+      byType[duty.dutyType] = (byType[duty.dutyType] || 0) + totalDutiesCount;
       
-      duty.duties.forEach(d => {
-        byShift[d.shift] = (byShift[d.shift] || 0) + 1;
+      filteredDuties.forEach(d => {
+        if (d.shift) {
+          byShift[d.shift] = (byShift[d.shift] || 0) + 1;
+        }
       });
     });
 
@@ -718,8 +896,14 @@ exports.getStaffDutySummary = async (req, res) => {
       if (startDate) query["duties.date"].$gte = new Date(startDate);
       if (endDate) query["duties.date"].$lte = new Date(endDate);
     }
+    query.status = { $ne: 'cancelled' }; // Ignore cancelled duties!
 
     const duties = await StaffDuty.find(query).populate("staffId", "name");
+
+    let filterStart = startDate ? new Date(startDate) : null;
+    if (filterStart) filterStart.setHours(0, 0, 0, 0);
+    let filterEnd = endDate ? new Date(endDate) : null;
+    if (filterEnd) filterEnd.setHours(23, 59, 59, 999);
 
     const staffSummary = {};
     const dailySummary = {};
@@ -727,6 +911,20 @@ exports.getStaffDutySummary = async (req, res) => {
     duties.forEach((duty) => {
       const staffId = duty.staffId?._id?.toString() || duty.staffId?.toString();
       if (!staffId) return;
+
+      const filteredDuties = (filterStart || filterEnd)
+        ? duty.duties.filter(d => {
+            if (!d.date) return false;
+            const dDate = new Date(d.date);
+            if (isNaN(dDate.getTime())) return false;
+            let match = true;
+            if (filterStart && dDate < filterStart) match = false;
+            if (filterEnd && dDate > filterEnd) match = false;
+            return match;
+          })
+        : duty.duties;
+
+      if (filteredDuties.length === 0) return;
       
       if (!staffSummary[staffId]) {
         staffSummary[staffId] = {
@@ -736,12 +934,16 @@ exports.getStaffDutySummary = async (req, res) => {
           shifts: {},
         };
       }
-      staffSummary[staffId].totalDuties += duty.totalDuties;
+      const totalDutiesCount = filteredDuties.length;
+      staffSummary[staffId].totalDuties += totalDutiesCount;
       staffSummary[staffId].dutyTypes[duty.dutyType] =
-        (staffSummary[staffId].dutyTypes[duty.dutyType] || 0) + duty.totalDuties;
+        (staffSummary[staffId].dutyTypes[duty.dutyType] || 0) + totalDutiesCount;
 
-      duty.duties.forEach((d) => {
-        const dateKey = d.date.toISOString().split("T")[0];
+      filteredDuties.forEach((d) => {
+        if (!d.date) return;
+        const dDate = new Date(d.date);
+        if (isNaN(dDate.getTime())) return;
+        const dateKey = dDate.toISOString().split("T")[0];
         if (!dailySummary[dateKey]) {
           dailySummary[dateKey] = {
             date: d.date,
@@ -755,15 +957,19 @@ exports.getStaffDutySummary = async (req, res) => {
           dutyType: duty.dutyType,
           shift: d.shift,
         });
-        staffSummary[staffId].shifts[d.shift] = (staffSummary[staffId].shifts[d.shift] || 0) + 1;
+        if (d.shift) {
+          staffSummary[staffId].shifts[d.shift] = (staffSummary[staffId].shifts[d.shift] || 0) + 1;
+        }
       });
     });
+
+    const totalDuties = Object.values(staffSummary).reduce((sum, s) => sum + s.totalDuties, 0);
 
     res.json({
       success: true,
       staffSummary,
       dailySummary,
-      totalDuties: duties.reduce((sum, d) => sum + d.totalDuties, 0),
+      totalDuties,
     });
   } catch (error) {
     console.error('Error in getStaffDutySummary:', error);
@@ -774,14 +980,17 @@ exports.getStaffDutySummary = async (req, res) => {
 // PUT /staff-duty/:id
 exports.updateDuty = async (req, res) => {
   try {
-    const duty = await StaffDuty.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true,
-    });
+    const duty = await StaffDuty.findById(req.params.id);
 
     if (!duty) {
       return res.status(404).json({ message: "Duty assignment not found" });
     }
+
+    // Update fields
+    Object.assign(duty, req.body);
+
+    // Save the document to trigger pre-save hook and recalculate totalDuties and totalHours
+    await duty.save();
 
     res.json({ success: true, data: duty });
   } catch (error) {
@@ -819,85 +1028,124 @@ exports.bulkDeleteDuties = async (req, res) => {
 // POST /staff-duty/multi-type-assign
 exports.multiTypeAssign = async (req, res) => {
   try {
-    const { dutyRequirements, excludedStaffIds = [] } = req.body;
+    const { dutyRequirements, excludedStaffIds = [], excludedStaff = [] } = req.body;
 
     if (!dutyRequirements || dutyRequirements.length === 0) {
       return res.status(400).json({ message: "Please provide duty requirements" });
     }
 
-    const allStaff = await Staff.find({ isActive: true });
+    const allStaff = await Staff.find({ isActive: { $ne: false } });
     if (allStaff.length === 0) {
       return res.status(400).json({ message: "No staff available" });
     }
 
     const allAssignments = {};
     const allSaved = [];
+    const allRawAssignments = [];
 
     for (const requirement of dutyRequirements) {
-      const { dutyType, dates, className = dutyType } = requirement;
+      const { dutyType, dates, className = dutyType, totalRooms = 1, rooms = [] } = requirement;
       
+      const roomsList = rooms && rooms.length > 0
+        ? rooms.map((r, i) => (r && r.trim()) || `Room ${i + 1}`)
+        : Array.from({ length: totalRooms || 1 }, (_, i) => `Room ${i + 1}`);
+
       // Create duty slots with shifts
       const dutySlots = [];
       for (const date of dates) {
         const shifts = date.shift === 'both' ? ['morning', 'afternoon'] : [date.shift || 'morning'];
         for (const shift of shifts) {
-          dutySlots.push({
-            date: typeof date === 'object' ? date.date : date,
-            shift: shift
-          });
+          for (const room of roomsList) {
+            dutySlots.push({
+              date: typeof date === 'object' ? date.date : date,
+              shift: shift,
+              room: room
+            });
+          }
         }
       }
       
-      const { assignments } = await fairDistributionScheduleWithShifts(allStaff, dutySlots, dutyType, excludedStaffIds);
+      const { assignments } = await fairDistributionScheduleWithShifts(allStaff, dutySlots, dutyType, excludedStaffIds, excludedStaff);
       
+      allRawAssignments.push(...assignments.map(a => ({ ...a, className })));
       allAssignments[dutyType] = [];
-      
-      for (const assignment of assignments) {
-        const existingDuty = await StaffDuty.findOne({
+    }
+
+    // Now group allRawAssignments by (staffId, dutyType, className)
+    const grouped = {};
+    for (const assignment of allRawAssignments) {
+      const key = `${assignment.staffId}_${assignment.dutyType}_${assignment.className}`;
+      if (!grouped[key]) {
+        grouped[key] = {
           staffId: assignment.staffId,
-          "duties.date": assignment.dutyDate,
-          "duties.shift": assignment.shift,
+          staffName: assignment.staffName,
           dutyType: assignment.dutyType,
+          className: assignment.className,
+          slots: []
+        };
+      }
+      grouped[key].slots.push({
+        date: assignment.dutyDate,
+        shift: assignment.shift,
+        room: assignment.room
+      });
+    }
+
+    for (const [key, group] of Object.entries(grouped)) {
+      const dutyRecords = [];
+      for (const slot of group.slots) {
+        const existingDuty = await StaffDuty.findOne({
+          staffId: group.staffId,
+          dutyType: group.dutyType,
+          "duties.date": slot.date,
+          "duties.shift": slot.shift
         });
 
         if (!existingDuty) {
-          const duration = SHIFT_CONFIG[assignment.shift]?.duration || 8;
-          
-          const duty = new StaffDuty({
-            staffId: assignment.staffId,
-            staffName: assignment.staffName,
-            dutyType: assignment.dutyType,
-            duties: [{
-              date: assignment.dutyDate,
-              shift: assignment.shift,
-              duration: duration,
-              startTime: SHIFT_CONFIG[assignment.shift]?.startTime || '09:00 AM',
-              endTime: SHIFT_CONFIG[assignment.shift]?.endTime || '05:00 PM',
-            }],
-            assignedBy: req.user.id,
-            location: className,
+          const duration = SHIFT_CONFIG[slot.shift]?.duration || 8;
+          dutyRecords.push({
+            date: slot.date,
+            shift: slot.shift,
+            duration: duration,
+            startTime: SHIFT_CONFIG[slot.shift]?.startTime || '09:00 AM',
+            endTime: SHIFT_CONFIG[slot.shift]?.endTime || '05:00 PM',
+            room: slot.room
           });
-          
-          await duty.save();
-          allAssignments[dutyType].push(duty);
-          allSaved.push(duty);
+        }
+      }
 
-          await updateStaffDutyStats(
-            assignment.staffId,
-            assignment.staffName,
-            dutyType,
-            1,
-            duration,
-          );
+      if (dutyRecords.length > 0) {
+        const duty = new StaffDuty({
+          staffId: group.staffId,
+          staffName: group.staffName,
+          dutyType: group.dutyType,
+          duties: dutyRecords,
+          assignedBy: req.user.id,
+          location: group.className,
+        });
 
+        await duty.save();
+        allAssignments[group.dutyType].push(duty);
+        allSaved.push(duty);
+
+        const totalHours = dutyRecords.reduce((sum, d) => sum + (d.duration || 0), 0);
+        await updateStaffDutyStats(
+          group.staffId,
+          group.staffName,
+          group.dutyType,
+          dutyRecords.length,
+          totalHours
+        );
+
+        for (const record of dutyRecords) {
           await sendDutyNotification(
-            assignment.staffId,
-            assignment.staffName,
-            dutyType,
-            assignment.dutyDate,
-            assignment.shift,
+            group.staffId,
+            group.staffName,
+            group.dutyType,
+            record.date,
+            record.shift,
             duty._id,
-            className
+            group.className
           );
         }
       }
@@ -920,4 +1168,104 @@ exports.multiTypeAssign = async (req, res) => {
     console.error("Multi-type assign error:", error);
     res.status(500).json({ message: error.message });
   }
+};
+
+// ==================== PDF GENERATION CONTROLLERS ====================
+
+// School logo URL
+const SCHOOL_LOGO_URL = 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
+
+const handlePDFGeneration = async (req, res, isAttachment) => {
+  try {
+    const { startDate, endDate, staffId, dutyType, location } = req.query;
+
+    const query = {};
+    if (staffId) query.staffId = staffId;
+    if (dutyType) query.dutyType = dutyType;
+    if (location) query.location = location;
+    
+    if (startDate || endDate) {
+      query["duties.date"] = {};
+      if (startDate) query["duties.date"].$gte = new Date(startDate);
+      if (endDate) query["duties.date"].$lte = new Date(endDate);
+    }
+
+    const duties = await StaffDuty.find(query)
+      .populate("staffId", "name email role staffCode designation")
+      .sort({ assignedAt: -1 });
+
+    const filterStart = startDate ? new Date(startDate) : null;
+    if (filterStart) filterStart.setHours(0, 0, 0, 0);
+    const filterEnd = endDate ? new Date(endDate) : null;
+    if (filterEnd) filterEnd.setHours(23, 59, 59, 999);
+
+    const formattedDutyList = [];
+    
+    for (const duty of duties) {
+      const filteredDuties = (filterStart || filterEnd)
+        ? duty.duties.filter(d => {
+            let match = true;
+            if (filterStart && d.date < filterStart) match = false;
+            if (filterEnd && d.date > filterEnd) match = false;
+            return match;
+          })
+        : duty.duties;
+
+      if (filteredDuties.length === 0) continue;
+
+      const designation = duty.staffId?.role
+        ? (roleDesignationMap[duty.staffId.role] || duty.staffId.role)
+        : (duty.staffId?.designation || '-');
+
+      formattedDutyList.push({
+        staffName: duty.staffName,
+        designation: designation,
+        dutyType: duty.dutyType,
+        duties: filteredDuties,
+        location: duty.location,
+        totalDuties: filteredDuties.length,
+        totalHours: filteredDuties.reduce((sum, d) => sum + (d.duration || 0), 0)
+      });
+    }
+
+    let filterParts = [];
+    if (startDate) filterParts.push(`From: ${new Date(startDate).toLocaleDateString('en-IN')}`);
+    if (endDate) filterParts.push(`To: ${new Date(endDate).toLocaleDateString('en-IN')}`);
+    if (dutyType) filterParts.push(`Type: ${dutyType.replace('_', ' ').toUpperCase()}`);
+    const filterInfo = filterParts.length > 0 ? filterParts.join(' | ') : 'All Assignments';
+
+    const templateData = {
+      schoolLogoUrl: SCHOOL_LOGO_URL,
+      dutyList: formattedDutyList,
+      filterInfo
+    };
+
+    const pdfBuffer = await generateStaffDutyPDF(templateData);
+
+    const dispositionMode = isAttachment ? 'attachment' : 'inline';
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Length", pdfBuffer.length);
+    res.setHeader(
+      "Content-Disposition",
+      `${dispositionMode}; filename="Staff_Duty_List_${new Date().toISOString().split('T')[0]}.pdf"`
+    );
+    res.setHeader("Cache-Control", "no-cache");
+
+    res.end(pdfBuffer);
+
+  } catch (error) {
+    console.error("Staff duty PDF generation error:", error);
+    res.status(500).json({
+      message: "Failed to generate PDF",
+      error: error.message,
+    });
+  }
+};
+
+exports.generateStaffDutyPDF = async (req, res) => {
+  await handlePDFGeneration(req, res, false);
+};
+
+exports.downloadStaffDutyPDF = async (req, res) => {
+  await handlePDFGeneration(req, res, true);
 };

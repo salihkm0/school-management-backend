@@ -128,6 +128,7 @@ ParentSchema.methods.getCurrentStudentDetails = async function(academicYearId = 
     if (!studentMap.has(s.studentCode)) {
       const connection = this.students.find(c => c.studentCode === s.studentCode);
       studentMap.set(s.studentCode, {
+        _id: s._id,
         studentCode: s.studentCode,
         fullName: s.fullName,
         className: `${s.className || ''} ${s.division || ''}`.trim(),

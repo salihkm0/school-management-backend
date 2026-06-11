@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Marklist of Annual Evaluation</title>
+
+<style>
+@page {
+    size: A4 portrait;
+    margin: 5mm;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 210mm;
+    font-family: "Times New Roman", serif;
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.page-container {
+    width: 200mm;
+    min-height: 277mm;
+    margin: 0 auto;
+    padding: 10mm 8mm;
+    border: 2px solid #000;
+    position: relative;
+    box-sizing: border-box;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Logo Watermark */
+.logo-watermark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 140mm;
+    height: 140mm;
+    opacity: 0.04;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.logo-watermark img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.content-layer {
+    position: relative;
+    z-index: 2;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+/* Main content */
+.main-content {
+    flex: 1;
+}
+
+/* Header Section */
+.header-section {
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+.school-logo {
+    width: 25mm;
+    height: 25mm;
+    margin: 0 auto 5px;
+}
+
+.school-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.school-name {
+    font-size: 14px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 3px;
+}
+
+.arabic-text {
+    font-size: 12px;
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: #333;
+}
+
+.marklist-title {
+    font-size: 16px;
+    font-weight: 900;
+    text-transform: uppercase;
+    text-decoration: underline;
+    margin-bottom: 15px;
+}
+
+/* Student Info */
+.student-info {
+    margin-bottom: 15px;
+    font-size: 11px;
+}
+
+.info-row {
+    margin-bottom: 3px;
+    font-weight: bold;
+}
+
+.info-label {
+    display: inline-block;
+    width: 80px;
+}
+
+.info-value {
+    font-weight: normal;
+}
+
+/* Marks Table */
+.marks-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 15px 0;
+    font-size: 11px;
+}
+
+.marks-table th,
+.marks-table td {
+    border: 1.5px solid #000;
+    padding: 8px 5px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.marks-table th {
+    background: #f0f0f0;
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: 10px;
+}
+
+.marks-table td:first-child {
+    text-align: left;
+    font-weight: 600;
+    padding-left: 10px;
+}
+
+/* Total Row */
+.total-row {
+    font-weight: 900;
+    background: #f0f0f0;
+}
+
+.total-row td {
+    font-weight: 900;
+}
+
+/* Percentage in Grade Column */
+.percentage-grade {
+    font-weight: 900;
+}
+
+/* Remarks Section */
+.remarks-section {
+    margin-top: 40px;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.remarks-label {
+    display: inline-block;
+    width: 60px;
+}
+
+.remarks-line {
+    display: inline-block;
+    width: 620px;
+    border-bottom: 1px solid #000;
+    margin-left: 5px;
+}
+
+/* Bottom Section - Fixed to bottom */
+.bottom-section {
+    margin-top: auto;
+    padding-top: 10px;
+}
+
+/* Footer */
+.footer {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    margin-bottom: 60px;
+}
+
+.signature-item {
+    text-align: start;
+    width: 200px;
+}
+
+.signature-line {
+    margin-top: 25px;
+    border-top: 1px solid #000;
+    width: 100%;
+}
+
+/* Instructions Section - Below Signatures */
+.instructions-section {
+    margin-top: 5px;
+    margin-bottom: 20px;
+    font-size: 17px;
+    color: #333;
+    line-height: 1.6;
+    border-top: 1px solid #ccc;
+    padding-top: 10px;
+}
+
+.instructions-title {
+    font-weight: 900;
+    text-decoration: underline;
+    margin-bottom: 5px;
+    font-size: 20px;
+}
+
+.instructions-list {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+.instructions-list li {
+    margin-bottom: 3px;
+}
+
+/* Grade Legend and Generated Info Row */
+.bottom-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-top: 10px;
+    border-top: 1px solid #000;
+    padding-top: 10px;
+}
+
+.grade-legend {
+    font-size: 8px;
+    font-weight: bold;
+    text-align: left;
+}
+
+.generated-info {
+    font-size: 8px;
+    color: #666;
+    text-align: right;
+}
+
+/* Print optimization */
+@media print {
+    html, body {
+        width: 210mm;
+        margin: 0;
+        padding: 0;
+    }
+    
+    th {
+        background: #f0f0f0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .total-row td {
+        background: #f0f0f0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .page-container {
+        border: 2px solid #000;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .logo-watermark {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<% students.forEach(function(student, index) { %>
+<div class="page-container" style="<%= index > 0 ? 'page-break-before: always;' : '' %>">
+    
+    <!-- Logo Watermark -->
+    <div class="logo-watermark">
+        <img src="<%= schoolLogo %>" alt="Watermark">
+    </div>
+    
+    <div class="content-layer">
+        
+        <div class="main-content">
+            
+            <!-- Header -->
+            <div class="header-section">
+                <div class="school-logo">
+                    <img src="<%= schoolLogo %>" alt="School Logo">
+                </div>
+                <div class="school-name">P.P.M.H.S.S. KOTTUKKARA</div>
+                <div class="marklist-title">MARKLIST OF ANNUAL EVALUATION (<%= academicYear %>)</div>
+            </div>
+            
+            <!-- Student Info -->
+            <div class="student-info">
+                <div class="info-row">
+                    <span class="info-label">Name</span>
+                    <span class="info-value">: <%= student.name %></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Class</span>
+                    <span class="info-value">: <%= student.class %></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Admission no.</span>
+                    <span class="info-value">: <%= student.admissionNo %></span>
+                </div>
+            </div>
+            
+            <!-- Marks Table -->
+            <table class="marks-table">
+                <thead>
+                    <tr>
+                        <th>Subject</th>
+                        <th>Marks obtained</th>
+                        <th>Maximum Mark</th>
+                        <th>Grade</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% 
+                    let totalObtained = 0;
+                    let totalMax = 0;
+                    
+                    student.subjects.forEach(function(subject) {
+                        totalObtained += subject.obtained;
+                        totalMax += subject.max;
+                    %>
+                    <tr>
+                        <td><%= subject.name %></td>
+                        <td><%= subject.obtained %></td>
+                        <td><%= subject.max %></td>
+                        <td><%= subject.grade %></td>
+                    </tr>
+                    <% }); %>
+                    
+                    <% const percentage = totalMax > 0 ? ((totalObtained / totalMax) * 100).toFixed(0) : 0; %>
+                    
+                    <tr class="total-row">
+                        <td><strong>Total</strong></td>
+                        <td><strong><%= totalObtained %></strong></td>
+                        <td><strong><%= totalMax %></strong></td>
+                        <td><strong><%= percentage %>%</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <!-- Remarks Section -->
+            <div class="remarks-section">
+                <span class="remarks-label">Remarks :</span>
+                <span class="remarks-line"></span>
+            </div>
+            
+        </div>
+        
+        <!-- Bottom Section -->
+        <div class="bottom-section">
+            
+            <!-- Signatures -->
+            <div class="footer">
+                <div class="signature-item">
+                    <div>Class Teacher</div>
+                    <div class="signature-line"></div>
+                </div>
+                <div class="signature-item">
+                    <div>Principal</div>
+                    <div class="signature-line"></div>
+                </div>
+            </div>
+            
+            <!-- Instructions Section - Below Signatures -->
+            <div class="instructions-section">
+                <div class="instructions-title">Instructions :</div>
+                <ul class="instructions-list">
+                    <li>1. This marklist is valid only with the school seal and authorized signature.</li>
+                    <li>2. Any corrections or overwriting must be authenticated by the Principal.</li>
+                    <li>3. This document should be preserved carefully for future reference.</li>
+                    <li>4. For any queries regarding marks, contact the school office within 10 working days.</li>
+                    <li>5. Duplicate marklist will be issued only on submission of proper application.</li>
+                </ul>
+            </div>
+            
+            <!-- Grade Legend and Generated Info -->
+            <div class="bottom-info-row">
+                <div class="grade-legend">
+                    A+ : 90% & Above | A : 80-89% | B+ : 70-79% | B : 60-69% | C+ : 50-59% | C : 40-49% | D+ : 30-39% | D : 20-29% | E : Below 20%
+                </div>
+                <div class="generated-info">
+                    Generated on: <%= new Date().toLocaleDateString('en-IN') %>
+                </div>
+            </div>
+            
+        </div>
+        
+        
+    </div>
+</div>
+<% }); %>
+
+</body>
+</html>

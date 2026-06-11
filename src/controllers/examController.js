@@ -1674,3 +1674,274 @@ exports.getExamScheduleDetails = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// Get exams for staff (class teacher only)
+exports.getStaffExams = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { academicYearId } = req.query;
+    
+    // Get staff record
+    const staff = await Staff.findOne({ userId });
+    if (!staff) {
+      return res.status(404).json({ message: 'Staff record not found' });
+    }
+    
+    // Get classes where this staff is class teacher
+    const classTeacherClasses = await Class.find({
+      classTeacherId: staff._id,
+      academicYearId: academicYearId,
+      isActive: true
+    }).select('_id');
+    
+    const classIds = classTeacherClasses.map(c => c._id);
+    
+    if (classIds.length === 0) {
+      return res.json({
+        success: true,
+        data: [],
+        message: 'No classes assigned as class teacher'
+      });
+    }
+    
+    // Find exams for these classes
+    const exams = await Exam.find({
+      classIds: { $in: classIds },
+      academicYearId: academicYearId,
+      isActive: true
+    })
+      .populate('classIds', 'name section displayName')
+      .populate('academicYearId', 'year name')
+      .populate('subjects.subjectId', 'name code')
+      .sort({ createdAt: -1 });
+    
+    res.json({
+      success: true,
+      data: exams
+    });
+  } catch (error) {
+    console.error('Error in getStaffExams:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Create exam for staff (class teacher)
+exports.createStaffExam = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const {
+      name,
+      examType,
+      description,
+      academicYearId,
+      term,
+      classIds,
+      subjects,
+      schedule,
+      schedulingMode,
+      startDate,
+      endDate,
+      settings,
+      termEntryDeadline,
+      resultDeclarationDate
+    } = req.body;
+    
+    // Get staff record
+    const staff = await Staff.findOne({ userId });
+    if (!staff) {
+      return res.status(404).json({ message: 'Staff record not found' });
+    }
+    
+    // Get classes where this staff is class teacher
+    const classTeacherClasses = await Class.find({
+      classTeacherId: staff._id,
+      academicYearId: academicYearId,
+      isActive: true
+    }).select('_id');
+    
+    const allowedClassIds = classTeacherClasses.map(c => c._id.toString());
+    
+    // Verify that all selected classes are taught by this teacher
+    for (const classId of classIds) {
+      if (!allowedClassIds.includes(classId)) {
+        return res.status(403).json({ 
+          message: `You are not authorized to create exam for class ${classId}` 
+        });
+      }
+    }
+    
+    // Validate academic year
+    const academicYear = await AcademicYear.findById(academicYearId);
+    if (!academicYear) {
+      return res.status(404).json({ message: 'Academic year not found' });
+    }
+    
+    // Prepare exam data (same as existing createExam logic)
+    const examData = {
+      name: examType === 'custom' ? name : `${examType}_exam`,
+      examType,
+      description,
+      academicYearId,
+      academicYear: academicYear.year,
+      term,
+      classIds,
+      schedulingMode: schedulingMode || 'subject_schedule',
+      settings: settings || {},
+      createdBy: req.user.id,
+      termEntryDeadline: termEntryDeadline ? new Date(termEntryDeadline) : null,
+      resultDeclarationDate: resultDeclarationDate ? new Date(resultDeclarationDate) : null,
+      globalCeConfig: { enabled: false }
+    };
+    
+    // Handle schedule creation (same logic as createExam)
+    if (schedulingMode === 'date_range') {
+      examData.startDate = new Date(startDate);
+      examData.endDate = new Date(endDate);
+      if (!subjects || subjects.length === 0) {
+        examData.subjects = await autoPopulateSubjectsFromClasses(classIds);
+      } else {
+        examData.subjects = subjects;
+      }
+      examData.schedule = [];
+    } else {
+      const enrichedSchedule = [];
+      
+      for (const s of schedule) {
+        let subject = null;
+        if (!s.subjectName) {
+          subject = await Subject.findById(s.subjectId);
+        }
+        
+        const maxMarks = parseInt(s.maxMarks) || 100;
+        const passingMarks = parseInt(s.passingMarks) || Math.floor(maxMarks * 0.4);
+        const practicalMarks = parseInt(s.practicalMarks) || 0;
+        const theoryMarks = maxMarks - practicalMarks;
+        
+        let examDate = new Date(s.examDate);
+        if (isNaN(examDate.getTime())) {
+          return res.status(400).json({ 
+            message: `Invalid exam date for subject ${subject?.name || s.subjectName}` 
+          });
+        }
+        
+        const ceEnabled = s.ceEnabled || false;
+        const ceMaxMarks = ceEnabled ? (parseInt(s.ceMaxMarks) || 20) : 0;
+        const cePassingMarks = ceEnabled ? (parseInt(s.cePassingMarks) || 8) : 0;
+        
+        const ceComponents = (s.ceComponents || [])
+          .filter(c => c.name && c.name.trim())
+          .map(comp => ({
+            name: comp.name,
+            maxMarks: parseInt(comp.maxMarks) || 0,
+            weightage: parseInt(comp.weightage) || 0
+          }));
+        
+        enrichedSchedule.push({
+          subjectId: s.subjectId,
+          subjectName: subject?.name || s.subjectName,
+          subjectCode: subject?.code || s.subjectCode,
+          examDate: examDate,
+          session: s.session || 'BF',
+          startTime: s.startTime || (s.session === 'BF' ? '09:00 AM' : s.session === 'AF' ? '02:00 PM' : '09:00 AM'),
+          endTime: s.endTime || (s.session === 'BF' ? '12:00 PM' : s.session === 'AF' ? '05:00 PM' : '05:00 PM'),
+          duration: s.duration || (s.session === 'FULL' ? 480 : 180),
+          maxMarks: maxMarks,
+          passingMarks: passingMarks,
+          theoryMarks: theoryMarks,
+          practicalMarks: practicalMarks,
+          hasPractical: practicalMarks > 0,
+          termMaxMarks: maxMarks,
+          termPassingMarks: passingMarks,
+          termWeightage: 80,
+          ceEnabled: ceEnabled,
+          ceMaxMarks: ceMaxMarks,
+          cePassingMarks: cePassingMarks,
+          ceComponents: ceComponents,
+          ceWeightage: 20,
+          roomNumber: s.roomNumber || '',
+          building: s.building || '',
+          invigilators: s.invigilators || [],
+          invigilatorNames: s.invigilatorNames || [],
+          notes: s.notes || '',
+          isAbsentAllowed: s.isAbsentAllowed !== false,
+          graceTime: s.graceTime || 0
+        });
+      }
+      
+      examData.schedule = enrichedSchedule;
+      
+      const dates = enrichedSchedule.map(s => new Date(s.examDate));
+      examData.startDate = new Date(Math.min(...dates));
+      examData.endDate = new Date(Math.max(...dates));
+      
+      const subjectMap = new Map();
+      for (const s of enrichedSchedule) {
+        const subjectKey = s.subjectId.toString();
+        if (!subjectMap.has(subjectKey)) {
+          const isLanguage = s.subjectCode && ['MAL', 'ENG', 'HIN', 'ARB', 'URD'].includes(s.subjectCode);
+          
+          subjectMap.set(subjectKey, {
+            subjectId: s.subjectId,
+            subjectName: s.subjectName,
+            subjectCode: s.subjectCode,
+            termMaxMarks: s.maxMarks,
+            termPassingMarks: s.passingMarks,
+            theoryMaxMarks: s.theoryMarks,
+            practicalMaxMarks: s.practicalMarks,
+            hasPractical: s.practicalMarks > 0,
+            ceEnabled: s.ceEnabled,
+            ceMaxMarks: s.ceMaxMarks,
+            cePassingMarks: s.cePassingMarks,
+            ceComponents: s.ceComponents || [],
+            totalMaxMarks: (s.maxMarks || 0) + (s.ceMaxMarks || 0),
+            totalPassingMarks: (s.passingMarks || 0) + (s.cePassingMarks || 0),
+            weightage: 100,
+            termWeightage: 80,
+            ceWeightage: 20,
+            isLanguageSubject: isLanguage
+          });
+        }
+      }
+      examData.subjects = Array.from(subjectMap.values());
+    }
+    
+    // Build class submission status
+    const classNamesMap = await getClassNamesForStatus(classIds);
+    examData.classSubmissionStatus = await Promise.all(classIds.map(async (classId) => {
+      const totalStudents = await Student.countDocuments({ classId, status: 'active' });
+      return {
+        classId,
+        className: classNamesMap.get(classId.toString()) || 'Unknown',
+        classDisplayName: classNamesMap.get(classId.toString()) || 'Unknown',
+        status: 'draft',
+        totalStudents: totalStudents,
+        marksEntryStats: {
+          totalStudents: totalStudents,
+          termMarksEntered: 0,
+          ceMarksEntered: 0,
+          marksPending: totalStudents * examData.subjects.length,
+          completionPercentage: 0
+        }
+      };
+    }));
+    
+    const exam = await Exam.create(examData);
+    
+    // Populate references for response
+    const populatedExam = await Exam.findById(exam._id)
+      .populate('classIds', 'name section displayName')
+      .populate('academicYearId', 'year name')
+      .populate('subjects.subjectId', 'name code type department')
+      .populate('schedule.subjectId', 'name code')
+      .populate('createdBy', 'name email');
+    
+    res.status(201).json({
+      success: true,
+      data: await formatExamResponse(populatedExam)
+    });
+    
+  } catch (error) {
+    console.error('Error creating staff exam:', error);
+    res.status(500).json({ message: error.message });
+  }
+};

@@ -325,6 +325,46 @@ exports.getMarksheetsByClass = async (req, res) => {
       return res.status(404).json({ message: "Exam not found" });
     }
 
+    const userObj = await User.findById(userId);
+    const isSystemAdmin = userObj?.role === "admin";
+    const isStaffAdmin = staffOrAdmin && [
+      "principal",
+      "administrator",
+      "manager",
+      "admin",
+    ].includes(staffOrAdmin.role);
+    const isAdmin = isSystemAdmin || isStaffAdmin;
+
+    let isClassTeacher = false;
+    const classObj = await Class.findById(classId);
+    if (classObj && classObj.classTeacherId && staffOrAdmin) {
+      isClassTeacher = classObj.classTeacherId.toString() === staffOrAdmin._id.toString();
+    }
+
+    let allowedSubjectIds = [];
+    if (!isAdmin) {
+      // Find staff assignment to get subjects taught
+      const staffAssignment = await StaffAssignment.findOne({
+        staffId: staffOrAdmin._id,
+        academicYearId: exam.academicYearId,
+      });
+
+      // Get subjects from classObj.subjectTeachers where teacher is staffOrAdmin._id
+      const subjectTeachersList = (classObj?.subjectTeachers || [])
+        .filter(st => {
+          const teacherId = st.teacherId?._id || st.teacherId;
+          return teacherId && teacherId.toString() === staffOrAdmin._id.toString();
+        })
+        .map(st => (st.subjectId?._id || st.subjectId).toString());
+
+      // Get subjects from staffAssignment.subjectsTaught for this class
+      const subjectsTaughtList = (staffAssignment?.subjectsTaught || [])
+        .filter(s => s.classId && s.classId.toString() === classId.toString())
+        .map(s => s.subjectId.toString());
+
+      allowedSubjectIds = [...new Set([...subjectTeachersList, ...subjectsTaughtList])];
+    }
+
     // Get all active students with their language subjects
     const students = await Student.find({ classId, status: "active" })
       .select("_id fullName studentCode rollNumber admissionNo className firstLanguagePaper1 firstLanguagePaper2 thirdLanguage additionalLanguage")
@@ -439,6 +479,7 @@ exports.getMarksheetsByClass = async (req, res) => {
           grade: "F",
           remarks: "",
           isAbsent: false,
+          isEntered: false,
         });
       }
       
@@ -461,6 +502,7 @@ exports.getMarksheetsByClass = async (req, res) => {
             studentSubj.grade = existingSubj.grade || "F";
             studentSubj.remarks = existingSubj.remarks || "";
             studentSubj.isAbsent = existingSubj.isAbsent || false;
+            studentSubj.isEntered = existingSubj.isEntered || false;
           }
         });
         
@@ -530,9 +572,51 @@ exports.getMarksheetsByClass = async (req, res) => {
       });
     });
     
-    const uniqueSubjects = Array.from(allSubjectsMap.values());
+    let uniqueSubjects = Array.from(allSubjectsMap.values());
     
-    // Also include information about which students take which languages
+    // Calculate progress for each unique subject
+    const subjectProgress = uniqueSubjects.map(subject => {
+      const subjectIdStr = subject.examSubjectId.toString();
+      
+      let totalStudentsTaking = 0;
+      let enteredCount = 0;
+      
+      studentMarksData.forEach(student => {
+        const studentSubj = student.subjects.find(
+          s => s.examSubjectId.toString() === subjectIdStr
+        );
+        if (studentSubj) {
+          totalStudentsTaking++;
+          if (studentSubj.isEntered) {
+            enteredCount++;
+          }
+        }
+      });
+      
+      return {
+        subjectId: subject.examSubjectId,
+        subjectName: subject.displayName || subject.subjectName,
+        subjectCode: subject.subjectCode,
+        totalStudents: totalStudentsTaking,
+        enteredCount: enteredCount,
+        percentage: totalStudentsTaking > 0 ? Math.round((enteredCount / totalStudentsTaking) * 100) : 0
+      };
+    });
+
+    // Securely filter subjects data for non-admins
+    if (!isAdmin) {
+      uniqueSubjects = uniqueSubjects.filter(s => 
+        allowedSubjectIds.includes(s.examSubjectId.toString())
+      );
+      
+      studentMarksData.forEach(student => {
+        student.subjects = student.subjects.filter(s => 
+          allowedSubjectIds.includes(s.examSubjectId.toString())
+        );
+      });
+    }
+
+    // Include information about which students take which languages
     const languageMapping = {};
     students.forEach(student => {
       languageMapping[student._id.toString()] = {
@@ -555,6 +639,7 @@ exports.getMarksheetsByClass = async (req, res) => {
         subjects: uniqueSubjects,
         students: studentMarksData,
         languageMapping,
+        subjectProgress,
         summary: {
           totalStudents: students.length,
           marksheetsCreated: marksheets.length,
@@ -595,20 +680,10 @@ exports.updateStudentMarks = async (req, res) => {
     let marksheet = await Mark.findOne({ studentId, examId, classId });
 
     if (!marksheet) {
-      // Build exam subjects map
-      const examSubjectsMap = new Map();
-      exam.subjects.forEach(subj => {
-        const subjId = subj.subjectId?._id?.toString() || subj.subjectId?.toString();
-        examSubjectsMap.set(subjId, subj);
-      });
-      
       const subjectsForMark = [];
       
-      // Map each subject from request to actual student's language
-      for (const subjectData of subjects) {
-        const examSubject = examSubjectsMap.get(subjectData.examSubjectId || subjectData.subjectId);
-        if (!examSubject) continue;
-        
+      for (const examSubject of exam.subjects) {
+        const examSubjId = examSubject.subjectId?._id?.toString() || examSubject.subjectId?.toString();
         let actualSubjectId = examSubject.subjectId;
         let actualSubjectName = examSubject.subjectName;
         
@@ -627,6 +702,17 @@ exports.updateStudentMarks = async (req, res) => {
           actualSubjectName = student.additionalLanguage.name;
         }
         
+        // Skip language subject if student doesn't take it
+        if (['firstLanguagePaper1', 'firstLanguagePaper2', 'thirdLanguage', 'additionalLanguage'].includes(examSubject.subjectName) && !actualSubjectId) {
+          continue;
+        }
+        
+        // Find if this subject is in the request body subjects
+        const updatedSubject = subjects.find(
+          (s) => s.subjectId?.toString() === actualSubjectId?.toString() ||
+                 s.examSubjectId?.toString() === examSubjId
+        );
+        
         subjectsForMark.push({
           subjectId: actualSubjectId,
           subjectName: actualSubjectName,
@@ -636,14 +722,15 @@ exports.updateStudentMarks = async (req, res) => {
           ceMaxMarks: examSubject.ceMaxMarks || 0,
           ceEnabled: examSubject.ceEnabled || false,
           passingMarks: examSubject.termPassingMarks || 40,
-          theoryScore: subjectData.theoryScore || 0,
-          practicalScore: subjectData.practicalScore || 0,
-          ceScore: subjectData.ceMarks || subjectData.ceScore || 0,
+          theoryScore: updatedSubject ? (updatedSubject.theoryScore || 0) : 0,
+          practicalScore: updatedSubject ? (updatedSubject.practicalScore || 0) : 0,
+          ceScore: updatedSubject ? (updatedSubject.ceMarks || updatedSubject.ceScore || 0) : 0,
           totalScore: 0,
           percentage: 0,
           grade: "F",
-          remarks: subjectData.remarks || "",
-          isAbsent: subjectData.isAbsent || false,
+          remarks: updatedSubject ? (updatedSubject.remarks || "") : "",
+          isAbsent: updatedSubject ? (updatedSubject.isAbsent || false) : false,
+          isEntered: updatedSubject ? true : false,
         });
       }
       
@@ -678,6 +765,51 @@ exports.updateStudentMarks = async (req, res) => {
             marksheet.subjects[subjectIndex].ceScore = updatedSubject.ceMarks || updatedSubject.ceScore || 0;
             marksheet.subjects[subjectIndex].remarks = updatedSubject.remarks || "";
             marksheet.subjects[subjectIndex].isAbsent = updatedSubject.isAbsent || false;
+            marksheet.subjects[subjectIndex].isEntered = true;
+          } else {
+            // Dynamic add if not found (template sync mismatch or legacy)
+            const examSubject = exam.subjects.find(
+              (s) => s.subjectId?.toString() === updatedSubject.examSubjectId?.toString() ||
+                     s.subjectId?.toString() === updatedSubject.subjectId?.toString()
+            );
+            if (examSubject) {
+              let actualSubjectId = examSubject.subjectId;
+              let actualSubjectName = examSubject.subjectName;
+              
+              if (examSubject.subjectName === 'firstLanguagePaper1' && student.firstLanguagePaper1) {
+                actualSubjectId = student.firstLanguagePaper1._id;
+                actualSubjectName = student.firstLanguagePaper1.name;
+              } else if (examSubject.subjectName === 'firstLanguagePaper2' && student.firstLanguagePaper2) {
+                actualSubjectId = student.firstLanguagePaper2._id;
+                actualSubjectName = student.firstLanguagePaper2.name;
+              } else if (examSubject.subjectName === 'thirdLanguage' && student.thirdLanguage) {
+                actualSubjectId = student.thirdLanguage._id;
+                actualSubjectName = student.thirdLanguage.name;
+              } else if (examSubject.subjectName === 'additionalLanguage' && student.additionalLanguage) {
+                actualSubjectId = student.additionalLanguage._id;
+                actualSubjectName = student.additionalLanguage.name;
+              }
+              
+              marksheet.subjects.push({
+                subjectId: actualSubjectId,
+                subjectName: actualSubjectName,
+                subjectCode: examSubject.subjectCode,
+                maxMarks: (examSubject.termMaxMarks || 0) + (examSubject.ceMaxMarks || 0),
+                termMaxMarks: examSubject.termMaxMarks || 100,
+                ceMaxMarks: examSubject.ceMaxMarks || 0,
+                ceEnabled: examSubject.ceEnabled || false,
+                passingMarks: examSubject.termPassingMarks || 40,
+                theoryScore: updatedSubject.theoryScore || 0,
+                practicalScore: updatedSubject.practicalScore || 0,
+                ceScore: updatedSubject.ceMarks || updatedSubject.ceScore || 0,
+                totalScore: 0,
+                percentage: 0,
+                grade: "F",
+                remarks: updatedSubject.remarks || "",
+                isAbsent: updatedSubject.isAbsent || false,
+                isEntered: true,
+              });
+            }
           }
         });
       }
@@ -735,14 +867,12 @@ exports.bulkUpdateMarks = async (req, res) => {
       examSubjectsMap.set(subjId, subj);
     });
 
-    const results = { success: [], failed: [] };
-
-    for (const studentData of studentsData) {
+    // ── Save ALL marksheets in parallel (instead of serial loop) ──
+    const savePromises = studentsData.map(async (studentData) => {
       try {
         const student = studentMap.get(studentData.studentId);
         if (!student) {
-          results.failed.push({ studentId: studentData.studentId, error: "Student not found" });
-          continue;
+          return { type: 'failed', studentId: studentData.studentId, error: 'Student not found' };
         }
 
         let marksheet = await Mark.findOne({
@@ -752,16 +882,14 @@ exports.bulkUpdateMarks = async (req, res) => {
         });
 
         if (!marksheet) {
+          // Initialize ALL exam subjects so other teachers can update their own subjects later
           const subjectsForMark = [];
-          
-          for (const subjectData of studentData.subjects) {
-            const examSubject = examSubjectsMap.get(subjectData.examSubjectId || subjectData.subjectId);
-            if (!examSubject) continue;
-            
+
+          for (const examSubject of exam.subjects) {
+            const examSubjId = examSubject.subjectId?._id?.toString() || examSubject.subjectId?.toString();
             let actualSubjectId = examSubject.subjectId;
             let actualSubjectName = examSubject.subjectName;
-            
-            // If this is a placeholder, replace with student's actual language
+
             if (examSubject.subjectName === 'firstLanguagePaper1' && student.firstLanguagePaper1) {
               actualSubjectId = student.firstLanguagePaper1._id;
               actualSubjectName = student.firstLanguagePaper1.name;
@@ -775,7 +903,15 @@ exports.bulkUpdateMarks = async (req, res) => {
               actualSubjectId = student.additionalLanguage._id;
               actualSubjectName = student.additionalLanguage.name;
             }
-            
+
+            if (['firstLanguagePaper1', 'firstLanguagePaper2', 'thirdLanguage', 'additionalLanguage'].includes(examSubject.subjectName) && !actualSubjectId) {
+              continue;
+            }
+
+            const submittedSubject = studentData.subjects.find(
+              (s) => s.examSubjectId?.toString() === examSubjId || s.subjectId?.toString() === actualSubjectId?.toString()
+            );
+
             subjectsForMark.push({
               subjectId: actualSubjectId,
               subjectName: actualSubjectName,
@@ -785,17 +921,18 @@ exports.bulkUpdateMarks = async (req, res) => {
               ceMaxMarks: examSubject.ceMaxMarks || 0,
               ceEnabled: examSubject.ceEnabled || false,
               passingMarks: examSubject.termPassingMarks || 40,
-              theoryScore: subjectData.theoryScore || 0,
-              practicalScore: subjectData.practicalScore || 0,
-              ceScore: subjectData.ceMarks || 0,
+              theoryScore: submittedSubject ? (submittedSubject.theoryScore || 0) : 0,
+              practicalScore: submittedSubject ? (submittedSubject.practicalScore || 0) : 0,
+              ceScore: submittedSubject ? (submittedSubject.ceMarks || 0) : 0,
               totalScore: 0,
               percentage: 0,
-              grade: "F",
-              remarks: subjectData.remarks || "",
-              isAbsent: subjectData.isAbsent || false,
+              grade: 'F',
+              remarks: submittedSubject ? (submittedSubject.remarks || '') : '',
+              isAbsent: submittedSubject ? (submittedSubject.isAbsent || false) : false,
+              isEntered: submittedSubject ? true : false,
             });
           }
-          
+
           marksheet = new Mark({
             studentId: studentData.studentId,
             studentName: student.fullName,
@@ -811,7 +948,7 @@ exports.bulkUpdateMarks = async (req, res) => {
             academicYearId: exam.academicYearId,
             academicYear: exam.academicYear,
             subjects: subjectsForMark,
-            status: "draft",
+            status: 'draft',
           });
         } else {
           // Update existing marksheet
@@ -825,8 +962,50 @@ exports.bulkUpdateMarks = async (req, res) => {
                 marksheet.subjects[subjectIndex].theoryScore = updatedSubject.theoryScore || 0;
                 marksheet.subjects[subjectIndex].practicalScore = updatedSubject.practicalScore || 0;
                 marksheet.subjects[subjectIndex].ceScore = updatedSubject.ceMarks || 0;
-                marksheet.subjects[subjectIndex].remarks = updatedSubject.remarks || "";
+                marksheet.subjects[subjectIndex].remarks = updatedSubject.remarks || '';
                 marksheet.subjects[subjectIndex].isAbsent = updatedSubject.isAbsent || false;
+                marksheet.subjects[subjectIndex].isEntered = true;
+              } else {
+                const examSubject = exam.subjects.find(
+                  (s) => s.subjectId?.toString() === updatedSubject.examSubjectId?.toString() ||
+                         s.subjectId?.toString() === updatedSubject.subjectId?.toString()
+                );
+                if (examSubject) {
+                  let actualSubjectId = examSubject.subjectId;
+                  let actualSubjectName = examSubject.subjectName;
+                  if (examSubject.subjectName === 'firstLanguagePaper1' && student.firstLanguagePaper1) {
+                    actualSubjectId = student.firstLanguagePaper1._id;
+                    actualSubjectName = student.firstLanguagePaper1.name;
+                  } else if (examSubject.subjectName === 'firstLanguagePaper2' && student.firstLanguagePaper2) {
+                    actualSubjectId = student.firstLanguagePaper2._id;
+                    actualSubjectName = student.firstLanguagePaper2.name;
+                  } else if (examSubject.subjectName === 'thirdLanguage' && student.thirdLanguage) {
+                    actualSubjectId = student.thirdLanguage._id;
+                    actualSubjectName = student.thirdLanguage.name;
+                  } else if (examSubject.subjectName === 'additionalLanguage' && student.additionalLanguage) {
+                    actualSubjectId = student.additionalLanguage._id;
+                    actualSubjectName = student.additionalLanguage.name;
+                  }
+                  marksheet.subjects.push({
+                    subjectId: actualSubjectId,
+                    subjectName: actualSubjectName,
+                    subjectCode: examSubject.subjectCode,
+                    maxMarks: (examSubject.termMaxMarks || 0) + (examSubject.ceMaxMarks || 0),
+                    termMaxMarks: examSubject.termMaxMarks || 100,
+                    ceMaxMarks: examSubject.ceMaxMarks || 0,
+                    ceEnabled: examSubject.ceEnabled || false,
+                    passingMarks: examSubject.termPassingMarks || 40,
+                    theoryScore: updatedSubject.theoryScore || 0,
+                    practicalScore: updatedSubject.practicalScore || 0,
+                    ceScore: updatedSubject.ceMarks || 0,
+                    totalScore: 0,
+                    percentage: 0,
+                    grade: 'F',
+                    remarks: updatedSubject.remarks || '',
+                    isAbsent: updatedSubject.isAbsent || false,
+                    isEntered: true,
+                  });
+                }
               }
             });
           }
@@ -837,40 +1016,50 @@ exports.bulkUpdateMarks = async (req, res) => {
         marksheet.lastUpdatedAt = new Date();
         await marksheet.save();
 
-        results.success.push({
-          studentId: studentData.studentId,
-          studentName: marksheet.studentName,
-        });
+        return { type: 'success', studentId: studentData.studentId, studentName: marksheet.studentName };
       } catch (error) {
-        console.error("Error saving marks for student:", studentData.studentId, error);
-        results.failed.push({
-          studentId: studentData.studentId,
-          error: error.message,
-        });
+        console.error('Error saving marks for student:', studentData.studentId, error);
+        return { type: 'failed', studentId: studentData.studentId, error: error.message };
       }
-    }
+    });
 
-    // Update exam submission stats
-    const examDoc = await Exam.findById(examId);
-    if (examDoc) {
-      const classSubmission = examDoc.classSubmissionStatus.find(
-        (cs) => cs.classId.toString() === classId,
-      );
-      if (classSubmission) {
-        await examDoc.updateClassSubmissionStats(classId);
-      }
-    }
+    // Wait for all saves concurrently
+    const saveResults = await Promise.all(savePromises);
+    const results = {
+      success: saveResults.filter(r => r.type === 'success').map(r => ({ studentId: r.studentId, studentName: r.studentName })),
+      failed: saveResults.filter(r => r.type === 'failed').map(r => ({ studentId: r.studentId, error: r.error })),
+    };
 
+    // ── Respond immediately ──────────────────────────────────────────
     res.json({
       success: true,
       message: `Updated ${results.success.length} students, ${results.failed.length} failed`,
       results,
     });
+
+    // ── Update exam submission stats ASYNC (non-blocking) ───────────
+    setImmediate(async () => {
+      try {
+        const examDoc = await Exam.findById(examId);
+        if (examDoc) {
+          const classSubmission = examDoc.classSubmissionStatus.find(
+            (cs) => cs.classId.toString() === classId,
+          );
+          if (classSubmission) {
+            await examDoc.updateClassSubmissionStats(classId);
+          }
+        }
+      } catch (err) {
+        console.error('Error updating exam stats (async):', err.message);
+      }
+    });
+
   } catch (error) {
-    console.error("Error in bulkUpdateMarks:", error);
+    console.error('Error in bulkUpdateMarks:', error);
     res.status(500).json({ message: error.message });
   }
 };
+
 
 // Submit marks for review (class teacher)
 exports.submitMarksForReview = async (req, res) => {
@@ -1177,7 +1366,7 @@ exports.getTeacherPermissions = async (req, res) => {
     let allowedSubjects = [];
     let isSubjectTeacher = false;
 
-    if (isClassTeacher || isAdmin) {
+    if (isAdmin) {
       allowedSubjects = exam.subjects.map((s) => ({
         subjectId: s.subjectId?._id || s.subjectId,
         subjectName: s.subjectName,
@@ -1187,7 +1376,7 @@ exports.getTeacherPermissions = async (req, res) => {
         ceMaxMarks: s.ceMaxMarks || 0,
         cePassingMarks: s.cePassingMarks || 0,
         canEdit: true,
-        isClassTeacher: !isAdmin && isClassTeacher,
+        isClassTeacher: false,
         isAdmin: isAdmin,
       }));
     } else {

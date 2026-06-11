@@ -55,6 +55,7 @@ const promotionListRoutes = require('./src/routes/pdf/promotionListRoutes');
 const userRoutes = require('./src/routes/userRoutes');
 const dashboardRoutes = require('./src/routes/dashboardRoutes');
 const reportCardRoutes = require('./src/routes/pdf/reportCardRoutes');
+const historicalImportRoutes = require('./src/routes/historicalImportRoutes');
 
 
 const app = express();
@@ -222,6 +223,9 @@ app.use('/api/pdf/class-teacher-list', classTeacherListRoutes);
 app.use('/api/pdf/fee-collection', feeCollectionRoutes);
 app.use('/api/pdf/promotion-list', promotionListRoutes);
 app.use('/api/pdf/report-card', reportCardRoutes);
+
+// Historical mark import (standalone — does not affect main system)
+app.use('/api/historical-imports', historicalImportRoutes);
 
 
 // Health check endpoint

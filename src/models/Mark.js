@@ -59,6 +59,10 @@ const SubjectMarkSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  isEntered: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const MarkSchema = new mongoose.Schema(

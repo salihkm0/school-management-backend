@@ -463,9 +463,9 @@ exports.deleteClass = async (req, res) => {
 exports.assignClassTeacher = async (req, res) => {
   try {
     const { id } = req.params;
-    const { teacherId, academicYearId } = req.body;
+    const { teacherId, academicYearId, subjectId, periodsPerWeek } = req.body;
     
-    console.log('assignClassTeacher called:', { classId: id, teacherId, academicYearId });
+    console.log('assignClassTeacher called:', { classId: id, teacherId, academicYearId, subjectId, periodsPerWeek });
     
     // Find the class
     const classItem = await Class.findById(id);
@@ -540,6 +540,18 @@ exports.assignClassTeacher = async (req, res) => {
       return res.status(400).json({ message: 'Academic year not found' });
     }
     
+    // Validate subject if provided
+    let subject = null;
+    if (subjectId) {
+      if (!classItem.subjects.includes(subjectId)) {
+        return res.status(400).json({ message: 'Subject not assigned to this class' });
+      }
+      subject = await Subject.findById(subjectId);
+      if (!subject) {
+        return res.status(404).json({ message: 'Subject not found' });
+      }
+    }
+    
     // Check if teacher is already class teacher for another class in same academic year
     const existingAssignment = await StaffAssignment.findOne({
       staffId: teacherId,
@@ -560,6 +572,39 @@ exports.assignClassTeacher = async (req, res) => {
       existingAssignment.classTeacherOf = null;
       existingAssignment.classTeacherOfName = null;
       await existingAssignment.save();
+    }
+    
+    // Update subjectTeachers mapping in classItem if subjectId is provided
+    if (subjectId && subject) {
+      const existingIndex = classItem.subjectTeachers.findIndex(
+        st => st.subjectId?.toString() === subjectId
+      );
+      
+      const subjectTeacherData = {
+        subjectId,
+        teacherId,
+        teacherName: teacher.name,
+        periodsPerWeek: periodsPerWeek ? parseInt(periodsPerWeek) : 1
+      };
+      
+      if (existingIndex >= 0) {
+        const oldSubjectTeacher = classItem.subjectTeachers[existingIndex];
+        if (oldSubjectTeacher.teacherId && oldSubjectTeacher.teacherId.toString() !== teacherId) {
+          const oldStaffAssignment = await StaffAssignment.findOne({
+            staffId: oldSubjectTeacher.teacherId,
+            academicYearId: yearId
+          });
+          if (oldStaffAssignment) {
+            oldStaffAssignment.subjectsTaught = oldStaffAssignment.subjectsTaught.filter(
+              s => !(s.subjectId?.toString() === subjectId && s.classId?.toString() === id)
+            );
+            await oldStaffAssignment.save();
+          }
+        }
+        classItem.subjectTeachers[existingIndex] = subjectTeacherData;
+      } else {
+        classItem.subjectTeachers.push(subjectTeacherData);
+      }
     }
     
     // Update class
@@ -585,12 +630,36 @@ exports.assignClassTeacher = async (req, res) => {
     
     staffAssignment.classTeacherOf = classItem._id;
     staffAssignment.classTeacherOfName = displayName;
+    
+    // Add subject teaching to new teacher's assignment if provided
+    if (subjectId && subject) {
+      const subjectAssignmentIndex = staffAssignment.subjectsTaught.findIndex(
+        s => s.subjectId?.toString() === subjectId && s.classId?.toString() === id
+      );
+      
+      const subjectAssignmentData = {
+        subjectId,
+        subjectName: subject.name,
+        subjectCode: subject.code,
+        classId: id,
+        className: classItem.name,
+        section: classItem.section,
+        periodsPerWeek: periodsPerWeek ? parseInt(periodsPerWeek) : 1
+      };
+      
+      if (subjectAssignmentIndex >= 0) {
+        staffAssignment.subjectsTaught[subjectAssignmentIndex] = subjectAssignmentData;
+      } else {
+        staffAssignment.subjectsTaught.push(subjectAssignmentData);
+      }
+    }
+    
     await staffAssignment.save();
     
     // Create recent activity
     await createRecentActivity({
       title: `Class Teacher Assigned: ${displayName}`,
-      description: `${teacher.name} was assigned as class teacher for ${displayName}`,
+      description: `${teacher.name} was assigned as class teacher for ${displayName}${subject ? ` and to teach ${subject.name}` : ''}`,
       activityType: ACTIVITY_TYPES.CLASS_TEACHER_ASSIGNED,
       entityType: ENTITY_TYPES.CLASS,
       entityId: classItem._id,
@@ -602,7 +671,8 @@ exports.assignClassTeacher = async (req, res) => {
         className: displayName,
         teacherId: teacherId,
         teacherName: teacher.name,
-        previousTeacherId: oldTeacherId || null
+        previousTeacherId: oldTeacherId || null,
+        subject: subject ? { name: subject.name, code: subject.code, periodsPerWeek } : null
       },
       severity: SEVERITY.SUCCESS
     });
@@ -612,9 +682,9 @@ exports.assignClassTeacher = async (req, res) => {
       const notification = await Notification.create({
         userId: teacher.userId,
         title: 'Class Teacher Assignment',
-        message: `You have been assigned as class teacher for ${displayName}`,
+        message: `You have been assigned as class teacher for ${displayName}${subject ? ` and to teach ${subject.name}` : ''}`,
         type: 'success',
-        data: { classId: classItem._id, className: displayName }
+        data: { classId: classItem._id, className: displayName, subjectId: subjectId || null }
       });
       
       broadcastToUser(teacher.userId.toString(), 'notification', {

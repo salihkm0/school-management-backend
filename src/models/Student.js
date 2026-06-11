@@ -573,5 +573,14 @@ StudentSchema.index({ parentIds: 1 });
 StudentSchema.index({ studentCode: 1, dateOfBirth: 1 });
 
 // Check if model already exists before creating
-module.exports =
-  mongoose.models.Student || mongoose.model("Student", StudentSchema);
+// ── Indexes ──────────────────────────────────────────────────────────
+// classId + status: used by attendance, marks, and many other queries
+StudentSchema.index({ classId: 1, status: 1 });
+// admissionNo unique lookup
+StudentSchema.index({ admissionNo: 1 }, { sparse: true });
+// studentCode lookup
+StudentSchema.index({ studentCode: 1 });
+// academic year queries
+StudentSchema.index({ academicYearId: 1, status: 1 });
+
+module.exports = mongoose.models.Student || mongoose.model('Student', StudentSchema);

@@ -1063,15 +1063,15 @@ function parseWorkbook(workbook, subjectConfig, academicYear) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SHARED_SUBJECTS = [
-  { code: 'LAN',    label: 'Language',      maxMarks: 40 },
-  { code: 'MAL II', label: 'Malayalam II',  maxMarks: 40 },
-  { code: 'ENG',    label: 'English',       maxMarks: 40 },
-  { code: 'HIN',    label: 'Hindi',         maxMarks: 40 },
-  { code: 'SS',     label: 'Social Science',maxMarks: 40 },
-  { code: 'PHY',    label: 'Physics',       maxMarks: 40 },
-  { code: 'CHE',    label: 'Chemistry',     maxMarks: 40 },
-  { code: 'BIO',    label: 'Biology',       maxMarks: 40 },
-  { code: 'MATHS',  label: 'Maths',         maxMarks: 40 },
+  { code: 'LAN',    label: 'Language',      maxMarks: 50 },
+  { code: 'MAL II', label: 'Malayalam II',  maxMarks: 50 },
+  { code: 'ENG',    label: 'English',       maxMarks: 50 },
+  { code: 'HIN',    label: 'Hindi',         maxMarks: 50 },
+  { code: 'SS',     label: 'Social Science',maxMarks: 50 },
+  { code: 'PHY',    label: 'Physics',       maxMarks: 50 },
+  { code: 'CHE',    label: 'Chemistry',     maxMarks: 50 },
+  { code: 'BIO',    label: 'Biology',       maxMarks: 50 },
+  { code: 'MATHS',  label: 'Maths',         maxMarks: 50 },
 ];
 
 const PRESET_CONFIGS = {

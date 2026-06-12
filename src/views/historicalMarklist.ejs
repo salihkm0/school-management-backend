@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Marklist of Annual Evaluation</title>
+<title>Historical Marklist of Annual Evaluation</title>
 
 <style>
 @page {
@@ -37,6 +37,11 @@ html, body {
     background: #fff;
     display: flex;
     flex-direction: column;
+    page-break-after: always;
+}
+
+.page-container:last-child {
+    page-break-after: avoid;
 }
 
 /* Logo Watermark */
@@ -67,7 +72,6 @@ html, body {
     flex: 1;
 }
 
-/* Main content */
 .main-content {
     flex: 1;
 }
@@ -96,13 +100,6 @@ html, body {
     text-transform: uppercase;
     letter-spacing: 1px;
     margin-bottom: 3px;
-}
-
-.arabic-text {
-    font-size: 12px;
-    font-weight: bold;
-    margin-bottom: 5px;
-    color: #333;
 }
 
 .marklist-title {
@@ -172,11 +169,6 @@ html, body {
     font-weight: 900;
 }
 
-/* Percentage in Grade Column */
-.percentage-grade {
-    font-weight: 900;
-}
-
 /* Remarks Section */
 .remarks-section {
     margin-top: 40px;
@@ -196,13 +188,13 @@ html, body {
     margin-left: 5px;
 }
 
-/* Bottom Section - Fixed to bottom */
+/* Bottom Section */
 .bottom-section {
     margin-top: auto;
     padding-top: 10px;
 }
 
-/* Footer */
+/* Footer Signatures */
 .footer {
     display: flex;
     justify-content: space-between;
@@ -221,7 +213,7 @@ html, body {
     width: 100%;
 }
 
-/* Instructions Section - Below Signatures */
+/* Instructions Section */
 .instructions-section {
     margin-top: 5px;
     margin-bottom: 20px;
@@ -277,25 +269,25 @@ html, body {
         margin: 0;
         padding: 0;
     }
-    
+
     th {
         background: #f0f0f0 !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
-    
+
     .total-row td {
         background: #f0f0f0 !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
-    
+
     .page-container {
         border: 2px solid #000;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
-    
+
     .logo-watermark {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
@@ -306,18 +298,18 @@ html, body {
 
 <body>
 
-<% students.forEach(function(student, index) { %>
-<div class="page-container" style="<%= index > 0 ? 'page-break-before: always;' : '' %>">
-    
+<% students.forEach(function(student) { %>
+<div class="page-container">
+
     <!-- Logo Watermark -->
     <div class="logo-watermark">
         <img src="<%= schoolLogo %>" alt="Watermark">
     </div>
-    
+
     <div class="content-layer">
-        
+
         <div class="main-content">
-            
+
             <!-- Header -->
             <div class="header-section">
                 <div class="school-logo">
@@ -326,7 +318,7 @@ html, body {
                 <div class="school-name">P.P.M.H.S.S. KOTTUKKARA</div>
                 <div class="marklist-title">MARKLIST OF ANNUAL EVALUATION (<%= academicYear %>)</div>
             </div>
-            
+
             <!-- Student Info -->
             <div class="student-info">
                 <div class="info-row">
@@ -342,24 +334,24 @@ html, body {
                     <span class="info-value">: <%= student.admissionNo %></span>
                 </div>
             </div>
-            
+
             <!-- Marks Table -->
             <table class="marks-table">
                 <thead>
                     <tr>
                         <th>Subject</th>
-                        <th>Marks obtained</th>
+                        <th>Marks Obtained</th>
                         <th>Maximum Mark</th>
                         <th>Grade</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <% 
+                    <%
                     let totalObtained = 0;
                     let totalMax = 0;
-                    
+
                     student.subjects.forEach(function(subject) {
-                        totalObtained += subject.obtained;
+                        totalObtained += (typeof subject.obtained === 'number' ? subject.obtained : 0);
                         totalMax += subject.max;
                     %>
                     <tr>
@@ -369,9 +361,9 @@ html, body {
                         <td><%= subject.grade %></td>
                     </tr>
                     <% }); %>
-                    
+
                     <% const percentage = totalMax > 0 ? ((totalObtained / totalMax) * 100).toFixed(0) : 0; %>
-                    
+
                     <tr class="total-row">
                         <td><strong>Total</strong></td>
                         <td><strong><%= totalObtained %></strong></td>
@@ -380,18 +372,18 @@ html, body {
                     </tr>
                 </tbody>
             </table>
-            
+
             <!-- Remarks Section -->
             <div class="remarks-section">
                 <span class="remarks-label">Remarks :</span>
                 <span class="remarks-line"></span>
             </div>
-            
+
         </div>
-        
+
         <!-- Bottom Section -->
         <div class="bottom-section">
-            
+
             <!-- Signatures -->
             <div class="footer">
                 <div class="signature-item">
@@ -403,8 +395,8 @@ html, body {
                     <div class="signature-line"></div>
                 </div>
             </div>
-            
-            <!-- Instructions Section - Below Signatures -->
+
+            <!-- Instructions -->
             <div class="instructions-section">
                 <div class="instructions-title">Instructions :</div>
                 <ul class="instructions-list">
@@ -415,19 +407,19 @@ html, body {
                     <li>5. Duplicate marklist will be issued only on submission of proper application.</li>
                 </ul>
             </div>
-            
+
             <!-- Grade Legend and Generated Info -->
             <div class="bottom-info-row">
                 <div class="grade-legend">
-                    A+ : 90% & Above | A : 80-89% | B+ : 70-79% | B : 60-69% | C+ : 50-59% | C : 40-49% | D+ : 30-39% | D : 20-29% | E : Below 20%
+                    A+ : 90% &amp; Above | A : 80-89% | B+ : 70-79% | B : 60-69% | C+ : 50-59% | C : 40-49% | D+ : 30-39% | D : 20-29% | E : Below 20%
                 </div>
                 <div class="generated-info">
                     Generated on: <%= new Date().toLocaleDateString('en-IN') %>
                 </div>
             </div>
-            
+
         </div>
-        
+
     </div>
 </div>
 <% }); %>

@@ -4,6 +4,7 @@ const router = express.Router();
 const multer = require('multer');
 const { protect, authorize } = require('../middleware/auth');
 const ctrl = require('../controllers/historicalImportController');
+const pdfCtrl = require('../controllers/pdf/historicalMarklistController');
 
 // Store file in memory (no disk write needed — we parse immediately)
 const upload = multer({
@@ -30,8 +31,12 @@ router.use(protect, authorize('admin'));
 // Get preset subject configurations (class 8/9, class 10 SSLC)
 router.get('/presets', ctrl.getPresetConfigs);
 
+// ── PDF Routes (served by the isolated PDF controller) ──────────────────────
+
 // Individual student PDF (must be before /:id to avoid conflict)
-router.get('/student/:studentId/pdf', ctrl.generateStudentPDF);
+router.get('/student/:studentId/pdf', pdfCtrl.generateStudentPDF);
+
+// ── Data Routes ──────────────────────────────────────────────────────────────
 
 // Upload XLS file (all sheets imported in one batch)
 router.post('/upload', upload.single('file'), ctrl.uploadXLS);
@@ -48,8 +53,8 @@ router.get('/:id', ctrl.getImportById);
 // Query students within a batch (paginated + filterable)
 router.get('/:id/students', ctrl.getStudents);
 
-// Generate & download PDF marklist
-router.get('/:id/pdf', ctrl.generateMarklistPDF);
+// Generate & download PDF marklist (batch) — isolated PDF controller
+router.get('/:id/pdf', pdfCtrl.generateMarklistPDF);
 
 // Delete a batch and all its students
 router.delete('/:id', ctrl.deleteImport);

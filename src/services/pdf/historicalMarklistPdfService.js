@@ -39,27 +39,40 @@ function calculateGrade(obtained, maxMarks) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Subject ordering
 // ─────────────────────────────────────────────────────────────────────────────
-const SUBJECT_ORDER = [
-  'Language',
+const EXACT_SUBJECT_ORDER = [
+  'Language I',
   'Malayalam II',
   'English',
-  'Hindi',
   'Social Science',
+  'Hindi',
+  'Basic Science',
   'Physics',
   'Chemistry',
   'Biology',
   'Maths',
-  'Information Technology',
+  'Information Technology'
 ];
+
+function normalizeSubjectName(rawName) {
+  if (!rawName) return 'Unknown';
+  const lower = rawName.toLowerCase();
+  if (lower.includes('first language') || lower === 'lan' || lower === 'language' || lower.includes('language i')) return 'Language I';
+  if (lower.includes('malayalam ii') || lower.includes('mal 2') || lower.includes('malayalam 2') || lower === 'mal ii') return 'Malayalam II';
+  if (lower.includes('english') || lower === 'eng') return 'English';
+  if (lower.includes('social') || lower.includes('soc') || lower === 'ss') return 'Social Science';
+  if (lower.includes('hindi') || lower === 'hin') return 'Hindi';
+  if (lower.includes('physics') || lower === 'phy') return 'Physics';
+  if (lower.includes('chemistry') || lower === 'che') return 'Chemistry';
+  if (lower.includes('biology') || lower === 'bio') return 'Biology';
+  if (lower.includes('math') || lower === 'mathematics') return 'Maths';
+  if (lower.includes('information technology') || lower.includes('ict') || lower === 'it') return 'Information Technology';
+  return rawName;
+}
 
 function sortSubjects(list) {
   return [...list].sort((a, b) => {
-    const ai = SUBJECT_ORDER.findIndex(s =>
-      a.name.toLowerCase().includes(s.toLowerCase())
-    );
-    const bi = SUBJECT_ORDER.findIndex(s =>
-      b.name.toLowerCase().includes(s.toLowerCase())
-    );
+    const ai = EXACT_SUBJECT_ORDER.indexOf(a.name);
+    const bi = EXACT_SUBJECT_ORDER.indexOf(b.name);
     if (ai !== -1 && bi !== -1) return ai - bi;
     if (ai !== -1) return -1;
     if (bi !== -1) return 1;
@@ -74,36 +87,54 @@ function sortSubjects(list) {
 // No Result column.
 // ─────────────────────────────────────────────────────────────────────────────
 function buildSubjects(studentDoc) {
-  const MAX = 50;
-
   const rawSubjects = (studentDoc.subjects || []).map(subj => ({
-    name:     subj.subjectLabel || subj.subjectCode || 'Unknown',
+    name:     normalizeSubjectName(subj.subjectLabel || subj.subjectCode || 'Unknown'),
     obtained: subj.obtained !== undefined && subj.obtained !== null
               ? subj.obtained
               : 0,
-    max:      MAX,
+    max:      subj.maxMarks || 50,
     code:     (subj.subjectCode || '').toUpperCase().trim(),
   }));
 
   // Find MAL II mark to use for IT
   const malII = rawSubjects.find(s =>
-    s.code === 'MAL II' || s.name.toLowerCase().includes('malayalam ii')
+    s.code === 'MAL II' || s.name === 'Malayalam II'
   );
 
-  // Add IT subject using MAL II obtained mark
+  // Add IT subject using MAL II obtained mark and max marks
   const itSubject = {
     name:     'Information Technology',
     obtained: malII ? malII.obtained : 0,
-    max:      MAX,
+    max:      malII ? malII.max : 50,
     code:     'IT',
   };
 
-  // Build final list — include IT, set grades
-  const all = [...rawSubjects, itSubject].map(s => ({
+  let all = [...rawSubjects, itSubject];
+
+  // Combine Physics, Chemistry, Biology into Basic Science if they are max 25
+  const phy = all.find(s => s.name === 'Physics');
+  const che = all.find(s => s.name === 'Chemistry');
+  const bio = all.find(s => s.name === 'Biology');
+
+  if (phy && che && bio && phy.max === 25 && che.max === 25 && bio.max === 25) {
+    const basicSci = {
+      name: 'Basic Science',
+      obtained: (phy.obtained || 0) + (che.obtained || 0) + (bio.obtained || 0),
+      max: 75,
+      code: 'BASIC_SCI'
+    };
+    // Remove individual subjects
+    all = all.filter(s => s.name !== 'Physics' && s.name !== 'Chemistry' && s.name !== 'Biology');
+    // Add Basic Science
+    all.push(basicSci);
+  }
+
+  // Build final list — set grades
+  all = all.map(s => ({
     name:     s.name,
     obtained: s.obtained,
-    max:      MAX,
-    grade:    calculateGrade(s.obtained, MAX),
+    max:      s.max,
+    grade:    calculateGrade(s.obtained, s.max),
   }));
 
   return sortSubjects(all);
@@ -147,12 +178,22 @@ async function renderHtmlToPdf(html) {
  * @returns {Promise<Buffer>}
  */
 async function generateHistoricalMarklistPdf(studentDocs, batchDoc) {
-  const students = studentDocs.map(doc => ({
-    name:        doc.name,
-    class:       `${doc.grade} ${doc.division}`.trim(),
-    admissionNo: doc.admissionNo || '—',
-    subjects:    buildSubjects(doc),
-  }));
+  const students = studentDocs.map(doc => {
+    let displayClass = `${doc.grade} ${doc.division}`.trim();
+    if (doc.classCode) {
+      const match = doc.classCode.match(/^(\d+\s*[a-zA-Z]+)/);
+      if (match) {
+        displayClass = match[1].toUpperCase();
+      }
+    }
+    
+    return {
+      name:        doc.name,
+      class:       displayClass,
+      admissionNo: doc.admissionNo || '—',
+      subjects:    buildSubjects(doc),
+    };
+  });
 
   const templateData = {
     schoolLogo:   SCHOOL_LOGO_URL,

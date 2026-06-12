@@ -8,7 +8,7 @@ const SubjectScoreSchema = new mongoose.Schema(
     subjectCode: { type: String, required: true }, // e.g. 'LAN', 'ENG', 'MATHS'
     subjectLabel: { type: String, required: true }, // display label
     obtained: { type: Number, default: 0 },
-    maxMarks: { type: Number, default: 40 },
+    maxMarks: { type: Number, default: 50 },
   },
   { _id: false }
 );
@@ -71,7 +71,7 @@ const HistoricalImportSchema = new mongoose.Schema(
       {
         code: { type: String },         // e.g. 'LAN'
         label: { type: String },        // e.g. 'Language'
-        maxMarks: { type: Number, default: 40 },
+        maxMarks: { type: Number, default: 50 },
       },
     ],
 

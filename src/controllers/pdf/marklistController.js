@@ -340,16 +340,45 @@ exports.generateMarklistPDF = async (req, res) => {
       return res.status(404).json({ message: "No subject marks found for this student" });
     }
 
-    // Sort subjects in standard order
-    const subjectOrder = [
-      'First language', 'Malayalam', 'English', 'Hindi', 'Arabic', 'Urdu',
-      'Social Science', 'Science', 'Physics', 'Chemistry', 'Biology', 'Mathematics', 'Maths',
-      'Computer Science', 'ICT', 'Information Technology'
+    const EXACT_SUBJECT_ORDER = [
+      'Language I',
+      'Malayalam II',
+      'English',
+      'Social Science',
+      'Hindi',
+      'Basic Science',
+      'Physics',
+      'Chemistry',
+      'Biology',
+      'Maths',
+      'Information Technology'
     ];
 
+    function normalizeSubjectName(rawName) {
+      if (!rawName) return 'Unknown';
+      const lower = rawName.toLowerCase();
+      if (lower.includes('first language') || lower === 'lan' || lower === 'language' || lower.includes('language i')) return 'Language I';
+      if (lower.includes('malayalam ii') || lower.includes('mal 2') || lower.includes('malayalam 2') || lower === 'mal ii') return 'Malayalam II';
+      if (lower.includes('english') || lower === 'eng') return 'English';
+      if (lower.includes('social') || lower.includes('soc') || lower === 'ss') return 'Social Science';
+      if (lower.includes('hindi') || lower === 'hin') return 'Hindi';
+      if (lower.includes('physics') || lower === 'phy') return 'Physics';
+      if (lower.includes('chemistry') || lower === 'che') return 'Chemistry';
+      if (lower.includes('biology') || lower === 'bio') return 'Biology';
+      if (lower.includes('math') || lower === 'mathematics') return 'Maths';
+      if (lower.includes('information technology') || lower.includes('ict') || lower === 'it') return 'Information Technology';
+      return rawName;
+    }
+
+    // Normalize all names
+    subjects.forEach(s => {
+      s.name = normalizeSubjectName(s.name);
+    });
+
+    // Sort subjects in standard order
     subjects.sort((a, b) => {
-      const aIndex = subjectOrder.findIndex(s => a.name.toLowerCase().includes(s.toLowerCase()));
-      const bIndex = subjectOrder.findIndex(s => b.name.toLowerCase().includes(s.toLowerCase()));
+      const aIndex = EXACT_SUBJECT_ORDER.indexOf(a.name);
+      const bIndex = EXACT_SUBJECT_ORDER.indexOf(b.name);
       if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
       if (aIndex !== -1) return -1;
       if (bIndex !== -1) return 1;
@@ -450,16 +479,45 @@ exports.downloadMarklistPDF = async (req, res) => {
       return res.status(404).json({ message: "No subject marks found for this student" });
     }
 
-    // Sort subjects in standard order
-    const subjectOrder = [
-      'First language', 'Malayalam', 'English', 'Hindi', 'Arabic', 'Urdu',
-      'Social Science', 'Science', 'Physics', 'Chemistry', 'Biology', 'Mathematics', 'Maths',
-      'Computer Science', 'ICT', 'Information Technology'
+    const EXACT_SUBJECT_ORDER = [
+      'Language I',
+      'Malayalam II',
+      'English',
+      'Social Science',
+      'Hindi',
+      'Basic Science',
+      'Physics',
+      'Chemistry',
+      'Biology',
+      'Maths',
+      'Information Technology'
     ];
 
+    function normalizeSubjectName(rawName) {
+      if (!rawName) return 'Unknown';
+      const lower = rawName.toLowerCase();
+      if (lower.includes('first language') || lower === 'lan' || lower === 'language' || lower.includes('language i')) return 'Language I';
+      if (lower.includes('malayalam ii') || lower.includes('mal 2') || lower.includes('malayalam 2') || lower === 'mal ii') return 'Malayalam II';
+      if (lower.includes('english') || lower === 'eng') return 'English';
+      if (lower.includes('social') || lower.includes('soc') || lower === 'ss') return 'Social Science';
+      if (lower.includes('hindi') || lower === 'hin') return 'Hindi';
+      if (lower.includes('physics') || lower === 'phy') return 'Physics';
+      if (lower.includes('chemistry') || lower === 'che') return 'Chemistry';
+      if (lower.includes('biology') || lower === 'bio') return 'Biology';
+      if (lower.includes('math') || lower === 'mathematics') return 'Maths';
+      if (lower.includes('information technology') || lower.includes('ict') || lower === 'it') return 'Information Technology';
+      return rawName;
+    }
+
+    // Normalize all names
+    subjects.forEach(s => {
+      s.name = normalizeSubjectName(s.name);
+    });
+
+    // Sort subjects in standard order
     subjects.sort((a, b) => {
-      const aIndex = subjectOrder.findIndex(s => a.name.toLowerCase().includes(s.toLowerCase()));
-      const bIndex = subjectOrder.findIndex(s => b.name.toLowerCase().includes(s.toLowerCase()));
+      const aIndex = EXACT_SUBJECT_ORDER.indexOf(a.name);
+      const bIndex = EXACT_SUBJECT_ORDER.indexOf(b.name);
       if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
       if (aIndex !== -1) return -1;
       if (bIndex !== -1) return 1;

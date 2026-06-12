@@ -944,12 +944,19 @@ function extractSubjectScoresFixed(row, subjectConfig, layout) {
       const subj = subjectConfig[i];
       if (!subj) return null;
       const raw     = String(row[col] || '').trim();
-      const obtained = raw !== '' && !isNaN(Number(raw)) ? Number(raw) : 0;
+      let obtained  = raw !== '' && !isNaN(Number(raw)) ? Number(raw) : 0;
+      
+      const max = subj.maxMarks || 50;
+      if (obtained > 0) {
+        const ceMarks = max === 100 ? 20 : (max === 50 ? 10 : (max === 25 ? 5 : 0));
+        obtained += ceMarks;
+      }
+
       return {
         subjectCode:  subj.code,
         subjectLabel: subj.label,
-        obtained:     isNaN(obtained) ? 0 : obtained,
-        maxMarks:     subj.maxMarks || 40,
+        obtained:     obtained,
+        maxMarks:     max,
       };
     })
     .filter(Boolean);
@@ -1026,7 +1033,7 @@ function parseWorkbook(workbook, subjectConfig, academicYear) {
         total = subjects.reduce((s, x) => s + (x.obtained || 0), 0);
       }
 
-      const maxTotal = subjectConfig.reduce((s, c) => s + (c.maxMarks || 40), 0);
+      const maxTotal = subjectConfig.reduce((s, c) => s + (c.maxMarks || 50), 0);
 
       allStudents.push({
         slNo,

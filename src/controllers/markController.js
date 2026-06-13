@@ -490,7 +490,8 @@ exports.getMarksheetsByClass = async (req, res) => {
         // Merge existing marks with the new structure
         subjectsForStudent.forEach(studentSubj => {
           const existingSubj = existing.subjects.find(
-            s => s.subjectId?.toString() === studentSubj.examSubjectId?.toString()
+            s => s.subjectId?.toString() === studentSubj.examSubjectId?.toString() ||
+                 s.subjectId?.toString() === studentSubj.actualSubjectId?.toString()
           );
           if (existingSubj) {
             studentSubj.theoryScore = existingSubj.theoryScore || 0;

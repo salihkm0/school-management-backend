@@ -1,16 +1,14 @@
 const mongoose = require('mongoose');
 
 const EXAM_TYPES = {
-  FIRST: 'first',
-  SECOND: 'second',
-  FINAL: 'final',
-  MID: 'mid',
-  QUARTERLY: 'quarterly',
-  HALF_YEARLY: 'half_yearly',
+  UNIT_TEST_1: 'unit_test_1',
+  UNIT_TEST_2: 'unit_test_2',
+  FIRST_MID_TERM: 'first_mid_term',
+  FIRST_TERM: 'first_term',
+  SECOND_MID_TERM: 'second_mid_term',
+  SECOND_TERM: 'second_term',
+  MODEL: 'model',
   ANNUAL: 'annual',
-  UNIT_TEST: 'unit_test',
-  CLASS_TEST: 'class_test',
-  SUBJECT_EXAM: 'subject_exam',
   CUSTOM: 'custom'
 };
 
@@ -339,10 +337,14 @@ const ExamSchema = new mongoose.Schema({
 // Virtuals
 ExamSchema.virtual('displayName').get(function() {
   const typeNames = {
-    first: 'First Term', second: 'Second Term', final: 'Final',
-    mid: 'Mid Term', quarterly: 'Quarterly', half_yearly: 'Half Yearly',
-    annual: 'Annual', unit_test: 'Unit Test', class_test: 'Class Test',
-    subject_exam: 'Subject Exam'
+    unit_test_1: 'Unit Test 1',
+    unit_test_2: 'Unit Test 2',
+    first_mid_term: 'First mid term examination',
+    first_term: 'First term Examination',
+    second_mid_term: 'Second mid term examination',
+    second_term: 'Second term examination',
+    model: 'Model examination',
+    annual: 'Annual examination'
   };
   
   if (this.examType !== 'custom') {

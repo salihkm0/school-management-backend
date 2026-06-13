@@ -807,16 +807,14 @@ exports.getExamTypes = async (req, res) => {
     success: true,
     data: {
       predefined: [
-        { value: 'first', label: 'First Term Exam' },
-        { value: 'second', label: 'Second Term Exam' },
-        { value: 'final', label: 'Final Exam' },
-        { value: 'mid', label: 'Mid Term Exam' },
-        { value: 'quarterly', label: 'Quarterly Exam' },
-        { value: 'half_yearly', label: 'Half Yearly Exam' },
-        { value: 'annual', label: 'Annual Exam' },
-        { value: 'unit_test', label: 'Unit Test' },
-        { value: 'class_test', label: 'Class Test' },
-        { value: 'subject_exam', label: 'Subject Exam' }
+        { value: 'unit_test_1', label: 'Unit Test 1' },
+        { value: 'unit_test_2', label: 'Unit Test 2' },
+        { value: 'first_mid_term', label: 'First mid term examination' },
+        { value: 'first_term', label: 'First term Examination' },
+        { value: 'second_mid_term', label: 'Second mid term examination' },
+        { value: 'second_term', label: 'Second term examination' },
+        { value: 'model', label: 'Model examination' },
+        { value: 'annual', label: 'Annual examination' }
       ],
       custom: { value: 'custom', label: 'Custom Exam' }
     }
@@ -1235,6 +1233,46 @@ exports.getExamAnalytics = async (req, res) => {
         isFullyFinalized: true
       });
       
+      const classAllMarks = await Mark.find({
+        examId: exam._id,
+        classId: classStatus.classId
+      });
+      
+      const subjectProgress = exam.subjects.map(subject => {
+        const expectedMarks = students.length;
+        const subjIdStr = subject.subjectId ? subject.subjectId.toString() : '';
+        const currentMarks = classAllMarks.filter(m => {
+          if (!m.subjects || !Array.isArray(m.subjects)) return false;
+          
+          // Try to find the subject in the mark document
+          // Match by subjectId, examSubjectId (if any), or subjectName as fallback
+          const s = m.subjects.find(sub => 
+            (sub.subjectId && sub.subjectId.toString() === subjIdStr) ||
+            (sub.examSubjectId && sub.examSubjectId.toString() === subjIdStr) ||
+            (sub.subjectName === subject.subjectName)
+          );
+          
+          // Check if it's considered "entered"
+          // We check isEntered (new format) OR if any score > 0 OR if marked absent (legacy format)
+          return s && (
+            s.isEntered === true || 
+            (s.theoryScore != null && s.theoryScore > 0) || 
+            (s.practicalScore != null && s.practicalScore > 0) || 
+            (s.ceScore != null && s.ceScore > 0) || 
+            s.isAbsent === true
+          );
+        }).length;
+        
+        const percentage = expectedMarks > 0 ? Math.round((currentMarks / expectedMarks) * 100) : 0;
+        return {
+          subjectId: subject.subjectId,
+          subjectName: subject.subjectName,
+          expectedMarks,
+          currentMarks,
+          percentage
+        };
+      });
+      
       const studentMarksMap = new Map();
       for (const mark of marks) {
         if (!studentMarksMap.has(mark.studentId.toString())) {
@@ -1260,6 +1298,10 @@ exports.getExamAnalytics = async (req, res) => {
       const classTotalMarks = studentPercentages.reduce((sum, s) => sum + s.totalMarks, 0);
       const classTotalMax = studentPercentages.reduce((sum, s) => sum + s.maxMarks, 0);
       
+      const totalExpected = subjectProgress.reduce((sum, sp) => sum + sp.expectedMarks, 0);
+      const totalEntered = subjectProgress.reduce((sum, sp) => sum + sp.currentMarks, 0);
+      const completionPercentage = totalExpected > 0 ? Math.round((totalEntered / totalExpected) * 100) : 0;
+      
       totalStudentsOverall += students.length;
       totalMarksOverall += classTotalMarks;
       totalMaxOverall += classTotalMax;
@@ -1270,6 +1312,8 @@ exports.getExamAnalytics = async (req, res) => {
         section: classInfo?.section,
         totalStudents: students.length,
         marksEntered: studentMarksMap.size,
+        completionPercentage,
+        subjectProgress: subjectProgress,
         totalMarks: classTotalMarks,
         totalMaxMarks: classTotalMax,
         averagePercentage: studentPercentages.length > 0 

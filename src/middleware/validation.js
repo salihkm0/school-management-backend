@@ -122,8 +122,10 @@ const examValidation = [
   body('startDate').isISO8601().withMessage('Valid start date required'),
   body('endDate').isISO8601().withMessage('Valid end date required'),
   body('classIds').isArray().withMessage('Classes must be an array'),
-  body('term').isIn(['first', 'second', 'final', 'mid', 'quarterly', 'half_yearly', 'annual'])
-    .withMessage('Invalid term')
+  body('term').optional().isIn(['first', 'second', 'third', 'fourth'])
+    .withMessage('Invalid term'),
+  body('examType').optional().isIn(['unit_test_1', 'unit_test_2', 'first_mid_term', 'first_term', 'second_mid_term', 'second_term', 'model', 'annual', 'custom'])
+    .withMessage('Invalid exam type')
 ];
 
 const markValidation = [

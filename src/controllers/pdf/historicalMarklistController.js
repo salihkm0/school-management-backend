@@ -9,6 +9,7 @@ const {
 const {
   generateHistoricalMarklistPdf,
 } = require('../../services/pdf/historicalMarklistPdfService');
+const { pdfQueue } = require('../../services/queue/jobQueue');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BATCH PDF — GET /api/historical-imports/:id/pdf
@@ -43,21 +44,20 @@ exports.generateMarklistPDF = async (req, res) => {
         .json({ message: 'No students found for the given filters' });
     }
 
-    const pdfBuffer = await generateHistoricalMarklistPdf(students, batch);
-
-    const parts = [batch.academicYear || 'Historical'];
-    if (grade)     parts.push(`Grade${grade}`);
-    if (division)  parts.push(division);
-    if (sheetName) parts.push(sheetName.replace(/\s+/g, '_'));
-    const filename = `HistoricalMarklist_${parts.join('_')}.pdf`;
-
-    res.set({
-      'Content-Type':        'application/pdf',
-      'Content-Disposition': `attachment; filename="${filename}"`,
-      'Content-Length':      pdfBuffer.length,
-      'Cache-Control':       'no-cache',
+    const job = await pdfQueue.add('historical-marklist-batch', {
+      type: 'historical-marklist-batch',
+      payload: {
+        importId: req.params.id,
+        grade,
+        division,
+        sheetName
+      }
     });
-    return res.send(pdfBuffer);
+
+    return res.status(202).json({ 
+      message: 'PDF generation started in background', 
+      jobId: job.id 
+    });
   } catch (err) {
     console.error('[historicalMarklistController] generateMarklistPDF error:', err);
     return res.status(500).json({ message: err.message });
@@ -79,20 +79,17 @@ exports.generateStudentPDF = async (req, res) => {
       return res.status(404).json({ message: 'Import batch not found' });
     }
 
-    const pdfBuffer = await generateHistoricalMarklistPdf([student], batch);
-
-    const safeName = (student.name || 'Student')
-      .replace(/[^a-zA-Z0-9\s]/g, '')
-      .replace(/\s+/g, '_');
-    const filename = `MarkSheet_${safeName}_${student.admissionNo || student._id}.pdf`;
-
-    res.set({
-      'Content-Type':        'application/pdf',
-      'Content-Disposition': `attachment; filename="${filename}"`,
-      'Content-Length':      pdfBuffer.length,
-      'Cache-Control':       'no-cache',
+    const job = await pdfQueue.add('historical-marklist-student', {
+      type: 'historical-marklist-student',
+      payload: {
+        studentId: req.params.studentId
+      }
     });
-    return res.send(pdfBuffer);
+
+    return res.status(202).json({ 
+      message: 'PDF generation started in background', 
+      jobId: job.id 
+    });
   } catch (err) {
     console.error('[historicalMarklistController] generateStudentPDF error:', err);
     return res.status(500).json({ message: err.message });

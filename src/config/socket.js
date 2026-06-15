@@ -1172,6 +1172,7 @@ async function sendPendingNotifications(socket, userId) {
   try {
     const pendingNotifications = await Notification.find({
       userId,
+      isRead: false,
       deliveredAt: null,
       createdAt: { $lt: new Date(Date.now() - 5000) },
     })

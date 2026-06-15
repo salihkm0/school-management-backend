@@ -5,11 +5,11 @@ const { getAllUsers, getUsersByRole, getParentsByClass } = require('../controlle
 
 router.use(protect);
 
-// Get all users (admin only)
-router.get('/', authorize('admin'), getAllUsers);
+// Get all users (admin & staff)
+router.get('/', authorize('admin', 'staff'), getAllUsers);
 
-// Get users by role (admin only)
-router.get('/role/:role', authorize('admin'), getUsersByRole);
+// Get users by role (admin & staff)
+router.get('/role/:role', authorize('admin', 'staff'), getUsersByRole);
 
 // Get parents by class (class teacher & admin)
 router.get('/parents/class/:classId', getParentsByClass);

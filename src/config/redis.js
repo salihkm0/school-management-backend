@@ -103,7 +103,7 @@ const connectRedis = async () => {
     if (upstashRestUrl && process.env.UPSTASH_REDIS_REST_TOKEN) {
       // Convert Upstash REST URL to Redis protocol
       const url = new URL(upstashRestUrl);
-      redisUrl = `redis://default:${process.env.UPSTASH_REDIS_REST_TOKEN}@${url.hostname}:${url.port || 6379}`;
+      redisUrl = `rediss://default:${process.env.UPSTASH_REDIS_REST_TOKEN}@${url.hostname}:${url.port || 6379}`;
       logger.info('📡 Configuring Upstash Redis connection');
     } 
     else if (standardRedisUrl) {

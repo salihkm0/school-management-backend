@@ -174,11 +174,10 @@ td {
 /* Main table column widths */
 .main-table th:nth-child(1), .main-table td:nth-child(1) { width: 5%; }
 .main-table th:nth-child(2), .main-table td:nth-child(2) { width: 8%; }
-.main-table th:nth-child(3), .main-table td:nth-child(3) { width: 22%; text-align: left; padding-left: 4px; }
-.main-table th:nth-child(4), .main-table td:nth-child(4) { width: 15%; }
-.main-table th:nth-child(5), .main-table td:nth-child(5) { width: 5%; }
-.main-table th:nth-child(6), .main-table td:nth-child(6) { width: 10%; }
-.main-table th:nth-child(7), .main-table td:nth-child(7) { width: 5%; }
+.main-table th:nth-child(3), .main-table td:nth-child(3) { width: 37%; text-align: left; padding-left: 4px; }
+.main-table th:nth-child(4), .main-table td:nth-child(4) { width: 5%; }
+.main-table th:nth-child(5), .main-table td:nth-child(5) { width: 10%; }
+.main-table th:nth-child(6), .main-table td:nth-child(6) { width: 5%; }
 
 /* Bottom Section - Fixed to bottom */
 .bottom-section {
@@ -420,7 +419,6 @@ for (let page = 0; page < totalPages; page++) {
                         <th>Sl no</th>
                         <th>Adm No</th>
                         <th>Name of Pupil</th>
-                        <th>UID/EID</th>
                         <th>B/G</th>
                         <th>Category</th>
                         <th>Y/N</th>
@@ -435,7 +433,6 @@ for (let page = 0; page < totalPages; page++) {
                         <td><%= slNo %></td>
                         <td><%= student.admissionNo %></td>
                         <td style="text-align: left; padding-left: 4px;"><%= student.name %></td>
-                        <td><%= student.uid || '-' %></td>
                         <td><%= gender %></td>
                         <td><%= student.category || 'General' %></td>
                         <td>&nbsp;</td>

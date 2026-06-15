@@ -54,6 +54,7 @@ const {
   sendAttendanceNotification,
   sendDutyNotification,
   getUserNotifications,
+  getSentNotifications,
   markAsRead,
   markAllAsRead,
   deleteNotification,
@@ -68,6 +69,7 @@ router.delete('/register-token', protect, unregisterFcmToken);
 
 // User's own notifications
 router.get('/', protect, getUserNotifications);
+router.get('/sent', protect, getSentNotifications);
 router.put('/mark-all-read', protect, markAllAsRead);
 router.put('/:id/read', protect, markAsRead);
 router.delete('/:id', protect, deleteNotification);
@@ -75,14 +77,14 @@ router.delete('/:id', protect, deleteNotification);
 // Staff can send marks notifications
 router.post('/marks', protect, authorize('staff', 'admin'), sendMarksNotification);
 
-// Admin only routes
-router.post('/user/:userId', protect, authorize('admin'), sendToUser);
-router.post('/class/:classId', protect, authorize('admin'), sendToClass);
-router.post('/role/:role', protect, authorize('admin'), sendToRole);
-router.post('/bulk', protect, authorize('admin'), sendBulk);
-router.post('/exam', protect, authorize('admin'), sendExamNotification);
-router.post('/attendance', protect, authorize('admin'), sendAttendanceNotification);
-router.post('/duty', protect, authorize('admin'), sendDutyNotification);
+// Admin and Staff routes
+router.post('/user/:userId', protect, authorize('admin', 'staff'), sendToUser);
+router.post('/class/:classId', protect, authorize('admin', 'staff'), sendToClass);
+router.post('/role/:role', protect, authorize('admin', 'staff'), sendToRole);
+router.post('/bulk', protect, authorize('admin', 'staff'), sendBulk);
+router.post('/exam', protect, authorize('admin', 'staff'), sendExamNotification);
+router.post('/attendance', protect, authorize('admin', 'staff'), sendAttendanceNotification);
+router.post('/duty', protect, authorize('admin', 'staff'), sendDutyNotification);
 
 router.post('/test-push', protect, authorize('admin'), sendTestPush);
 

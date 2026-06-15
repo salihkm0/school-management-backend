@@ -107,6 +107,39 @@ exports.getUserNotifications = async (req, res) => {
   }
 };
 
+// @desc    Get notifications sent by user
+// @route   GET /api/notifications/sent
+// @access  Private
+exports.getSentNotifications = async (req, res) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    
+    const query = { senderId: req.user.id };
+    
+    const notifications = await Notification.find(query)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit))
+      .populate('userId', 'fullName role');
+    
+    const total = await Notification.countDocuments(query);
+    
+    res.json({
+      success: true,
+      data: notifications,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Error getting sent notifications:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // @desc    Mark notification as read
 // @route   PUT /api/notifications/:id/read
 // @access  Private
@@ -182,6 +215,7 @@ exports.sendToUser = async (req, res) => {
     const { title, message, type, data } = req.body;
     
     const notification = await Notification.create({
+      senderId: req.user.id,
       userId,
       title,
       message,
@@ -240,6 +274,7 @@ exports.sendToClass = async (req, res) => {
     const notifications = [];
     for (const userId of parentIds) {
       const notification = await Notification.create({
+      senderId: req.user.id,
         userId,
         title,
         message,
@@ -301,6 +336,7 @@ exports.sendToRole = async (req, res) => {
     const notifications = [];
     for (const user of users) {
       const notification = await Notification.create({
+      senderId: req.user.id,
         userId: user._id,
         title,
         message,
@@ -359,6 +395,7 @@ exports.sendBulk = async (req, res) => {
     const notifications = [];
     for (const userId of userIds) {
       const notification = await Notification.create({
+      senderId: req.user.id,
         userId,
         title,
         message,
@@ -416,11 +453,12 @@ exports.sendExamNotification = async (req, res) => {
     const notifications = [];
     for (const userId of allUserIds) {
       const notification = await Notification.create({
+      senderId: req.user.id,
         userId,
         title: `Exam Update: ${examName}`,
         message,
         type: type || 'info',
-        data: { examId, examName, classIds }
+        data: { examId, examName, classIds, link: '/exams' }
       });
       notifications.push(notification);
       
@@ -431,7 +469,7 @@ exports.sendExamNotification = async (req, res) => {
         title: `Exam Update: ${examName}`,
         message,
         type: type || 'info',
-        data: { examId, examName, classIds },
+        data: { examId, examName, classIds, link: '/exams' },
         timestamp: notification.createdAt,
         createdAt: notification.createdAt,
         read: false,
@@ -442,6 +480,7 @@ exports.sendExamNotification = async (req, res) => {
         notificationId: notification._id.toString(),
         examId,
         examName,
+        link: '/exams',
         type: type || 'info'
       });
     }
@@ -470,11 +509,12 @@ exports.sendMarksNotification = async (req, res) => {
     const notifications = [];
     for (const parentId of parentIds) {
       const notification = await Notification.create({
+      senderId: req.user.id,
         userId: parentId,
         title: `Marks Updated: ${subjectName}`,
         message: `${studentName} scored ${marksObtained}/${maxMarks} (${percentage.toFixed(1)}%) in ${examName}`,
         type: percentage >= 40 ? 'success' : 'warning',
-        data: { studentId, studentName, examId, examName, subjectName, marksObtained, maxMarks, percentage, grade }
+        data: { studentId, studentName, examId, examName, subjectName, marksObtained, maxMarks, percentage, grade, link: '/exams' }
       });
       notifications.push(notification);
       
@@ -508,6 +548,7 @@ exports.sendMarksNotification = async (req, res) => {
         `${studentName} scored ${marksObtained}/${maxMarks} in ${examName}`, {
         notificationId: notification._id.toString(),
         type: 'marks',
+        link: '/exams',
         studentId,
         examId
       });
@@ -536,11 +577,12 @@ exports.sendAttendanceNotification = async (req, res) => {
     const notifications = [];
     for (const parentId of parentIds) {
       const notification = await Notification.create({
+      senderId: req.user.id,
         userId: parentId,
         title: `Attendance Report - ${monthName} ${year}`,
         message: `${studentName} has ${attendancePercentage.toFixed(1)}% attendance in ${monthName}. Status: ${status}`,
         type: attendancePercentage >= 75 ? 'success' : (attendancePercentage >= 60 ? 'warning' : 'error'),
-        data: { studentId, studentName, month, year, attendancePercentage, classId, status }
+        data: { studentId, studentName, month, year, attendancePercentage, classId, status, link: '/attendance' }
       });
       notifications.push(notification);
       
@@ -571,6 +613,7 @@ exports.sendAttendanceNotification = async (req, res) => {
         `${studentName} has ${attendancePercentage.toFixed(1)}% attendance`, {
         notificationId: notification._id.toString(),
         type: 'attendance',
+        link: '/attendance',
         studentId,
         classId
       });
@@ -608,11 +651,12 @@ exports.sendDutyNotification = async (req, res) => {
     };
     
     const notification = await Notification.create({
+      senderId: req.user.id,
       userId: staffId,
       title: `Duty Assignment: ${dutyTypeNames[dutyType] || 'Duty'}`,
       message: `You have been assigned ${dutyTypeNames[dutyType] || 'duty'} for ${className} on ${formattedDate}.`,
       type: 'info',
-      data: { staffId, staffName, className, dutyDate, dutyType, dutyId }
+      data: { staffId, staffName, className, dutyDate, dutyType, dutyId, link: '/staff/dashboard' }
     });
     
     broadcastToUser(staffId, 'duty:assigned', {
@@ -640,6 +684,7 @@ exports.sendDutyNotification = async (req, res) => {
       `You have been assigned duty for ${className} on ${formattedDate}`, {
       notificationId: notification._id.toString(),
       type: 'duty',
+      link: '/staff/dashboard',
       dutyId,
       dutyType
     });

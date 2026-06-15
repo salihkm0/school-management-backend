@@ -6,6 +6,11 @@ const NotificationSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  senderId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: false
+  },
   title: {
     type: String,
     required: true
@@ -29,11 +34,15 @@ const NotificationSchema = new mongoose.Schema({
   },
   readAt: {
     type: Date
+  },
+  deliveredAt: {
+    type: Date
   }
 }, {
   timestamps: true
 });
 
 NotificationSchema.index({ userId: 1, isRead: 1, createdAt: -1 });
+NotificationSchema.index({ senderId: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Notification', NotificationSchema);

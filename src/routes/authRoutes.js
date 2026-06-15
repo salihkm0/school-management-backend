@@ -10,6 +10,7 @@ const {
   forgotPassword,
   resetPassword,
   changePassword,
+  updateProfile,
   getMe
 } = require('../controllers/authController');
 
@@ -24,6 +25,7 @@ router.put('/reset-password/:token', resetPassword);
 router.use(protect);
 router.post('/logout', logout);
 router.put('/change-password', changePassword);
+router.put('/profile', updateProfile);
 router.get('/me', getMe);
 
 module.exports = router;

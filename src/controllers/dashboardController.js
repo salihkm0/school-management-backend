@@ -299,12 +299,13 @@ exports.getStaffDashboard = async (req, res) => {
     
     const currentYear = await AcademicYear.findOne({ isCurrent: true });
     
-    // Get classes where staff is class teacher
-    const classTeacherClasses = await Class.find({
+    // Get class where staff is class teacher
+    const classTeacherClass = await Class.findOne({
       classTeacherId: staff._id,
       isActive: true,
       academicYearId: currentYear?._id
     }).populate('subjects', 'name code');
+    const classTeacherClasses = classTeacherClass ? [classTeacherClass] : [];
     
     // Get staff assignment for current year
     const staffAssignment = await StaffAssignment.findOne({
@@ -418,13 +419,26 @@ exports.getStaffDashboard = async (req, res) => {
       }
     }
     
-    // Check for pending marks entry
     const pendingExams = await Exam.find({
       classIds: { $in: classTeacherClasses.map(c => c._id) },
       overallStatus: 'draft',
       endDate: { $lt: new Date() },
       isActive: true
     }).limit(5);
+
+    // Ready Reports (Exams where results are published or submitted/ready)
+    const completedExams = await Exam.find({
+      classIds: { $in: classTeacherClasses.map(c => c._id) },
+      overallStatus: 'published',
+      isActive: true
+    }).limit(5);
+    
+    const readyReports = completedExams.map(exam => ({
+      id: exam._id,
+      name: exam.displayName || exam.name,
+      classId: exam.classIds[0],
+      date: exam.endDate
+    }));
     
     for (const exam of pendingExams) {
       pendingTasks.push({
@@ -539,15 +553,21 @@ exports.getStaffDashboard = async (req, res) => {
         pendingTasks: pendingTasks.slice(0, 5),
         upcomingDuties: formattedDuties.slice(0, 10),
         recentActivities: formattedStaffActivities,
-        classTeacherInfo: classTeacherClasses.length > 0 ? {
-          classes: classTeacherClasses.map(c => ({
-            id: c._id,
-            name: c.displayName || `${c.name}-${c.section}`,
-            studentCount: c.studentCount || 0
-          })),
+          classTeacherInfo: classTeacherClass ? {
+          class: {
+            id: classTeacherClass._id,
+            name: classTeacherClass.displayName || `${classTeacherClass.name}-${classTeacherClass.section}`,
+            studentCount: totalStudents
+          },
           averageAttendance: averageAttendance.toFixed(1),
-          pendingParentRequests
+          pendingParentRequests,
+          readyReports
         } : null,
+        subjectClasses: teachingClasses.map(c => ({
+          id: c._id,
+          name: c.displayName || `${c.name}-${c.section}`,
+          subjects: subjectsTaught.filter(s => s.classId?._id?.toString() === c._id.toString()).map(s => s.subjectId?.name || s.subjectName).filter((value, index, self) => self.indexOf(value) === index)
+        })),
         academicYear: currentYear ? {
           id: currentYear._id,
           name: currentYear.name,

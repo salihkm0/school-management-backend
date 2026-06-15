@@ -220,8 +220,35 @@ exports.getExams = async (req, res) => {
     if (academicYear) query.academicYear = academicYear;
     if (examType) query.examType = examType;
     if (term) query.term = term;
-    if (overallStatus) query.overallStatus = overallStatus;
     if (isActive !== undefined) query.isActive = isActive === 'true';
+
+    // Apply staff visibility filtering
+    if (req.user.role === 'staff') {
+      const staffAssignment = await StaffAssignment.findOne({ staffId: req.user.id });
+      let myClassIds = [];
+      if (staffAssignment) {
+        if (staffAssignment.classTeacherClassId) {
+          myClassIds.push(staffAssignment.classTeacherClassId.toString());
+        }
+        if (staffAssignment.teachingAssignments && staffAssignment.teachingAssignments.length > 0) {
+          staffAssignment.teachingAssignments.forEach(ta => {
+            if (ta.classIds && ta.classIds.length > 0) {
+              ta.classIds.forEach(id => myClassIds.push(id.toString()));
+            }
+          });
+        }
+      }
+      myClassIds = [...new Set(myClassIds)];
+      
+      if (myClassIds.length > 0) {
+        query.$or = [
+          { classIds: { $in: myClassIds } },
+          { createdBy: req.user.id }
+        ];
+      } else {
+        query.createdBy = req.user.id;
+      }
+    }
 
     const exams = await Exam.find(query)
       .populate('classIds', 'name section displayName')
@@ -723,6 +750,11 @@ exports.updateExam = async (req, res) => {
       return res.status(404).json({ message: 'Exam not found' });
     }
 
+    // Access control: Only admin or the creator can edit
+    if (req.user.role !== 'admin' && oldExam.createdBy.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Only the creator of the exam or an admin can modify it' });
+    }
+
     const hasMarks = await Mark.exists({ examId: req.params.id });
     if (hasMarks && (req.body.subjects || req.body.schedule)) {
       return res.status(400).json({ 
@@ -767,6 +799,11 @@ exports.deleteExam = async (req, res) => {
     
     if (!exam) {
       return res.status(404).json({ message: 'Exam not found' });
+    }
+
+    // Access control: Only admin or the creator can delete
+    if (req.user.role !== 'admin' && exam.createdBy.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Only the creator of the exam or an admin can delete it' });
     }
 
     const hasMarks = await Mark.exists({ examId: req.params.id });

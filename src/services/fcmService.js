@@ -80,6 +80,11 @@ const sendToDevice = async (token, title, body, data = {}, options = {}) => {
           },
         },
       },
+      webpush: {
+        fcmOptions: {
+          link: data?.link || '/',
+        },
+      },
       token,
       ...options,
     };

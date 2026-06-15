@@ -182,9 +182,8 @@ html, body {
 /* Column widths */
 .main-table .sl-col { width: 6%; }
 .main-table .adm-col { width: 8%; }
-.main-table .name-col { width: 22%; text-align: left; padding-left: 4px; }
-.main-table .uid-col { width: 15%; }
-.main-table .parent-col { width: 24%; text-align: left; padding-left: 4px; }
+.main-table .name-col { width: 29%; text-align: left; padding-left: 4px; }
+.main-table .parent-col { width: 32%; text-align: left; padding-left: 4px; }
 .main-table .qty-col { width: 10%; }
 .main-table .sign-col { width: 15%; }
 
@@ -341,7 +340,6 @@ for (let page = 0; page < totalPages; page++) {
                         <th class="sl-col">Sl No</th>
                         <th class="adm-col">Adm. No</th>
                         <th class="name-col">Name of Student</th>
-                        <th class="uid-col">UID</th>
                         <th class="parent-col">Name of Parent</th>
                         <th class="qty-col">Quantity<br>of Rice</th>
                         <th class="sign-col">Signature</th>
@@ -355,7 +353,6 @@ for (let page = 0; page < totalPages; page++) {
                         <td><%= slNo %></td>
                         <td><%= student.admissionNo %></td>
                         <td style="text-align: left; padding-left: 4px;"><%= student.name %></td>
-                        <td><%= student.uid || '-' %></td>
                         <td style="text-align: left; padding-left: 4px;"><%= student.parentName %></td>
                         <td>&nbsp;</td>
                         <td>&nbsp;</td>

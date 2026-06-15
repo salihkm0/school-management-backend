@@ -469,3 +469,78 @@ exports.getMe = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+exports.updateProfile = async (req, res) => {
+  try {
+    const { name, phone, email } = req.body;
+    const user = await User.findById(req.user.id);
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check if new email/phone is already taken
+    if (email && email !== user.email) {
+      const emailExists = await User.findOne({ email });
+      if (emailExists) {
+        return res.status(400).json({ message: 'Email already in use' });
+      }
+    }
+    
+    if (phone && phone !== user.phone) {
+      const phoneExists = await User.findOne({ phone });
+      if (phoneExists) {
+        return res.status(400).json({ message: 'Phone number already in use' });
+      }
+    }
+
+    // Update User model
+    if (name) user.name = name;
+    if (phone) user.phone = phone;
+    if (email) user.email = email;
+    await user.save();
+
+    // Sync with corresponding role collections
+    if (user.role === 'staff') {
+      await Staff.findOneAndUpdate(
+        { userId: user._id },
+        { name: user.name, contact: user.phone },
+        { new: true }
+      );
+    } else if (user.role === 'parent') {
+      await Parent.findOneAndUpdate(
+        { userId: user._id },
+        { fullName: user.name, phone: user.phone, email: user.email },
+        { new: true }
+      );
+    }
+
+    await createRecentActivity({
+      title: `Profile Updated: ${user.name}`,
+      description: `User ${user.name} updated their profile information`,
+      activityType: ACTIVITY_TYPES.USER_UPDATED || 'user_updated',
+      entityType: ENTITY_TYPES.USER || 'user',
+      entityId: user._id,
+      entityModel: 'User',
+      performedBy: user._id,
+      performedByName: user.name,
+      performedByRole: user.role,
+      severity: SEVERITY.INFO || 'info'
+    });
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: {
+        id: user._id,
+        email: user.email,
+        phone: user.phone,
+        name: user.name,
+        role: user.role,
+        photoUrl: user.photoUrl
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

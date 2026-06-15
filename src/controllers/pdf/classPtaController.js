@@ -72,7 +72,8 @@ exports.generateClassPtaPDF = async (req, res) => {
 
     const studentList = students.map(student => ({
       admissionNo: student.admissionNo || '-',
-      name: student.fullName || student.name || '-'
+      name: student.fullName || student.name || '-',
+      parentName: student.fatherFullName || student.guardian || ''
     }));
 
     const templateData = {
@@ -150,7 +151,8 @@ exports.downloadClassPtaPDF = async (req, res) => {
 
     const studentList = students.map(student => ({
       admissionNo: student.admissionNo || '-',
-      name: student.fullName || student.name || '-'
+      name: student.fullName || student.name || '-',
+      parentName: student.fatherFullName || student.guardian || ''
     }));
 
     const templateData = {

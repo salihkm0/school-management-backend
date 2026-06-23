@@ -58,6 +58,7 @@ const searchRoutes = require('./src/routes/searchRoutes');
 const reportCardRoutes = require('./src/routes/pdf/reportCardRoutes');
 const historicalImportRoutes = require('./src/routes/historicalImportRoutes');
 const jobRoutes = require('./src/routes/jobRoutes');
+const appConfigRoutes = require('./src/routes/appConfigRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -231,6 +232,9 @@ app.use('/api/historical-imports', historicalImportRoutes);
 
 // Background Jobs route
 app.use('/api/jobs', jobRoutes);
+
+// App Config (Version Check)
+app.use('/api/app-config', appConfigRoutes);
 
 
 // Health check endpoint

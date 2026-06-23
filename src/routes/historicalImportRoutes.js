@@ -38,6 +38,15 @@ router.get('/student/:studentId/pdf', pdfCtrl.generateStudentPDF);
 
 // ── Data Routes ──────────────────────────────────────────────────────────────
 
+// Hierarchical API
+router.get('/hierarchical/years', ctrl.getHierarchicalYears);
+router.get('/hierarchical/standards', ctrl.getHierarchicalStandards);
+router.get('/hierarchical/mediums', ctrl.getHierarchicalMediums);
+router.get('/hierarchical/classes', ctrl.getHierarchicalClasses);
+router.get('/hierarchical/students', ctrl.getHierarchicalStudents);
+
+// Generate from DB
+router.post('/generate-from-db', ctrl.generateFromDB);
 // Upload XLS file (all sheets imported in one batch)
 router.post('/upload', upload.single('file'), ctrl.uploadXLS);
 

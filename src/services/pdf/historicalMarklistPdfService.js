@@ -86,7 +86,7 @@ function sortSubjects(list) {
 // All subjects have max 50.
 // No Result column.
 // ─────────────────────────────────────────────────────────────────────────────
-function buildSubjects(studentDoc) {
+function buildSubjects(studentDoc, source) {
   const rawSubjects = (studentDoc.subjects || []).map(subj => ({
     name:     normalizeSubjectName(subj.subjectLabel || subj.subjectCode || 'Unknown'),
     obtained: subj.obtained !== undefined && subj.obtained !== null
@@ -96,31 +96,33 @@ function buildSubjects(studentDoc) {
     code:     (subj.subjectCode || '').toUpperCase().trim(),
   }));
 
-  // Find MAL II mark to use for IT
-  const malII = rawSubjects.find(s =>
-    s.code === 'MAL II' || s.name === 'Malayalam II'
-  );
+  let all = [...rawSubjects];
 
-  // Add IT subject using MAL II obtained mark and max marks
-  const itSubject = {
-    name:     'Information Technology',
-    obtained: malII ? malII.obtained : 0,
-    max:      malII ? malII.max : 50,
-    code:     'IT',
-  };
+  // Only synthesize IT from MAL II for imported data (XLS_IMPORT)
+  if (source !== 'DB_GENERATION') {
+    const hasIT = all.some(s => s.name === 'Information Technology');
+    if (!hasIT) {
+      const malII = all.find(s => s.code === 'MAL II' || s.name === 'Malayalam II');
+      all.push({
+        name:     'Information Technology',
+        obtained: malII ? malII.obtained : 0,
+        max:      malII ? malII.max : 50,
+        code:     'IT',
+      });
+    }
+  }
 
-  let all = [...rawSubjects, itSubject];
-
-  // Combine Physics, Chemistry, Biology into Basic Science if they are max 25
+  // Combine Physics, Chemistry, Biology into Basic Science if Grade 8
   const phy = all.find(s => s.name === 'Physics');
   const che = all.find(s => s.name === 'Chemistry');
   const bio = all.find(s => s.name === 'Biology');
 
-  if (phy && che && bio && phy.max === 25 && che.max === 25 && bio.max === 25) {
+  if (phy && che && bio && studentDoc.grade === '8') {
+    const combinedMax = (phy.max || 0) + (che.max || 0) + (bio.max || 0);
     const basicSci = {
       name: 'Basic Science',
       obtained: (phy.obtained || 0) + (che.obtained || 0) + (bio.obtained || 0),
-      max: 75,
+      max: combinedMax,
       code: 'BASIC_SCI'
     };
     // Remove individual subjects
@@ -191,7 +193,7 @@ async function generateHistoricalMarklistPdf(studentDocs, batchDoc) {
       name:        doc.name,
       class:       displayClass,
       admissionNo: doc.admissionNo || '—',
-      subjects:    buildSubjects(doc),
+      subjects:    buildSubjects(doc, batchDoc.source),
     };
   });
 

@@ -187,19 +187,7 @@ exports.getAdminDashboard = async (req, res) => {
       performedByRole: a.performedByRole
     }));
     
-    // If no recent activities, create some default ones
-    if (formattedActivities.length === 0) {
-      formattedActivities.push({
-        id: '1',
-        title: 'Welcome to Dashboard',
-        description: 'Start managing your school',
-        type: 'system',
-        severity: 'info',
-        timestamp: new Date(),
-        performedBy: 'System',
-        performedByRole: 'system'
-      });
-    }
+    // Default activities removed (no mock data)
     
     // Pending Tasks
     const pendingExams = await Exam.countDocuments({ 
@@ -390,67 +378,7 @@ exports.getStaffDashboard = async (req, res) => {
     // Sort schedule by time
     todaySchedule.sort((a, b) => a.time.localeCompare(b.time));
     
-    // Pending Tasks
-    const pendingTasks = [];
-    
-    // Check for pending attendance marking
-    const todayDate = new Date();
-    todayDate.setHours(0, 0, 0, 0);
-    const tomorrowDate = new Date(todayDate);
-    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-    
-    for (const cls of classTeacherClasses) {
-      const studentsInClass = await Student.countDocuments({ classId: cls._id, status: 'active' });
-      const attendanceMarked = await Attendance.countDocuments({
-        classId: cls._id,
-        createdAt: { $gte: todayDate, $lt: tomorrowDate }
-      });
-      
-      if (attendanceMarked === 0 && studentsInClass > 0) {
-        pendingTasks.push({
-          id: `attendance_${cls._id}`,
-          title: 'Mark Attendance',
-          description: `Mark attendance for ${cls.displayName || `${cls.name}-${cls.section}`}`,
-          deadline: 'Today 4:00 PM',
-          priority: 'high',
-          link: `/attendance?classId=${cls._id}`,
-          type: 'attendance'
-        });
-      }
-    }
-    
-    const pendingExams = await Exam.find({
-      classIds: { $in: classTeacherClasses.map(c => c._id) },
-      overallStatus: 'draft',
-      endDate: { $lt: new Date() },
-      isActive: true
-    }).limit(5);
-
-    // Ready Reports (Exams where results are published or submitted/ready)
-    const completedExams = await Exam.find({
-      classIds: { $in: classTeacherClasses.map(c => c._id) },
-      overallStatus: 'published',
-      isActive: true
-    }).limit(5);
-    
-    const readyReports = completedExams.map(exam => ({
-      id: exam._id,
-      name: exam.displayName || exam.name,
-      classId: exam.classIds[0],
-      date: exam.endDate
-    }));
-    
-    for (const exam of pendingExams) {
-      pendingTasks.push({
-        id: `exam_${exam._id}`,
-        title: 'Enter Exam Marks',
-        description: `Enter marks for ${exam.displayName || exam.name}`,
-        deadline: new Date(exam.endDate).toLocaleDateString(),
-        priority: 'high',
-        link: `/exams/marks?examId=${exam._id}`,
-        type: 'exam'
-      });
-    }
+    // Pending Tasks logic removed as requested by user
     
     // Upcoming Duties
     const upcomingDuties = await StaffDuty.find({
@@ -488,22 +416,26 @@ exports.getStaffDashboard = async (req, res) => {
       const studentsInClass = await Student.countDocuments({ classId: cls._id, status: 'active' });
       totalStudents += studentsInClass;
       
-      // Get average attendance for this class
-      const attendanceRecords = await Attendance.find({ classId: cls._id });
-      let classAvg = 0;
+      // Get average attendance for this class — filter to current academic year only
+      const attendanceRecords = await Attendance.find({
+        classId: cls._id,
+        academicYearId: currentYear?._id
+      });
+      let classAttendanceSum = 0;
+      let classAttendanceCount = 0;
       for (const record of attendanceRecords) {
         if (record.totalWorkingDays > 0) {
-          classAvg += (record.presentDays / record.totalWorkingDays) * 100;
+          classAttendanceSum += (record.presentDays / record.totalWorkingDays) * 100;
+          classAttendanceCount++;
           totalAttendanceCount++;
         }
       }
-      if (attendanceRecords.length > 0) {
-        classAvg = classAvg / attendanceRecords.length;
-        totalAttendanceSum += classAvg;
+      if (classAttendanceCount > 0) {
+        totalAttendanceSum += classAttendanceSum / classAttendanceCount;
       }
     }
     
-    const averageAttendance = totalAttendanceCount > 0 ? totalAttendanceSum / totalAttendanceCount : 0;
+    const averageAttendance = classTeacherClasses.length > 0 ? totalAttendanceSum / classTeacherClasses.length : 0;
     
     // Recent Activities (staff-related)
     const recentActivities = await RecentActivity.find({
@@ -533,7 +465,7 @@ exports.getStaffDashboard = async (req, res) => {
       classesTaught: teachingClasses.length + classTeacherClasses.length,
       subjectsTaught: subjectsTaught.length,
       totalStudents: totalStudents,
-      pendingTasks: pendingTasks.length
+      pendingTasks: 0
     };
     
     res.json({
@@ -550,18 +482,18 @@ exports.getStaffDashboard = async (req, res) => {
         },
         quickStats,
         todaySchedule: todaySchedule.slice(0, 10),
-        pendingTasks: pendingTasks.slice(0, 5),
+        pendingTasks: [],
         upcomingDuties: formattedDuties.slice(0, 10),
         recentActivities: formattedStaffActivities,
-          classTeacherInfo: classTeacherClass ? {
-          class: {
+        classTeacherInfo: classTeacherClass ? {
+          classes: [{
             id: classTeacherClass._id,
-            name: classTeacherClass.displayName || `${classTeacherClass.name}-${classTeacherClass.section}`,
+            name: classTeacherClass.displayName || `${classTeacherClass.name}${classTeacherClass.section ? '-' + classTeacherClass.section : ''}`,
             studentCount: totalStudents
-          },
+          }],
           averageAttendance: averageAttendance.toFixed(1),
           pendingParentRequests,
-          readyReports
+          readyReports: []
         } : null,
         subjectClasses: teachingClasses.map(c => ({
           id: c._id,
@@ -698,13 +630,13 @@ exports.getParentDashboard = async (req, res) => {
       });
     }
     
-    // Fee Status (from student data or default)
+    // Fee Status (from actual data when available, currently empty)
     const feeStatus = {
-      totalFee: 25000,
-      paid: 20000,
-      due: 5000,
-      lastPaymentDate: new Date(),
-      status: 'partial'
+      totalFee: 0,
+      paid: 0,
+      due: 0,
+      lastPaymentDate: null,
+      status: 'none'
     };
     
     // Recent Notifications for parent
@@ -777,35 +709,9 @@ exports.getParentDashboard = async (req, res) => {
 // ==================== HELPER FUNCTIONS ====================
 
 async function getUpcomingEvents(limit = 10) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  // Get events from database if available, otherwise return default events
-  const events = [
-    { id: 1, title: 'Parent-Teacher Meeting', date: new Date(today.getFullYear(), today.getMonth(), 20), type: 'Meeting', priority: 'high' },
-    { id: 2, title: 'Final Exams Begin', date: new Date(today.getFullYear(), today.getMonth(), 25), type: 'Exam', priority: 'high' },
-    { id: 3, title: 'Sports Day', date: new Date(today.getFullYear(), today.getMonth(), 30), type: 'Event', priority: 'medium' },
-    { id: 4, title: 'Independence Day Celebration', date: new Date(today.getFullYear(), 7, 15), type: 'Event', priority: 'high' },
-    { id: 5, title: 'Teacher\'s Day', date: new Date(today.getFullYear(), 8, 5), type: 'Event', priority: 'medium' },
-    { id: 6, title: 'Onam Celebration', date: new Date(today.getFullYear(), 8, 10), type: 'Event', priority: 'high' },
-    { id: 7, title: 'Christmas Vacation', date: new Date(today.getFullYear(), 11, 23), type: 'Holiday', priority: 'medium' },
-  ];
-  
-  // Filter upcoming events
-  const upcoming = events
-    .filter(e => e.date >= today)
-    .sort((a, b) => a.date - b.date)
-    .slice(0, limit)
-    .map(e => ({
-      id: e.id,
-      title: e.title,
-      date: e.date,
-      type: e.type,
-      priority: e.priority,
-      daysLeft: Math.ceil((e.date - today) / (1000 * 60 * 60 * 24))
-    }));
-  
-  return upcoming;
+  // TODO: Implement actual database query when Event model is created
+  // For now, return empty array instead of mock data
+  return [];
 }
 
 async function getExamPerformanceStats(academicYearId) {

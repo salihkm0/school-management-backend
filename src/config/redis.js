@@ -110,7 +110,7 @@ const connectRedis = async () => {
       redisUrl = standardRedisUrl;
       logger.info('📡 Using standard Redis URL');
     }
-    else if (redisHost && redisHost !== 'localhost') {
+    else if (redisHost) {
       redisUrl = `redis://${redisHost}:${redisPort || 6379}`;
       if (process.env.REDIS_PASSWORD) {
         redisUrl = `redis://default:${process.env.REDIS_PASSWORD}@${redisHost}:${redisPort || 6379}`;

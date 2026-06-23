@@ -28,38 +28,38 @@ exports.generateAbstractPDF = async (req, res) => {
     if (!student) {
       console.log('Student not found, using dummy data');
       student = {
-        fullName: 'ISHA MINNA. M',
-        admissionNo: '41317',
-        fatherFullName: 'MUHAMMED IQBAL MADATHIL',
+        fullName: '',
+        admissionNo: '',
+        fatherFullName: '',
         guardian: '',
-        houseName: 'MADATHIL HOUSE',
-        postOffice: 'KONDOTTY',
-        admissionDate: new Date('2025-05-08'),
-        dateOfBirth: new Date('2011-08-29'),
-        religion: 'Islam',
-        casteName: 'Mappila',
-        category: 'OBC',
-        className: '8',
-        gender: 'F',
-        identificationMark1: 'A BLACK MOLE ON THE OUTER PALM'
+        houseName: '',
+        postOffice: '',
+        admissionDate: new Date(''),
+        dateOfBirth: new Date(''),
+        religion: '',
+        casteName: '',
+        category: '',
+        className: '',
+        gender: '',
+        identificationMark1: ''
       };
     }
 
     // Format dates
-    let admissionDateFormatted = '08/05/2025';
+    let admissionDateFormatted = '';
     if (student.admissionDate) {
       const date = new Date(student.admissionDate);
       admissionDateFormatted = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
     }
 
-    let dobFormatted = '29/08/2011';
+    let dobFormatted = '';
     if (student.dateOfBirth) {
       const dob = new Date(student.dateOfBirth);
       dobFormatted = `${dob.getDate().toString().padStart(2, '0')}/${(dob.getMonth() + 1).toString().padStart(2, '0')}/${dob.getFullYear()}`;
     }
 
     // Determine parent name
-    const parentName = student.fatherFullName || student.guardian || 'MUHAMMED IQBAL MADATHIL';
+    const parentName = student.fatherFullName || student.guardian || '';
     const parentRelation = student.fatherFullName ? 'Father' : 'Guardian';
 
     const templateData = {
@@ -85,9 +85,9 @@ exports.generateAbstractPDF = async (req, res) => {
         leavingClass: '',
         tcNo: student.tcNo || '',
         tcDate: student.tcDate || '',
-        tcGrantedNo: 'NA',
-        tcGrantedDate: 'NA',
-        leavingReason: 'NA',
+        tcGrantedNo: '',
+        tcGrantedDate: '',
+        leavingReason: '',
         vaccinationDate: student.vaccinationDate || '',
         identificationMarks: student.identificationMark1 || '',
         remarks: '',
@@ -136,68 +136,68 @@ exports.downloadAbstractPDF = async (req, res) => {
     if (!student) {
       console.log('Student not found, using dummy data');
       student = {
-        fullName: 'ISHA MINNA. M',
-        admissionNo: '41317',
-        fatherFullName: 'MUHAMMED IQBAL MADATHIL',
+        fullName: '',
+        admissionNo: '',
+        fatherFullName: '',
         guardian: '',
-        houseName: 'MADATHIL HOUSE',
-        postOffice: 'KONDOTTY',
-        admissionDate: new Date('2025-05-08'),
-        dateOfBirth: new Date('2011-08-29'),
-        religion: 'Islam',
-        casteName: 'Mappila',
-        category: 'OBC',
-        className: '8',
-        gender: 'F',
-        identificationMark1: 'A BLACK MOLE ON THE OUTER PALM'
+        houseName: '',
+        postOffice: '',
+        admissionDate: '',
+        dateOfBirth: '',
+        religion: '',
+        casteName: '',
+        category: '',
+        className: '',
+        gender: '',
+        identificationMark1: ''
       };
     }
 
-    let admissionDateFormatted = '08/05/2025';
+    let admissionDateFormatted = '';
     if (student.admissionDate) {
       const date = new Date(student.admissionDate);
       admissionDateFormatted = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
     }
 
-    let dobFormatted = '29/08/2011';
+    let dobFormatted = '';
     if (student.dateOfBirth) {
       const dob = new Date(student.dateOfBirth);
       dobFormatted = `${dob.getDate().toString().padStart(2, '0')}/${(dob.getMonth() + 1).toString().padStart(2, '0')}/${dob.getFullYear()}`;
     }
 
-    const parentName = student.fatherFullName || student.guardian || 'MUHAMMED IQBAL MADATHIL';
+    const parentName = student.fatherFullName || student.guardian || '';
     const parentRelation = student.fatherFullName ? 'Father' : 'Guardian';
 
     const templateData = {
       schoolLogoUrl: SCHOOL_LOGO_URL,
       schoolName: 'PPMHSS KOTTUKKARA',
       abstractDate: date || new Date().toLocaleDateString('en-IN'),
-      station: station || 'KOTTUKKARA',
+      station: station || '',
       student: {
-        name: student.fullName || 'ISHA MINNA. M',
-        admissionNo: student.admissionNo || '41317',
+        name: student.fullName || '',
+        admissionNo: student.admissionNo || '',
         parentName: parentName,
         parentRelation: parentRelation,
-        address: student.houseName || 'MADATHIL HOUSE',
-        postOffice: student.postOffice || 'KONDOTTY',
-        previousSchool: student.previousSchool || '-',
-        previousClass: student.previousClass || '-',
+        address: student.houseName || '',
+        postOffice: student.postOffice || '',
+        previousSchool: student.previousSchool || '',
+        previousClass: student.previousClass || '',
         admissionDate: admissionDateFormatted,
         dob: dobFormatted,
-        religion: student.religion || 'Islam',
-        caste: student.casteName || 'Mappila',
-        category: student.category || 'OBC',
-        admissionClass: student.className || '8',
-        leavingClass: 'Still on the Roll',
+        religion: student.religion || '',
+        caste: student.casteName || '',
+        category: student.category || '',
+        admissionClass: student.className || '',
+        leavingClass: '',
         tcNo: student.tcNo || '-',
         tcDate: student.tcDate || '-',
-        tcGrantedNo: 'NA',
-        tcGrantedDate: 'NA',
-        leavingReason: 'NA',
+        tcGrantedNo: '',
+        tcGrantedDate: '',
+        leavingReason: '',
         vaccinationDate: student.vaccinationDate || '',
-        identificationMarks: student.identificationMark1 || 'A BLACK MOLE ON THE OUTER PALM',
+        identificationMarks: student.identificationMark1 || '',
         remarks: '',
-        gender: student.gender || 'F'
+        gender: student.gender || ''
       }
     };
 

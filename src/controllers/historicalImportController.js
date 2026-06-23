@@ -825,6 +825,9 @@ const path = require('path');
 const ejs = require('ejs');
 const { HistoricalImport, HistoricalStudent } = require('../models/HistoricalImport');
 const { getBrowser, closeBrowser } = require('../services/pdf/browserHelper');
+const { Exam } = require('../models/Exam');
+const Mark = require('../models/Mark');
+const AcademicYear = require('../models/AcademicYear');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -948,7 +951,7 @@ function extractSubjectScoresFixed(row, subjectConfig, layout) {
       
       const max = subj.maxMarks || 50;
       if (obtained > 0) {
-        const ceMarks = max === 100 ? 20 : (max === 50 ? 10 : (max === 25 ? 5 : 0));
+        const ceMarks = subj.ceMarks || 0;
         obtained += ceMarks;
       }
 
@@ -982,6 +985,8 @@ function parseWorkbook(workbook, subjectConfig, academicYear) {
     let currentSection = null;
     let layout         = null;
     let sheetCount     = 0;
+    let lastExtractedGrade = '';
+    let lastExtractedDivision = '';
 
     for (let ri = 0; ri < rows.length; ri++) {
       const row = rows[ri];
@@ -1035,6 +1040,15 @@ function parseWorkbook(workbook, subjectConfig, academicYear) {
 
       const maxTotal = subjectConfig.reduce((s, c) => s + (c.maxMarks || 50), 0);
 
+      if (classCode) {
+        // Extract grade and division from classCode (e.g., "9 M 2025-2026" or "8B 2025-2026")
+        const classMatch = classCode.match(/^(\d{1,2})\s*([A-Z])/i);
+        if (classMatch) {
+          lastExtractedGrade = classMatch[1];
+          lastExtractedDivision = classMatch[2].toUpperCase();
+        }
+      }
+
       allStudents.push({
         slNo,
         classCode,
@@ -1043,8 +1057,8 @@ function parseWorkbook(workbook, subjectConfig, academicYear) {
         gender,
         language,
         category,
-        grade:         currentSection.grade    || '',
-        division:      currentSection.division  || '',
+        grade:         lastExtractedGrade,
+        division:      lastExtractedDivision,
         medium:        currentSection.medium    || '',
         languageGroup: currentSection.languageGroup || '',
         sheetName,
@@ -1069,21 +1083,34 @@ function parseWorkbook(workbook, subjectConfig, academicYear) {
 // DEFAULT SUBJECT CONFIGS
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SHARED_SUBJECTS = [
-  { code: 'LAN',    label: 'Language',      maxMarks: 50 },
-  { code: 'MAL II', label: 'Malayalam II',  maxMarks: 50 },
-  { code: 'ENG',    label: 'English',       maxMarks: 50 },
-  { code: 'HIN',    label: 'Hindi',         maxMarks: 50 },
-  { code: 'SS',     label: 'Social Science',maxMarks: 50 },
-  { code: 'PHY',    label: 'Physics',       maxMarks: 50 },
-  { code: 'CHE',    label: 'Chemistry',     maxMarks: 50 },
-  { code: 'BIO',    label: 'Biology',       maxMarks: 50 },
-  { code: 'MATHS',  label: 'Maths',         maxMarks: 50 },
+const PRESET_CONFIG_8 = [
+  { code: 'LAN',    label: 'Language I',    maxMarks: 50, ceMarks: 10 },
+  { code: 'MAL',    label: 'Malayalam II',  maxMarks: 50, ceMarks: 10 },
+  { code: 'ENG',    label: 'English',       maxMarks: 50, ceMarks: 10 },
+  { code: 'HIN',    label: 'Hindi',         maxMarks: 50, ceMarks: 10 },
+  { code: 'SS',     label: 'Social Science',maxMarks: 50, ceMarks: 10 },
+  { code: 'PHY',    label: 'Physics',       maxMarks: 25, ceMarks: 5 },
+  { code: 'CHE',    label: 'Chemistry',     maxMarks: 25, ceMarks: 5 },
+  { code: 'BIO',    label: 'Biology',       maxMarks: 25, ceMarks: 5 },
+  { code: 'MATHS',  label: 'Maths',         maxMarks: 50, ceMarks: 10 },
+];
+
+const PRESET_CONFIG_9 = [
+  { code: 'LAN',    label: 'Language I',    maxMarks: 50, ceMarks: 10 },
+  { code: 'MAL',    label: 'Malayalam II',  maxMarks: 50, ceMarks: 10 },
+  { code: 'ENG',    label: 'English',       maxMarks: 100, ceMarks: 20 },
+  { code: 'HIN',    label: 'Hindi',         maxMarks: 50, ceMarks: 10 },
+  { code: 'SS',     label: 'Social Science',maxMarks: 100, ceMarks: 20 },
+  { code: 'PHY',    label: 'Physics',       maxMarks: 50, ceMarks: 10 },
+  { code: 'CHE',    label: 'Chemistry',     maxMarks: 50, ceMarks: 10 },
+  { code: 'BIO',    label: 'Biology',       maxMarks: 50, ceMarks: 10 },
+  { code: 'MATHS',  label: 'Maths',         maxMarks: 100, ceMarks: 20 },
 ];
 
 const PRESET_CONFIGS = {
-  'class_8_9':    SHARED_SUBJECTS,
-  'class_10_sslc': SHARED_SUBJECTS,
+  'class_8': PRESET_CONFIG_8,
+  'class_9': PRESET_CONFIG_9,
+  'class_10_sslc': PRESET_CONFIG_9 // Fallback mapped to 9 for now, unless specified
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1106,7 +1133,7 @@ function calculateGrade(obtained, maxMarks) {
 
 const subjectOrder = [
   'First language', 'Malayalam', 'English', 'Hindi', 'Arabic', 'Urdu',
-  'Social Science', 'Science', 'Physics', 'Chemistry', 'Biology', 'Mathematics', 'Maths',
+  'Social Science', 'Basic Science', 'Science', 'Physics', 'Chemistry', 'Biology', 'Mathematics', 'Maths',
   'Computer Science', 'ICT', 'Information Technology'
 ];
 
@@ -1189,7 +1216,7 @@ exports.uploadXLS = async (req, res) => {
   }
 
   if (!subjectConfig || subjectConfig.length === 0) {
-    subjectConfig = PRESET_CONFIGS['class_8_9'];
+    subjectConfig = PRESET_CONFIGS['class_9'];
   }
 
   let academicYear = req.body.academicYear || '';
@@ -1203,47 +1230,46 @@ exports.uploadXLS = async (req, res) => {
     status: 'processing',
   });
 
-  setImmediate(async () => {
-    try {
-      const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellText: false, cellDates: false });
-      const { students, sheetSummary } = parseWorkbook(workbook, subjectConfig, academicYear);
+  try {
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellText: false, cellDates: false });
+    const { students, sheetSummary } = parseWorkbook(workbook, subjectConfig, academicYear);
 
-      if (students.length === 0) {
-        await HistoricalImport.findByIdAndUpdate(importBatch._id, {
-          status: 'error',
-          errorMessage: 'No student rows found.',
-        });
-        return;
-      }
-
-      if (!academicYear && students[0]?.classCode) {
-        const m = students[0].classCode.match(/\d{4}-\d{4}/);
-        if (m) academicYear = m[0];
-      }
-
-      const docs = students.map((s) => ({ ...s, importId: importBatch._id }));
-      await HistoricalStudent.insertMany(docs, { ordered: false });
-
-      await HistoricalImport.findByIdAndUpdate(importBatch._id, {
-        academicYear: academicYear || importBatch.academicYear,
-        totalStudents: students.length,
-        sheets: sheetSummary,
-        status: 'done',
-      });
-    } catch (err) {
-      console.error('Historical import error:', err);
+    if (students.length === 0) {
       await HistoricalImport.findByIdAndUpdate(importBatch._id, {
         status: 'error',
-        errorMessage: err.message,
+        errorMessage: 'No student rows found.',
       });
+      return res.status(400).json({ success: false, message: 'No student rows found in the uploaded file.' });
     }
-  });
 
-  res.status(201).json({
-    success: true,
-    message: 'File received, processing...',
-    importId: importBatch._id,
-  });
+    if (!academicYear && students[0]?.classCode) {
+      const m = students[0].classCode.match(/\d{4}-\d{4}/);
+      if (m) academicYear = m[0];
+    }
+
+    const docs = students.map((s) => ({ ...s, importId: importBatch._id }));
+    await HistoricalStudent.insertMany(docs, { ordered: false });
+
+    await HistoricalImport.findByIdAndUpdate(importBatch._id, {
+      academicYear: academicYear || importBatch.academicYear,
+      totalStudents: students.length,
+      sheets: sheetSummary,
+      status: 'done',
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'File processed successfully',
+      importId: importBatch._id,
+    });
+  } catch (err) {
+    console.error('Historical import error:', err);
+    await HistoricalImport.findByIdAndUpdate(importBatch._id, {
+      status: 'error',
+      errorMessage: err.message,
+    });
+    res.status(500).json({ success: false, message: 'Processing failed: ' + err.message });
+  }
 };
 
 exports.getImports = async (req, res) => {
@@ -1376,12 +1402,32 @@ exports.generateMarklistPDF = async (req, res) => {
         const maxVal = subj.maxMarks || 40;
         const obtainedVal = subj.obtained !== undefined ? subj.obtained : 0;
         return {
+          code: subj.subjectCode || subj.subjectLabel,
           name: subj.subjectLabel || subj.subjectCode,
           obtained: obtainedVal,
           max: maxVal,
           grade: calculateGrade(obtainedVal, maxVal)
         };
       });
+
+      if (student.grade === '8') {
+        const scienceCodes = ['PHY', 'CHE', 'BIO', 'Physics', 'Chemistry', 'Biology'];
+        const scienceSubjects = subjects.filter(s => scienceCodes.includes(s.code) || scienceCodes.includes(s.name));
+        
+        if (scienceSubjects.length > 0) {
+          const combinedMax = scienceSubjects.reduce((sum, s) => sum + s.max, 0);
+          const combinedObtained = scienceSubjects.reduce((sum, s) => sum + s.obtained, 0);
+          
+          subjects = subjects.filter(s => !scienceCodes.includes(s.code) && !scienceCodes.includes(s.name));
+          subjects.push({
+            code: 'BASIC_SCI',
+            name: 'Basic Science',
+            obtained: combinedObtained,
+            max: combinedMax,
+            grade: calculateGrade(combinedObtained, combinedMax)
+          });
+        }
+      }
 
       subjects = sortSubjects(subjects);
 
@@ -1441,6 +1487,244 @@ exports.generateMarklistPDF = async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // INDIVIDUAL STUDENT PDF
+// ─────────────────────────────────────────────────────────────────────────────
+// HIERARCHICAL API ENDPOINTS (YEAR -> STANDARD -> MEDIUM -> CLASS)
+// ─────────────────────────────────────────────────────────────────────────────
+
+exports.getHierarchicalYears = async (req, res) => {
+  try {
+    const imports = await HistoricalImport.find({ status: 'done' }).select('academicYear source createdAt totalStudents').sort({ academicYear: -1 });
+    // Group by year to return unique years with aggregated totalStudents
+    const uniqueYearsMap = new Map();
+    imports.forEach(imp => {
+      if (!uniqueYearsMap.has(imp.academicYear)) {
+        uniqueYearsMap.set(imp.academicYear, {
+          academicYear: imp.academicYear,
+          importId: imp._id,
+          source: imp.source,
+          createdAt: imp.createdAt,
+          totalStudents: 0
+        });
+      }
+      uniqueYearsMap.get(imp.academicYear).totalStudents += (imp.totalStudents || 0);
+    });
+    res.json({ success: true, data: Array.from(uniqueYearsMap.values()) });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.getHierarchicalStandards = async (req, res) => {
+  try {
+    const { year } = req.query;
+    if (!year) return res.status(400).json({ success: false, message: 'Year is required' });
+    
+    const imports = await HistoricalImport.find({ academicYear: year, status: 'done' });
+    if (!imports.length) return res.json({ success: true, data: [] });
+
+    const importIds = imports.map(i => i._id);
+    const standardsAgg = await HistoricalStudent.aggregate([
+      { $match: { importId: { $in: importIds } } },
+      { $group: { _id: "$grade", count: { $sum: 1 } } }
+    ]);
+    
+    const standards = standardsAgg.map(s => ({ item: s._id, count: s.count }));
+    
+    // Sort standards numerically if possible
+    standards.sort((a, b) => {
+      const numA = parseInt(a.item);
+      const numB = parseInt(b.item);
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      return String(a.item).localeCompare(String(b.item));
+    });
+
+    res.json({ success: true, data: standards });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.getHierarchicalMediums = async (req, res) => {
+  try {
+    const { year, standard } = req.query;
+    if (!year || !standard) return res.status(400).json({ success: false, message: 'Year and Standard are required' });
+
+    const imports = await HistoricalImport.find({ academicYear: year, status: 'done' });
+    if (!imports.length) return res.json({ success: true, data: [] });
+
+    const importIds = imports.map(i => i._id);
+    const mediumsAgg = await HistoricalStudent.aggregate([
+      { $match: { importId: { $in: importIds }, grade: standard } },
+      { $group: { _id: "$medium", count: { $sum: 1 } } }
+    ]);
+    
+    // Some might be null or empty, filter them out or replace with 'Unknown'
+    const mediums = mediumsAgg
+      .filter(m => m._id && m._id.trim() !== '')
+      .map(m => ({ item: m._id, count: m.count }))
+      .sort((a, b) => String(a.item).localeCompare(String(b.item)));
+    
+    res.json({ success: true, data: mediums });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.getHierarchicalClasses = async (req, res) => {
+  try {
+    const { year, standard, medium } = req.query;
+    if (!year || !standard || !medium) return res.status(400).json({ success: false, message: 'Missing parameters' });
+
+    const imports = await HistoricalImport.find({ academicYear: year, status: 'done' });
+    if (!imports.length) return res.json({ success: true, data: [] });
+
+    const importIds = imports.map(i => i._id);
+    const classesAgg = await HistoricalStudent.aggregate([
+      { 
+        $match: { 
+          importId: { $in: importIds }, 
+          grade: standard,
+          medium: medium
+        } 
+      },
+      { $group: { _id: "$division", count: { $sum: 1 } } }
+    ]);
+    
+    const classes = classesAgg
+      .map(c => ({ item: c._id, count: c.count }))
+      .sort((a, b) => String(a.item).localeCompare(String(b.item)));
+      
+    res.json({ success: true, data: classes });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.getHierarchicalStudents = async (req, res) => {
+  try {
+    const { year, standard, medium, class: division } = req.query;
+    if (!year || !standard || !medium || !division) return res.status(400).json({ success: false, message: 'Missing parameters' });
+
+    const imports = await HistoricalImport.find({ academicYear: year, status: 'done' });
+    if (!imports.length) return res.json({ success: true, data: [] });
+
+    const importIds = imports.map(i => i._id);
+    const students = await HistoricalStudent.find({ 
+      importId: { $in: importIds }, 
+      grade: standard,
+      medium: medium,
+      division: division
+    }).sort({ slNo: 1, name: 1 });
+    
+    res.json({ success: true, data: students });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GENERATE FROM DB
+// ─────────────────────────────────────────────────────────────────────────────
+
+exports.generateFromDB = async (req, res) => {
+  try {
+    const { academicYearId, examId } = req.body;
+    if (!academicYearId) return res.status(400).json({ success: false, message: 'Academic Year ID is required' });
+    if (!examId) return res.status(400).json({ success: false, message: 'Exam ID is required' });
+
+    const yearDoc = await AcademicYear.findById(academicYearId);
+    if (!yearDoc) return res.status(404).json({ success: false, message: 'Academic Year not found' });
+
+    // Find the specific exam
+    const exam = await Exam.findById(examId);
+
+    if (!exam) return res.status(404).json({ success: false, message: 'Exam not found' });
+
+    // Check if an import batch already exists for this exam
+    let importBatch = await HistoricalImport.findOne({ examId: exam._id });
+    if (importBatch) {
+       // Delete existing students so we can regenerate
+       await HistoricalStudent.deleteMany({ importId: importBatch._id });
+       importBatch.status = 'processing';
+       await importBatch.save();
+    } else {
+       importBatch = new HistoricalImport({
+         fileName: `Generated from DB - ${yearDoc.name}`,
+         academicYear: yearDoc.name,
+         uploadedBy: req.user._id,
+         uploadedByName: req.user.name,
+         source: 'DB_GENERATION',
+         examId: exam._id,
+         status: 'processing'
+       });
+       await importBatch.save();
+    }
+
+    // Now, fetch all marks for this exam
+    const marks = await Mark.find({ examId: exam._id })
+      .populate('studentId')
+      .populate({
+        path: 'classId',
+        select: 'name section'
+      });
+
+    // We need to group marks by student
+    const studentMap = new Map();
+
+    for (const mark of marks) {
+      if (!mark.studentId || !mark.classId) continue;
+      
+      const stId = mark.studentId._id.toString();
+      if (!studentMap.has(stId)) {
+        studentMap.set(stId, {
+           importId: importBatch._id,
+           slNo: mark.studentId.rollNumber || 0,
+           classCode: `${mark.classId.name} ${mark.classId.section || ''} ${yearDoc.name}`.trim(),
+           admissionNo: mark.studentId.admissionNo || '',
+           aadhaarNo: '', // We don't have this in student model usually
+           name: mark.studentId.name || mark.studentId.fullName,
+           gender: mark.studentId.gender === 'Female' || mark.studentId.gender === 'F' ? 'F' : (mark.studentId.gender === 'Male' || mark.studentId.gender === 'M' ? 'M' : ''),
+           medium: mark.studentId.instructionMedium || 'Common',
+           grade: mark.classId.name,
+           division: mark.classId.section || '',
+           subjects: [],
+           total: 0,
+           maxTotal: 0
+        });
+      }
+      
+      const st = studentMap.get(stId);
+      
+      if (mark.subjects && Array.isArray(mark.subjects)) {
+        for (const subjMark of mark.subjects) {
+          st.subjects.push({
+            subjectCode: subjMark.subjectCode || subjMark.subjectName,
+            subjectLabel: subjMark.subjectName,
+            obtained: subjMark.totalScore || 0,
+            maxMarks: subjMark.maxMarks || 100
+          });
+          st.total += subjMark.totalScore || 0;
+          st.maxTotal += subjMark.maxMarks || 100;
+        }
+      }
+    }
+
+    const studentsToInsert = Array.from(studentMap.values());
+    if (studentsToInsert.length > 0) {
+      await HistoricalStudent.insertMany(studentsToInsert);
+    }
+
+    importBatch.totalStudents = studentsToInsert.length;
+    importBatch.status = 'done';
+    await importBatch.save();
+
+    res.json({ success: true, data: importBatch, message: `Generated ${studentsToInsert.length} historical records.` });
+  } catch (error) {
+    console.error('Error generating from DB:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // GET /api/historical-imports/student/:studentId/pdf
 // ─────────────────────────────────────────────────────────────────────────────
 exports.generateStudentPDF = async (req, res) => {

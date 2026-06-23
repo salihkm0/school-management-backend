@@ -375,6 +375,43 @@ exports.generateMarklistPDF = async (req, res) => {
       s.name = normalizeSubjectName(s.name);
     });
 
+    const isClass8 = student.classId?.displayName?.startsWith('8') || String(student.className || '').startsWith('8');
+
+    if (isClass8) {
+      const phy = subjects.find(s => s.name === 'Physics');
+      const che = subjects.find(s => s.name === 'Chemistry');
+      const bio = subjects.find(s => s.name === 'Biology');
+
+      if (phy && che && bio) {
+        const combinedMax = (phy.max || 0) + (che.max || 0) + (bio.max || 0);
+        const combinedObtained = (phy.obtained || 0) + (che.obtained || 0) + (bio.obtained || 0);
+        
+        // Simple grade calculation
+        const pct = combinedMax > 0 ? (combinedObtained / combinedMax) * 100 : 0;
+        let grade = 'E';
+        if (pct >= 90) grade = 'A+';
+        else if (pct >= 80) grade = 'A';
+        else if (pct >= 70) grade = 'B+';
+        else if (pct >= 60) grade = 'B';
+        else if (pct >= 50) grade = 'C+';
+        else if (pct >= 40) grade = 'C';
+        else if (pct >= 30) grade = 'D+';
+        else if (pct >= 20) grade = 'D';
+
+        const basicSci = {
+          name: 'Basic Science',
+          obtained: combinedObtained,
+          max: combinedMax,
+          grade: grade
+        };
+
+        // Remove individual subjects
+        subjects = subjects.filter(s => s.name !== 'Physics' && s.name !== 'Chemistry' && s.name !== 'Biology');
+        // Add Basic Science
+        subjects.push(basicSci);
+      }
+    }
+
     // Sort subjects in standard order
     subjects.sort((a, b) => {
       const aIndex = EXACT_SUBJECT_ORDER.indexOf(a.name);

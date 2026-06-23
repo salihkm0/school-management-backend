@@ -930,7 +930,7 @@ exports.bulkUpdateMarks = async (req, res) => {
               grade: 'F',
               remarks: submittedSubject ? (submittedSubject.remarks || '') : '',
               isAbsent: submittedSubject ? (submittedSubject.isAbsent || false) : false,
-              isEntered: submittedSubject ? true : false,
+              isEntered: submittedSubject ? (submittedSubject.isEntered !== undefined ? submittedSubject.isEntered : true) : false,
             });
           }
 
@@ -965,7 +965,7 @@ exports.bulkUpdateMarks = async (req, res) => {
                 marksheet.subjects[subjectIndex].ceScore = updatedSubject.ceMarks || 0;
                 marksheet.subjects[subjectIndex].remarks = updatedSubject.remarks || '';
                 marksheet.subjects[subjectIndex].isAbsent = updatedSubject.isAbsent || false;
-                marksheet.subjects[subjectIndex].isEntered = true;
+                marksheet.subjects[subjectIndex].isEntered = updatedSubject.isEntered !== undefined ? updatedSubject.isEntered : true;
               } else {
                 const examSubject = exam.subjects.find(
                   (s) => s.subjectId?.toString() === updatedSubject.examSubjectId?.toString() ||
@@ -1004,7 +1004,7 @@ exports.bulkUpdateMarks = async (req, res) => {
                     grade: 'F',
                     remarks: updatedSubject.remarks || '',
                     isAbsent: updatedSubject.isAbsent || false,
-                    isEntered: true,
+                    isEntered: updatedSubject.isEntered !== undefined ? updatedSubject.isEntered : true,
                   });
                 }
               }

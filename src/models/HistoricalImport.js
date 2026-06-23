@@ -61,6 +61,14 @@ const HistoricalImportSchema = new mongoose.Schema(
     academicYear: { type: String, required: true },   // e.g. '2025-2026'
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     uploadedByName: { type: String },
+    
+    // Origin tracking
+    source: {
+      type: String,
+      enum: ['XLS_IMPORT', 'DB_GENERATION'],
+      default: 'XLS_IMPORT'
+    },
+    examId: { type: mongoose.Schema.Types.ObjectId, ref: 'Exam' },
 
     // Summary stats written after import
     totalStudents: { type: Number, default: 0 },

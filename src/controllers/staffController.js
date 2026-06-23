@@ -146,7 +146,7 @@ exports.createStaff = async (req, res) => {
       password,
       name,
       role: "staff",
-      phone,
+      phone: contact,
     });
 
     // Create staff profile with shortName
@@ -830,6 +830,8 @@ exports.getStaffRoles = async (req, res) => {
       'teacher',
       'principal', 
       'vice_principal',
+      'headmaster',
+      'dep.headmaster',
       'librarian',
       'administrator',
       'office_staff',

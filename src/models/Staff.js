@@ -41,7 +41,7 @@ const StaffSchema = new mongoose.Schema({
   role: {
     type: String,
     required: true,
-    enum: ['teacher', 'principal', 'vice_principal', 'librarian', 'administrator', 'office_staff', 'support_staff']
+    enum: ['teacher', 'principal', 'vice_principal', 'headmaster', 'dep.headmaster', 'librarian', 'administrator', 'office_staff', 'support_staff']
   },
   employeeType: {
     type: String,

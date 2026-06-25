@@ -8,8 +8,8 @@ const {
   getParentDashboard
 } = require('../controllers/dashboardController');
 
-// Admin dashboard - accessible only by admin
-router.get('/admin', protect, authorize('admin'), getAdminDashboard);
+// Admin dashboard - accessible only by admin and administration
+router.get('/admin', protect, authorize('admin', 'administration'), getAdminDashboard);
 
 // Staff dashboard - accessible only by staff
 router.get('/staff', protect, authorize('staff'), getStaffDashboard);

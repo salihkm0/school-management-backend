@@ -1117,6 +1117,7 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const Notification = require("../models/Notification");
 const { RecentActivity, ACTIVITY_TYPES, SEVERITY } = require("../models/RecentActivity");
+const AppConfig = require("../models/AppConfig");
 const logger = require("../utils/logger");
 
 const connectedUsers = new Map();
@@ -1326,7 +1327,14 @@ const broadcastToAll = (event, data) => {
 };
 
 const getConnectedUsers = () => {
-  return Array.from(connectedUsers.keys());
+  return Array.from(connectedUsers.entries()).map(([userId, data]) => ({
+    userId,
+    email: data.name, // email or name is stored here
+    role: data.role,
+    connectedAt: data.connectedAt,
+    lastActivity: data.lastActivity,
+    transport: data.transport
+  }));
 };
 
 const isUserConnected = (userId) => {
@@ -1458,6 +1466,12 @@ const setupSocket = (io) => {
 
     setupHeartbeat(socket, userId);
     sendPendingNotifications(socket, userId);
+
+    // Fetch and send initial maintenance mode state
+    AppConfig.findOne({ key: 'maintenance_mode' }).then(config => {
+      const isMaintenance = config && config.value === 'true';
+      socket.emit('maintenance_mode_changed', { enabled: isMaintenance });
+    }).catch(err => logger.error('Error fetching maintenance mode for socket:', err.message));
 
     // Handle transport upgrade (polling -> websocket)
     socket.on("upgrade", () => {

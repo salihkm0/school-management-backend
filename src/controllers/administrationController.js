@@ -151,9 +151,9 @@ exports.deleteUser = async (req, res) => {
 
 exports.getActiveUsers = async (req, res) => {
   try {
-    const activeMap = getConnectedUsers();
-    // activeMap is a Map of socket connections
-    const users = Array.from(activeMap.values()).map(u => ({
+    const activeUsersList = getConnectedUsers();
+    // activeUsersList is an array of objects
+    const users = activeUsersList.map(u => ({
       userId: u.userId,
       email: u.email,
       role: u.role,

@@ -14,6 +14,13 @@ const protect = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // Handle Open Dashboard virtual user
+    if (decoded.role === 'open') {
+      req.user = { id: decoded.id, role: 'open', email: decoded.email };
+      return next();
+    }
+
     const user = await User.findById(decoded.id).select('-password');
 
     if (!user) {
@@ -39,7 +46,13 @@ const protect = async (req, res, next) => {
 
 const authorize = (...roles) => {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
+    // 'administration' role has super-admin powers and can access anything an 'admin' can
+    const allowedRoles = [...roles];
+    if (allowedRoles.includes('admin') && !allowedRoles.includes('administration')) {
+      allowedRoles.push('administration');
+    }
+
+    if (!allowedRoles.includes(req.user.role)) {
       return res.status(403).json({
         message: `Role ${req.user.role} is not authorized to access this resource`
       });

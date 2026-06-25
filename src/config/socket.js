@@ -1430,6 +1430,9 @@ const setupSocket = (io) => {
     } else if (userRole === "admin") {
       socket.join("admin");
       socket.join(`role:admin`);
+    } else if (userRole === "administration") {
+      socket.join("administration");
+      socket.join(`role:administration`);
     }
 
     // Send connection confirmation

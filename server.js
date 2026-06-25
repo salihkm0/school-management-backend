@@ -8,12 +8,15 @@ const compression = require('compression');
 const morgan = require('morgan');
 const dotenv = require('dotenv');
 const path = require('path');
+const { rateLimit } = require('express-rate-limit');
 
 dotenv.config();
 
 const connectDB = require('./src/config/database');
 const { setupSocket } = require('./src/config/socket');
 const errorHandler = require('./src/middleware/errorHandler');
+const payloadLogger = require('./src/middleware/payloadLogger');
+const checkMaintenanceMode = require('./src/middleware/checkMaintenanceMode');
 
 // Import routes
 const authRoutes = require('./src/routes/authRoutes');
@@ -58,6 +61,7 @@ const searchRoutes = require('./src/routes/searchRoutes');
 const reportCardRoutes = require('./src/routes/pdf/reportCardRoutes');
 const historicalImportRoutes = require('./src/routes/historicalImportRoutes');
 const jobRoutes = require('./src/routes/jobRoutes');
+const administrationRoutes = require('./src/routes/administrationRoutes');
 const appConfigRoutes = require('./src/routes/appConfigRoutes');
 
 const app = express();
@@ -179,12 +183,26 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('dev'));
 
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1000
+});
+app.use('/api/', limiter);
+
+// Request payload logging for audit and debugging (only POST/PUT/DELETE/PATCH)
+app.use(payloadLogger);
+
+// Check if system is in maintenance mode
+app.use(checkMaintenanceMode);
+
 // Serve static files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/public', express.static(path.join(__dirname, 'public')));
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/administration', administrationRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/classes', classRoutes);

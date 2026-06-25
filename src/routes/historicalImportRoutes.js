@@ -25,47 +25,47 @@ const upload = multer({
   },
 });
 
-// All routes — admin only
-router.use(protect, authorize('admin'));
+// Protect all routes
+router.use(protect);
 
 // Get preset subject configurations (class 8/9, class 10 SSLC)
-router.get('/presets', ctrl.getPresetConfigs);
+router.get('/presets', authorize('admin', 'open'), ctrl.getPresetConfigs);
 
 // ── PDF Routes (served by the isolated PDF controller) ──────────────────────
 
 // Individual student PDF (must be before /:id to avoid conflict)
-router.get('/student/:studentId/pdf', pdfCtrl.generateStudentPDF);
+router.get('/student/:studentId/pdf', authorize('admin', 'open'), pdfCtrl.generateStudentPDF);
 
 // ── Data Routes ──────────────────────────────────────────────────────────────
 
 // Hierarchical API
-router.get('/hierarchical/years', ctrl.getHierarchicalYears);
-router.get('/hierarchical/standards', ctrl.getHierarchicalStandards);
-router.get('/hierarchical/mediums', ctrl.getHierarchicalMediums);
-router.get('/hierarchical/classes', ctrl.getHierarchicalClasses);
-router.get('/hierarchical/students', ctrl.getHierarchicalStudents);
+router.get('/hierarchical/years', authorize('admin', 'open'), ctrl.getHierarchicalYears);
+router.get('/hierarchical/standards', authorize('admin', 'open'), ctrl.getHierarchicalStandards);
+router.get('/hierarchical/mediums', authorize('admin', 'open'), ctrl.getHierarchicalMediums);
+router.get('/hierarchical/classes', authorize('admin', 'open'), ctrl.getHierarchicalClasses);
+router.get('/hierarchical/students', authorize('admin', 'open'), ctrl.getHierarchicalStudents);
 
 // Generate from DB
-router.post('/generate-from-db', ctrl.generateFromDB);
+router.post('/generate-from-db', authorize('admin'), ctrl.generateFromDB);
 // Upload XLS file (all sheets imported in one batch)
-router.post('/upload', upload.single('file'), ctrl.uploadXLS);
+router.post('/upload', authorize('admin'), upload.single('file'), ctrl.uploadXLS);
 
 // List all import batches
-router.get('/', ctrl.getImports);
+router.get('/', authorize('admin', 'open'), ctrl.getImports);
 
 // Poll upload processing status
-router.get('/:id/status', ctrl.getImportStatus);
+router.get('/:id/status', authorize('admin', 'open'), ctrl.getImportStatus);
 
 // Get import detail + available grade/division groups
-router.get('/:id', ctrl.getImportById);
+router.get('/:id', authorize('admin', 'open'), ctrl.getImportById);
 
 // Query students within a batch (paginated + filterable)
-router.get('/:id/students', ctrl.getStudents);
+router.get('/:id/students', authorize('admin', 'open'), ctrl.getStudents);
 
 // Generate & download PDF marklist (batch) — isolated PDF controller
-router.get('/:id/pdf', pdfCtrl.generateMarklistPDF);
+router.get('/:id/pdf', authorize('admin', 'open'), pdfCtrl.generateMarklistPDF);
 
 // Delete a batch and all its students
-router.delete('/:id', ctrl.deleteImport);
+router.delete('/:id', authorize('admin'), ctrl.deleteImport);
 
 module.exports = router;

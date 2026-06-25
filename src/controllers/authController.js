@@ -161,6 +161,26 @@ exports.login = async (req, res) => {
 
     console.log('Login attempt:', { email, phone });
 
+    // Handle Open Dashboard static login
+    if (email === 'open@gmail.com' && password === 'ppmhss@001') {
+      const token = jwt.sign(
+        { id: 'open-dashboard-user', role: 'open', email: 'open@gmail.com' },
+        process.env.JWT_SECRET,
+        { expiresIn: '30d' }
+      );
+      return res.json({
+        success: true,
+        token,
+        user: { 
+          id: 'open-dashboard-user', 
+          email: 'open@gmail.com', 
+          name: 'Open Dashboard', 
+          role: 'open', 
+          photoUrl: null 
+        }
+      });
+    }
+
     let query = {};
     if (email) {
       query.email = email;
@@ -448,6 +468,20 @@ exports.changePassword = async (req, res) => {
 
 exports.getMe = async (req, res) => {
   try {
+    // Handle Open Dashboard virtual user
+    if (req.user && req.user.role === 'open') {
+      return res.json({
+        success: true,
+        user: {
+          id: req.user.id,
+          email: req.user.email,
+          name: 'Open Dashboard',
+          role: 'open',
+          photoUrl: null
+        }
+      });
+    }
+
     const user = await User.findById(req.user.id).select('-password');
     
     let additionalData = {};

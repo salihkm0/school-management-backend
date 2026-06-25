@@ -37,6 +37,7 @@
     "mongoose": "^8.0.0",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
+    "node-cache": "^5.1.2",
     "nodemailer": "^6.9.7",
     "phantomjs-prebuilt": "^2.1.16",
     "puppeteer": "^24.43.0",

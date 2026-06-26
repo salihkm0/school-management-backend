@@ -96,31 +96,85 @@ exports.getAllUsers = async (req, res) => {
   }
 };
 
-exports.updateUserRole = async (req, res) => {
+exports.updateUser = async (req, res) => {
   try {
-    const { name, email, role, phone, isActive } = req.body;
+    const { name, email, role, phone, isActive, password } = req.body;
     
     // Prevent self-demotion from administration role
-    if (req.user.id === req.params.id && role !== 'administration') {
+    if (req.user.id === req.params.id && role && role !== 'administration') {
       return res.status(400).json({ message: 'Cannot demote your own administration account' });
     }
 
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { name, email, role, phone, isActive },
-      { new: true, runValidators: true }
-    ).select('-password');
+    const user = await User.findById(req.params.id);
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    // Update fields
+    if (name) user.name = name;
+    if (email) user.email = email;
+    if (role) user.role = role;
+    if (phone) user.phone = phone;
+    if (isActive !== undefined) user.isActive = isActive;
+    
+    // Only update password if provided
+    if (password && password.trim() !== '') {
+      user.password = password;
+    }
+
+    await user.save();
+
     res.json({
       success: true,
-      data: user
+      data: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        isActive: user.isActive
+      }
     });
   } catch (error) {
     console.error('Update User Error:', error);
+    res.status(400).json({ message: error.message });
+  }
+};
+
+exports.createUser = async (req, res) => {
+  try {
+    const { name, email, role, phone, password, isActive } = req.body;
+    
+    const user = new User({
+      name,
+      email,
+      role,
+      phone,
+      password,
+      isActive: isActive !== undefined ? isActive : true
+    });
+
+    await user.save();
+
+    res.status(201).json({
+      success: true,
+      data: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        isActive: user.isActive
+      }
+    });
+  } catch (error) {
+    console.error('Create User Error:', error);
+    // Handle duplicate key errors gracefully
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      return res.status(400).json({ message: `A user with this ${field} already exists.` });
+    }
     res.status(400).json({ message: error.message });
   }
 };

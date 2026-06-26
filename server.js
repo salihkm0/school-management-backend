@@ -88,7 +88,10 @@ const server = http.createServer(app);
 // Socket.IO configuration - OPTIMIZED FOR RENDER FREE TIER
 const io = socketIO(server, {
   cors: {
-    origin: process.env.CORS_ORIGIN || '*',
+    origin: (origin, callback) => {
+      // Allow all origins when credentials are true
+      callback(null, true);
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: true,
     allowedHeaders: ['Authorization', 'Content-Type']
@@ -175,7 +178,9 @@ app.use(helmet({
 }));
 app.use(compression());
 app.use(cors({
-  origin: '*',
+  origin: function (origin, callback) {
+    callback(null, true);
+  },
   credentials: true,
   allowedHeaders: ['Authorization', 'Content-Type']
 }));

@@ -5,14 +5,15 @@ const {
   getSystemHealth,
   getSystemLogs,
   getAllUsers,
-  updateUserRole,
   deleteUser,
   getActiveUsers,
   testFcmNotification,
   clearCache,
   getDbStats,
   getAuditLogs,
-  toggleMaintenanceMode
+  toggleMaintenanceMode,
+  createUser,
+  updateUser
 } = require('../controllers/administrationController');
 
 // All administration routes are protected and restricted to 'administration' role
@@ -25,7 +26,8 @@ router.get('/system/logs', getSystemLogs);
 
 // User management routes
 router.get('/users', protect, authorize('administration'), getAllUsers);
-router.put('/users/:id/role', protect, authorize('administration'), updateUserRole);
+router.post('/users', protect, authorize('administration'), createUser);
+router.put('/users/:id', protect, authorize('administration'), updateUser);
 router.delete('/users/:id', protect, authorize('administration'), deleteUser);
 
 // Advanced features

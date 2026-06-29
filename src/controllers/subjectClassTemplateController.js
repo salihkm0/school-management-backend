@@ -7,10 +7,11 @@ const { broadcastToRole } = require('../config/socket');
 // Get all templates
 exports.getTemplates = async (req, res) => {
   try {
-    const { isActive, page = 1, limit = 20 } = req.query;
+    const { isActive, academicYearId, page = 1, limit = 20 } = req.query;
     
     const query = {};
     if (isActive !== undefined) query.isActive = isActive === 'true';
+    if (academicYearId) query.academicYearId = academicYearId;
 
     const templates = await SubjectClassTemplate.find(query)
       .populate('subjects', 'name code type')
@@ -67,10 +68,14 @@ exports.getTemplate = async (req, res) => {
 // Get template by class name
 exports.getTemplateByClassName = async (req, res) => {
   try {
-    const template = await SubjectClassTemplate.findOne({ 
+    const { academicYearId } = req.query;
+    const query = { 
       className: req.params.className,
       isActive: true 
-    }).populate('subjects', 'name code description type creditHours');
+    };
+    if (academicYearId) query.academicYearId = academicYearId;
+
+    const template = await SubjectClassTemplate.findOne(query).populate('subjects', 'name code description type creditHours');
 
     if (!template) {
       return res.status(404).json({ message: 'Template not found for this class' });
@@ -85,17 +90,22 @@ exports.getTemplateByClassName = async (req, res) => {
 // Create template
 exports.createTemplate = async (req, res) => {
   try {
-    const { className, subjects, sectionSpecific, sectionSubjects } = req.body;
+    const { className, academicYearId, subjects, sectionSpecific, sectionSubjects } = req.body;
 
-    const existingTemplate = await SubjectClassTemplate.findOne({ className });
+    if (!academicYearId) {
+      return res.status(400).json({ message: 'Academic Year ID is required' });
+    }
+
+    const existingTemplate = await SubjectClassTemplate.findOne({ className, academicYearId });
     if (existingTemplate) {
       return res.status(400).json({ 
-        message: 'Template already exists for this class. Use update instead.' 
+        message: 'Template already exists for this class in the selected academic year. Use update instead.' 
       });
     }
 
     const template = await SubjectClassTemplate.create({
       className,
+      academicYearId,
       subjects,
       sectionSpecific,
       sectionSubjects,
@@ -150,12 +160,17 @@ exports.updateTemplate = async (req, res) => {
 exports.upsertTemplateByClassName = async (req, res) => {
   try {
     const { className } = req.params;
-    const { subjects, sectionSpecific, sectionSubjects } = req.body;
+    const { academicYearId, subjects, sectionSpecific, sectionSubjects } = req.body;
+
+    if (!academicYearId) {
+      return res.status(400).json({ message: 'Academic Year ID is required' });
+    }
 
     const template = await SubjectClassTemplate.findOneAndUpdate(
-      { className },
+      { className, academicYearId },
       { 
         className,
+        academicYearId,
         subjects,
         sectionSpecific,
         sectionSubjects,

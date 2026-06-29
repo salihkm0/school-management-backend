@@ -2,7 +2,9 @@ const { Queue } = require('bullmq');
 const Redis = require('ioredis');
 require('dotenv').config();
 
-let redisUrl = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
+const redisHost = process.env.REDIS_HOST || '127.0.0.1';
+const redisPort = process.env.REDIS_PORT || '6379';
+let redisUrl = process.env.REDIS_URL || `redis://${redisHost}:${redisPort}`;
 const isUpstash = redisUrl.includes('upstash');
 
 if (isUpstash && redisUrl.startsWith('redis://')) {

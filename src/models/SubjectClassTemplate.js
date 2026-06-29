@@ -7,6 +7,11 @@ const SubjectClassTemplateSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  academicYearId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'AcademicYear',
+    required: true
+  },
   subjects: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Subject'
@@ -35,8 +40,8 @@ const SubjectClassTemplateSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Unique index for className
-SubjectClassTemplateSchema.index({ className: 1 }, { unique: true });
+// Unique index for className + academicYearId
+SubjectClassTemplateSchema.index({ className: 1, academicYearId: 1 }, { unique: true });
 
 // Check if model already exists
 module.exports = mongoose.models.SubjectClassTemplate || mongoose.model('SubjectClassTemplate', SubjectClassTemplateSchema);

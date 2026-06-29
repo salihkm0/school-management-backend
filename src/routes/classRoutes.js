@@ -26,7 +26,8 @@ const {
   getTeacherClassTeacherClasses, // Add this
   syncLanguageSubjects,
   syncAllClassesLanguageSubjects,
-  getClassLanguageSubjects
+  getClassLanguageSubjects,
+  syncAllSubjectTemplates
 } = require('../controllers/classController');
 
 router.use(protect);
@@ -39,6 +40,9 @@ router.get('/:id/subject-teachers', validate([idParam]), getClassSubjectTeachers
 router.post('/:id/subject-teachers', authorize('admin'), validate([idParam]), assignSubjectTeacher);
 router.post('/:id/subject-teachers/bulk', authorize('admin'), validate([idParam]), bulkAssignSubjectTeachers);
 router.delete('/:id/subject-teachers/:subjectId', authorize('admin'), validate([idParam]), removeSubjectTeacher);
+
+// Subject templates bulk sync
+router.post('/sync-all-templates/:academicYearId', authorize('admin'), syncAllSubjectTemplates);
 
 // Language subjects
 router.post('/:id/sync-language-subjects', authorize('admin'), validate([idParam]), syncLanguageSubjects);

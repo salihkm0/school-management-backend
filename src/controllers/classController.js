@@ -954,6 +954,74 @@ exports.applyTemplateToClass = async (req, res) => {
   }
 };
 
+exports.syncAllSubjectTemplates = async (req, res) => {
+  try {
+    const { academicYearId } = req.params;
+
+    if (!academicYearId) {
+      return res.status(400).json({ message: 'Academic Year ID is required' });
+    }
+
+    const classes = await Class.find({ academicYearId, isActive: true });
+    
+    if (!classes.length) {
+      return res.status(404).json({ message: 'No classes found for the selected academic year' });
+    }
+
+    let updatedCount = 0;
+    let skippedCount = 0;
+
+    for (const classItem of classes) {
+      const template = await SubjectClassTemplate.findOne({ 
+        className: classItem.name, 
+        academicYearId,
+        isActive: true 
+      });
+
+      if (!template) {
+        skippedCount++;
+        continue;
+      }
+
+      let subjectIds = [];
+      if (template.sectionSpecific && template.sectionSubjects && classItem.section) {
+        const sectionSubjects = template.sectionSubjects.get(classItem.section);
+        subjectIds = sectionSubjects || template.subjects;
+      } else {
+        subjectIds = template.subjects;
+      }
+
+      if (subjectIds.length > 0) {
+        await Class.findByIdAndUpdate(classItem._id, {
+          $addToSet: { subjects: { $each: subjectIds } }
+        });
+        updatedCount++;
+      } else {
+        skippedCount++;
+      }
+    }
+
+    await createRecentActivity({
+      title: 'Bulk Sync Subject Templates',
+      description: `Synced templates for ${updatedCount} classes in academic year`,
+      activityType: ACTIVITY_TYPES.TEMPLATE_APPLIED,
+      entityType: ENTITY_TYPES.CLASS,
+      performedBy: req.user._id,
+      performedByName: req.user.name,
+      performedByRole: req.user.role,
+      severity: SEVERITY.INFO
+    });
+
+    res.json({
+      message: `Successfully synced templates for ${updatedCount} classes. ${skippedCount} skipped.`,
+      updatedCount,
+      skippedCount
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 exports.syncClassSubjects = async (req, res) => {
   try {
     const classItem = await Class.findById(req.params.id);

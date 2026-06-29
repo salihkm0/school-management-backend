@@ -90,7 +90,13 @@ exports.getSubjects = async (req, res) => {
     
     const query = {};
     if (type) query.type = type;
-    if (isActive !== undefined) query.isActive = isActive === 'true';
+    if (isActive === "false") {
+      query.isActive = false;
+    } else if (isActive === "all") {
+      // No filter
+    } else {
+      query.isActive = { $ne: false };
+    }
     if (department) query.department = department;
     if (search) {
       query.$or = [
@@ -241,32 +247,8 @@ exports.deleteSubject = async (req, res) => {
       return res.status(404).json({ message: 'Subject not found' });
     }
 
-    const classesUsingSubject = await Class.find({ subjects: subject._id });
-    if (classesUsingSubject.length > 0) {
-      const classNames = classesUsingSubject.map(c => c.section ? `${c.name}-${c.section}` : c.name);
-      return res.status(400).json({ 
-        message: 'Cannot delete subject. It is being used in classes.',
-        classes: classNames
-      });
-    }
-
-    const templatesUsingSubject = await SubjectClassTemplate.find({ subjects: subject._id });
-    if (templatesUsingSubject.length > 0) {
-      return res.status(400).json({ 
-        message: 'Cannot delete subject. It is being used in subject templates.',
-        templates: templatesUsingSubject.map(t => t.className)
-      });
-    }
-
-    const examsUsingSubject = await Exam.find({ 
-      'subjectConfigs.subjectId': subject._id 
-    });
-    if (examsUsingSubject.length > 0) {
-      return res.status(400).json({ 
-        message: 'Cannot delete subject. It is being used in exams.',
-        exams: examsUsingSubject.map(e => e.name)
-      });
-    }
+    // Soft delete allows keeping historical records intact.
+    // We don't block deactivation even if it's used in classes or exams.
 
     await sendSubjectNotification(
       subject._id,

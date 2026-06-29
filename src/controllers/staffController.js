@@ -259,10 +259,27 @@ exports.updateStaff = async (req, res) => {
 
 exports.deleteStaff = async (req, res) => {
   try {
+    const { force } = req.query;
     const staff = await Staff.findById(req.params.id);
 
     if (!staff) {
       return res.status(404).json({ message: "Staff not found" });
+    }
+
+    if (force === 'true') {
+      const userId = staff.userId;
+      await Staff.findByIdAndDelete(req.params.id);
+      if (userId) {
+        await User.findByIdAndDelete(userId);
+      }
+      
+      broadcastToRole('admin', 'staff:deleted', {
+        staffId: staff._id,
+        staffName: staff.name,
+        timestamp: new Date()
+      });
+
+      return res.json({ message: "Staff permanently deleted" });
     }
 
     staff.isActive = false;

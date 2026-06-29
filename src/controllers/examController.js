@@ -224,18 +224,22 @@ exports.getExams = async (req, res) => {
 
     // Apply staff visibility filtering
     if (req.user.role === 'staff') {
-      const staffAssignment = await StaffAssignment.findOne({ staffId: req.user.id });
+      const staff = await Staff.findOne({ userId: req.user.id });
       let myClassIds = [];
-      if (staffAssignment) {
-        if (staffAssignment.classTeacherClassId) {
-          myClassIds.push(staffAssignment.classTeacherClassId.toString());
-        }
-        if (staffAssignment.teachingAssignments && staffAssignment.teachingAssignments.length > 0) {
-          staffAssignment.teachingAssignments.forEach(ta => {
-            if (ta.classIds && ta.classIds.length > 0) {
-              ta.classIds.forEach(id => myClassIds.push(id.toString()));
-            }
-          });
+      
+      if (staff) {
+        const staffAssignment = await StaffAssignment.findOne({ staffId: staff._id });
+        if (staffAssignment) {
+          if (staffAssignment.classTeacherOf) {
+            myClassIds.push(staffAssignment.classTeacherOf.toString());
+          }
+          if (staffAssignment.subjectsTaught && staffAssignment.subjectsTaught.length > 0) {
+            staffAssignment.subjectsTaught.forEach(ta => {
+              if (ta.classId) {
+                myClassIds.push(ta.classId.toString());
+              }
+            });
+          }
         }
       }
       myClassIds = [...new Set(myClassIds)];

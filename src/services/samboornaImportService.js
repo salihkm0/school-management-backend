@@ -56,19 +56,26 @@ class SamboornaImportService {
     console.log('=== Parsing Excel file ===');
     
     const workbook = XLSX.readFile(filePath);
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
     
-    const rows = XLSX.utils.sheet_to_json(worksheet, { 
-      header: 1,
-      defval: '',
+    const allSheetsRows = workbook.SheetNames.map(sheetName => {
+      const worksheet = workbook.Sheets[sheetName];
+      return XLSX.utils.sheet_to_json(worksheet, { 
+        header: 1,
+        defval: '',
+      });
     });
+
+    if (allSheetsRows.length === 0) {
+      console.error('No sheets found in Excel file');
+      return [];
+    }
     
-    console.log(`Total rows in Excel: ${rows.length}`);
+    const primaryRows = allSheetsRows[0];
+    console.log(`Total rows in primary sheet: ${primaryRows.length}`);
     
     let headerRowIndex = -1;
-    for (let i = 0; i < Math.min(10, rows.length); i++) {
-      const row = rows[i];
+    for (let i = 0; i < Math.min(10, primaryRows.length); i++) {
+      const row = primaryRows[i];
       if (row && row.some(cell => String(cell).includes('Student code'))) {
         headerRowIndex = i;
         break;
@@ -80,29 +87,43 @@ class SamboornaImportService {
       return [];
     }
     
-    const headerRow = rows[headerRowIndex];
-    const headers = headerRow.map(h => this.cleanColumnName(String(h || '')));
-    
-    const dataRows = rows.slice(headerRowIndex + 1);
+    const allHeaders = allSheetsRows.map(sheetRows => {
+      if (headerRowIndex < sheetRows.length) {
+        return (sheetRows[headerRowIndex] || []).map(h => this.cleanColumnName(String(h || '')));
+      }
+      return [];
+    });
     
     const result = [];
-    for (const row of dataRows) {
-      if (!row || row.length === 0) continue;
+    const maxDataRows = Math.max(...allSheetsRows.map(rows => rows.length));
+    
+    for (let i = headerRowIndex + 1; i < maxDataRows; i++) {
+      const primaryRow = primaryRows[i] || [];
+      const firstCell = String(primaryRow[0] || '').trim();
       
-      const firstCell = String(row[0] || '').trim();
-      if (!firstCell || firstCell === '') continue;
-      if (!/^\d+$/.test(firstCell)) continue;
+      if (!firstCell || firstCell === '' || !/^\d+$/.test(firstCell)) {
+        continue;
+      }
       
-      const obj = {};
-      for (let i = 0; i < headers.length; i++) {
-        if (headers[i]) {
-          obj[headers[i]] = row[i] !== undefined && row[i] !== null ? row[i] : '';
+      const mergedObj = {};
+      
+      for (let s = 0; s < allSheetsRows.length; s++) {
+        const sheetRows = allSheetsRows[s];
+        const headers = allHeaders[s];
+        const row = sheetRows[i] || [];
+        
+        for (let j = 0; j < headers.length; j++) {
+          if (headers[j]) {
+            if (mergedObj[headers[j]] === undefined || mergedObj[headers[j]] === '') {
+              mergedObj[headers[j]] = row[j] !== undefined && row[j] !== null ? row[j] : '';
+            }
+          }
         }
       }
-      result.push(obj);
+      result.push(mergedObj);
     }
     
-    console.log(`Valid data rows parsed: ${result.length}`);
+    console.log(`Valid data rows parsed (merged from ${allSheetsRows.length} sheets): ${result.length}`);
     
     return result;
   }
@@ -795,6 +816,7 @@ async syncAllClassesLanguageSubjects() {
     const studentData = {
       studentCode,
       fullName,
+      fullNameMalayalam: this.getValue(row, 'Full name(malayalam)'),
       gender: this.mapGender(this.getValue(row, 'Gender')),
       dateOfBirth: this.parseDate(this.getValue(row, 'Date of birth')),
       birthPlace: this.getValue(row, 'Birth place'),
@@ -807,6 +829,9 @@ async syncAllClassesLanguageSubjects() {
       identificationMark1: this.getValue(row, 'Identification mark 1'),
       identificationMark2: this.getValue(row, 'Identification mark 2'),
       eid: this.getValue(row, 'EID'),
+      udidNumber: this.getValue(row, 'UDID Number'),
+      disabilityPercentage: this.parseNumber(this.getValue(row, 'Disability Percentage')),
+      physicalChallenge: this.getValue(row, 'Physical Challenge'),
       reasonForNoUid: this.getValue(row, 'Reason for no uid'),
       
       houseName: this.getValue(row, 'House Name'),
@@ -839,15 +864,19 @@ async syncAllClassesLanguageSubjects() {
       className: className,
       division: division,
       status: 'active',
+      confirmationStatus: this.getValue(row, 'Confirmation status'),
       
       fatherFullName: this.getValue(row, 'Father full name'),
+      fatherNameMalayalam: this.getValue(row, "Father's Name(malayalam)"),
       motherFullName: this.getValue(row, 'Mother full name'),
+      motherNameMalayalam: this.getValue(row, "Mother's Name(malayalam)"),
       guardian: this.getValue(row, 'Guardian') || this.getValue(row, 'Father full name'),
       relationOfGuardian: this.getValue(row, 'Relation of Guardian') || 'Father',
       occupationOfGuardian: this.getValue(row, 'Occupation of Guardian'),
       
       annualIncome: this.parseNumber(this.getValue(row, 'Annual income')),
       apl: String(this.getValue(row, 'APL')).toLowerCase() === 'true',
+      midDayMealApplicable: String(this.getValue(row, 'Mid day meal applicable')).toLowerCase() === 'yes',
       
       bankName: this.getValue(row, 'Bank name'),
       branchName: this.getValue(row, 'Branch Name'),

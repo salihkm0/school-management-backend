@@ -41,8 +41,13 @@ exports.getStaff = async (req, res) => {
 
     const query = {};
     if (role) query.role = role;
-    if (isActive !== undefined) {
-      query.isActive = isActive === "true" ? { $ne: false } : false;
+    if (isActive === "false") {
+      query.isActive = false;
+    } else if (isActive === "all") {
+      // No filter on isActive
+    } else {
+      // Default to only active staff (true or undefined)
+      query.isActive = { $ne: false };
     }
     if (search) {
       query.$or = [

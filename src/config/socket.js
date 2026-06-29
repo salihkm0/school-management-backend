@@ -1373,10 +1373,16 @@ const setupSocket = (io) => {
         return next(new Error("Authentication error: No token provided"));
       }
 
+      let decoded;
       try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        decoded = jwt.verify(token, process.env.JWT_SECRET);
         logger.debug(`Token decoded successfully for user: ${decoded.id}`);
+      } catch (jwtError) {
+        logger.error("Socket.IO JWT verification failed:", jwtError.message);
+        return next(new Error("Authentication error: Invalid token"));
+      }
 
+      try {
         const user = await User.findById(decoded.id).select("-password");
 
         if (!user) {
@@ -1392,9 +1398,9 @@ const setupSocket = (io) => {
         socket.user = user;
         logger.info(`Socket.IO authenticated: ${user.email} (${user.role})`);
         next();
-      } catch (jwtError) {
-        logger.error("Socket.IO JWT verification failed:", jwtError.message);
-        return next(new Error("Authentication error: Invalid token"));
+      } catch (dbError) {
+        logger.error("Socket.IO Database lookup failed:", dbError.message);
+        return next(new Error("Authentication error: Internal server error"));
       }
     } catch (error) {
       logger.error("Socket.IO authentication error:", error.message);

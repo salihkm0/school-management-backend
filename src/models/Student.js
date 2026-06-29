@@ -14,6 +14,10 @@ const StudentSchema = new mongoose.Schema(
       required: [true, "Full name is required"],
       trim: true,
     },
+    fullNameMalayalam: {
+      type: String,
+      trim: true,
+    },
     gender: {
       type: String,
       enum: ["M", "F", "Other"],
@@ -56,6 +60,17 @@ const StudentSchema = new mongoose.Schema(
       trim: true,
     },
     eid: {
+      type: String,
+      trim: true,
+    },
+    udidNumber: {
+      type: String,
+      trim: true,
+    },
+    disabilityPercentage: {
+      type: Number,
+    },
+    physicalChallenge: {
       type: String,
       trim: true,
     },
@@ -183,13 +198,25 @@ const StudentSchema = new mongoose.Schema(
       enum: ["active", "inactive", "discontinued", "transferred", "completed"],
       default: "active",
     },
+    confirmationStatus: {
+      type: String,
+      trim: true,
+    },
 
     // Parent/Guardian Information (from Samboorna)
     fatherFullName: {
       type: String,
       trim: true,
     },
+    fatherNameMalayalam: {
+      type: String,
+      trim: true,
+    },
     motherFullName: {
+      type: String,
+      trim: true,
+    },
+    motherNameMalayalam: {
       type: String,
       trim: true,
     },
@@ -219,6 +246,10 @@ const StudentSchema = new mongoose.Schema(
       type: Number,
     },
     apl: {
+      type: Boolean,
+      default: false,
+    },
+    midDayMealApplicable: {
       type: Boolean,
       default: false,
     },

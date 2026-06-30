@@ -121,7 +121,10 @@ const { connectRedis, disconnectRedis } = require('./src/config/redis');
 
 connectRedis().then(client => {
   if (client) {
-    console.log('🎯 Redis cache layer ready with Upstash');
+    const redisType = process.env.UPSTASH_REDIS_REST_URL ? 'Upstash' 
+      : process.env.REDIS_URL ? 'Redis URL'
+      : `local Redis (${process.env.REDIS_HOST || '127.0.0.1'}:${process.env.REDIS_PORT || 6379})`;
+    console.log(`🎯 Redis cache layer ready — ${redisType}`);
   } else {
     console.log('⚠️ Running without Redis cache (fallback mode)');
   }

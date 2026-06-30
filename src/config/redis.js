@@ -123,26 +123,34 @@ const connectRedis = async () => {
     }
     
     // Create Redis client
+    let retryCount = 0;
+    const MAX_RETRIES = 5;
+
     redisClient = createClient({
       url: redisUrl,
       socket: {
-        tls: upstashRestUrl ? true : false, // Enable TLS for Upstash
+        tls: upstashRestUrl ? true : false,
         rejectUnauthorized: false,
         connectTimeout: 10000,
-        keepAlive: 5000
+        keepAlive: 5000,
+        reconnectStrategy: (retries) => {
+          if (retries >= MAX_RETRIES) {
+            logger.warn(`⚠️ Redis max retries (${MAX_RETRIES}) reached. Giving up on reconnect.`);
+            return false; // Stop retrying
+          }
+          const delay = Math.min(retries * 500, 5000);
+          logger.warn(`Redis reconnect attempt ${retries + 1}/${MAX_RETRIES} in ${delay}ms`);
+          return delay;
+        }
       },
       pingInterval: 30000,
       commandsQueueMaxLength: 100,
-      retryStrategy: (times) => {
-        const delay = Math.min(times * 100, 3000);
-        logger.warn(`Redis connection retry ${times} in ${delay}ms`);
-        return delay;
-      }
     });
     
     redisClient.on('connect', () => {
       logger.info('✅ Redis connected successfully');
       isRedisAvailable = true;
+      retryCount = 0;
     });
     
     redisClient.on('ready', () => {
@@ -150,7 +158,10 @@ const connectRedis = async () => {
     });
     
     redisClient.on('error', (err) => {
-      logger.error('❌ Redis connection error:', err.message);
+      retryCount++;
+      if (retryCount <= 3) {
+        logger.error('❌ Redis connection error:', err.message);
+      }
       isRedisAvailable = false;
     });
     

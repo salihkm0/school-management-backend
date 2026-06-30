@@ -2,61 +2,60 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 
-let browserInstance = null;
-
 const findChromePath = () => {
   const possiblePaths = [
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    '/Applications/Chromium.app/Contents/MacOS/Chromium',
     '/usr/bin/google-chrome-stable',
     '/usr/bin/google-chrome',
     '/usr/bin/chromium-browser',
     '/usr/bin/chromium',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Chromium.app/Contents/MacOS/Chromium',
     process.env.CHROME_PATH,
     process.env.PUPPETEER_EXECUTABLE_PATH
   ].filter(Boolean);
 
   for (const chromePath of possiblePaths) {
     if (fs.existsSync(chromePath)) {
-      console.log(`Found Chrome at: ${chromePath}`);
+      console.log(`[browserHelper] Found Chrome at: ${chromePath}`);
       return chromePath;
     }
   }
-  
+
+  console.warn('[browserHelper] No system Chrome found, using bundled Puppeteer Chromium');
   return null;
 };
 
+// Launch a fresh browser per use — avoids stale singleton connection issues on VPS
 const getBrowser = async () => {
-  if (!browserInstance) {
-    const chromePath = findChromePath();
-    
-    const launchOptions = {
-      headless: true,
-      args: [
-        '--no-sandbox', 
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--single-process',
-        '--no-zygote'
-      ]
-    };
-    
-    if (chromePath) {
-      launchOptions.executablePath = chromePath;
-      console.log('Using Chrome at:', chromePath);
-    } else {
-      console.log('No Chrome found, using default Puppeteer Chromium');
-    }
-    
-    browserInstance = await puppeteer.launch(launchOptions);
+  const chromePath = findChromePath();
+
+  const launchOptions = {
+    headless: 'new',
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-software-rasterizer',
+      '--disable-extensions',
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--disable-background-networking'
+    ]
+  };
+
+  if (chromePath) {
+    launchOptions.executablePath = chromePath;
   }
-  return browserInstance;
+
+  const browser = await puppeteer.launch(launchOptions);
+  return browser;
 };
 
-const closeBrowser = async () => {
-  if (browserInstance) {
-    await browserInstance.close();
-    browserInstance = null;
+// Close the browser after use — caller is responsible for calling this
+const closeBrowser = async (browser) => {
+  if (browser) {
+    await browser.close().catch(() => {});
   }
 };
 

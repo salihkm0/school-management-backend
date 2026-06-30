@@ -146,9 +146,10 @@ function buildSubjects(studentDoc, source) {
 // Core: render EJS → PDF via Puppeteer
 // ─────────────────────────────────────────────────────────────────────────────
 async function renderHtmlToPdf(html) {
-  let page;
+  let browser = null;
+  let page = null;
   try {
-    const browser = await getBrowser();
+    browser = await getBrowser();
     page = await browser.newPage();
 
     await page.setContent(html, { waitUntil: 'networkidle0' });
@@ -161,11 +162,13 @@ async function renderHtmlToPdf(html) {
       margin: { top: '5mm', right: '5mm', bottom: '5mm', left: '5mm' },
     });
 
-    await page.close();
-    return Buffer.from(pdfBuffer); // ensure Node Buffer
+    return Buffer.from(pdfBuffer);
   } catch (err) {
-    if (page) await page.close().catch(() => {});
     throw err;
+  } finally {
+    // Always close page and browser — fresh instance per call
+    if (page) await page.close().catch(() => {});
+    if (browser) await browser.close().catch(() => {});
   }
 }
 

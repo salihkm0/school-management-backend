@@ -17,18 +17,23 @@ const connection = new Redis(redisUrl, {
 });
 
 connection.on('error', (err) => {
-  console.error('[jobQueue] ioredis error:', err);
+  console.error('[jobQueue] ioredis error:', err.message);
+});
+
+connection.on('connect', () => {
+  console.log('[jobQueue] Redis connected successfully');
 });
 
 // Setup queues
 const pdfQueue = new Queue('pdf-generation', { connection });
 const importQueue = new Queue('bulk-import', { connection });
 
-pdfQueue.on('error', (err) => console.error('[pdfQueue] error:', err));
-importQueue.on('error', (err) => console.error('[importQueue] error:', err));
+pdfQueue.on('error', (err) => console.error('[pdfQueue] error:', err.message));
+importQueue.on('error', (err) => console.error('[importQueue] error:', err.message));
 
 module.exports = {
   connection,
+  redisConnection: connection, // Exported so server.js can share it with health endpoint
   pdfQueue,
   importQueue,
 };

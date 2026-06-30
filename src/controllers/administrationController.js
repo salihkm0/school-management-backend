@@ -25,7 +25,28 @@ exports.getSystemHealth = async (req, res) => {
     // Add redis status if available
     const redisClient = req.app.get('redisClient');
     if (redisClient) {
-      health.redisStatus = redisClient.isReady ? 'connected' : 'disconnected';
+      const status = redisClient.status; // 'ready' | 'connecting' | 'close' | 'end'
+      health.redisStatus = status === 'ready' ? 'connected' : status;
+      try {
+        const info = await redisClient.info('all');
+        const extract = (key) => {
+          const match = info.match(new RegExp(`${key}:(\\S+)`));
+          return match ? match[1] : null;
+        };
+        health.redisInfo = {
+          version:         extract('redis_version'),
+          uptimeSeconds:   extract('uptime_in_seconds'),
+          usedMemory:      extract('used_memory_human'),
+          maxMemory:       extract('maxmemory_human'),
+          connectedClients:extract('connected_clients'),
+          totalKeys:       extract('db0') || '0',
+          mode:            extract('redis_mode'),
+        };
+      } catch (_) {
+        // INFO failed — still show connection status
+      }
+    } else {
+      health.redisStatus = 'not configured';
     }
 
     res.json(health);

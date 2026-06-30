@@ -299,6 +299,10 @@ server.listen(PORT, '0.0.0.0', () => {
 // Start background workers
 require('./src/services/queue/workers/pdfWorker');
 
+// Register Redis connection on app so health endpoint can read status
+const { redisConnection } = require('./src/services/queue/jobQueue');
+app.set('redisClient', redisConnection);
+
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {
   console.error('Unhandled Rejection:', err);

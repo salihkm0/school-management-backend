@@ -163,6 +163,9 @@ setupSocket(io);
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'src', 'views'));
 
+// Trust Nginx reverse proxy — required for express-rate-limit to read real client IPs
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },

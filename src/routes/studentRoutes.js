@@ -17,7 +17,8 @@ const {
   promoteStudents,
   getStudentsByClass,
   getStudentMarks,
-  getStudentAcademicInfo
+  getStudentAcademicInfo,
+  exportStudents
 } = require('../controllers/studentController');
 
 router.use(protect);
@@ -32,6 +33,9 @@ router.post('/promote', authorize('admin'), promoteStudents);
 
 // FIXED: Use classIdParam instead of idParam
 router.get('/class/:classId', validate([classIdParam]), getStudentsByClass);
+
+// Export all students as CSV (must be before /:id)
+router.get('/export/csv', exportStudents);
 
 router.get('/:id', validate([idParam]), getStudent);
 router.get('/:id/marks', validate([idParam]), getStudentMarks);

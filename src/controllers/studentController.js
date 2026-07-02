@@ -755,3 +755,76 @@ exports.getStudentAcademicInfo = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// Export ALL students as CSV (no pagination)
+exports.exportStudents = async (req, res) => {
+  try {
+    const { classId, academicYearId, status, search, format = 'csv' } = req.query;
+
+    const query = { isActive: true };
+    if (classId) query.classId = classId;
+    if (academicYearId) query.academicYearId = academicYearId;
+    if (status && status !== 'all') query.status = status;
+    if (search) {
+      query.$or = [
+        { fullName: { $regex: search, $options: 'i' } },
+        { studentCode: { $regex: search, $options: 'i' } },
+        { admissionNo: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const students = await Student.find(query)
+      .populate('classId', 'name section displayName')
+      .populate('academicYearId', 'year name')
+      .sort({ 'classId.name': 1, rollNumber: 1, fullName: 1 })
+      .lean();
+
+    // Build CSV rows
+    const headers = [
+      'SL No', 'Admission No', 'Student Name', 'Class', 'Division',
+      'Roll No', 'Gender', 'Date of Birth', 'Religion', 'Caste',
+      'Primary Phone', 'Father Name', 'Mother Name', 'Status'
+    ];
+
+    const rows = students.map((s, i) => [
+      i + 1,
+      s.admissionNo || '',
+      s.fullName || '',
+      s.classId ? (s.classId.name || '') : '',
+      s.classId ? (s.classId.section || '') : '',
+      s.rollNumber || '',
+      s.gender === 'M' ? 'Male' : s.gender === 'F' ? 'Female' : (s.gender || ''),
+      s.dateOfBirth ? new Date(s.dateOfBirth).toLocaleDateString('en-IN') : '',
+      s.religion || '',
+      s.caste || '',
+      s.contact?.primaryPhone || '',
+      s.fatherName || '',
+      s.motherName || '',
+      s.status || 'active'
+    ]);
+
+    // Escape CSV cell
+    const escapeCell = (val) => {
+      const str = String(val ?? '');
+      return str.includes(',') || str.includes('"') || str.includes('\n')
+        ? `"${str.replace(/"/g, '""')}"`
+        : str;
+    };
+
+    const csvLines = [
+      headers.map(escapeCell).join(','),
+      ...rows.map(row => row.map(escapeCell).join(','))
+    ];
+    const csvContent = csvLines.join('\n');
+
+    const className = students[0]?.classId?.name || 'All';
+    const filename = `Students_${className}_${Date.now()}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send('\uFEFF' + csvContent); // BOM for Excel UTF-8 compatibility
+  } catch (error) {
+    console.error('Error in exportStudents:', error);
+    res.status(500).json({ message: error.message });
+  }
+};

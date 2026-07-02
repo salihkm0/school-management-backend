@@ -184,6 +184,13 @@ exports.getClasses = async (req, res) => {
 
     const total = await Class.countDocuments(query);
 
+    // Aggregate total students across ALL matching classes (not just current page)
+    const allMatchingClassIds = await Class.find(query).select('_id').lean();
+    const totalStudents = await Student.countDocuments({
+      classId: { $in: allMatchingClassIds.map(c => c._id) },
+      isActive: true
+    });
+
     res.json({
       success: true,
       data: classesWithDetails,
@@ -191,7 +198,8 @@ exports.getClasses = async (req, res) => {
         page: parseInt(page),
         limit: parseInt(limit),
         total,
-        pages: Math.ceil(total / limit)
+        pages: Math.ceil(total / limit),
+        totalStudents
       }
     });
   } catch (error) {

@@ -779,7 +779,6 @@ exports.exportStudents = async (req, res) => {
       .sort({ 'classId.name': 1, rollNumber: 1, fullName: 1 })
       .lean();
 
-    // Build CSV rows
     const headers = [
       'SL No', 'Admission No', 'Student Name', 'Class', 'Division',
       'Roll No', 'Gender', 'Date of Birth', 'Religion', 'Caste',
@@ -803,26 +802,19 @@ exports.exportStudents = async (req, res) => {
       s.status || 'active'
     ]);
 
-    // Escape CSV cell
-    const escapeCell = (val) => {
-      const str = String(val ?? '');
-      return str.includes(',') || str.includes('"') || str.includes('\n')
-        ? `"${str.replace(/"/g, '""')}"`
-        : str;
-    };
+    const xlsx = require('xlsx');
+    const ws = xlsx.utils.aoa_to_sheet([headers, ...rows]);
+    const wb = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(wb, ws, "Students");
 
-    const csvLines = [
-      headers.map(escapeCell).join(','),
-      ...rows.map(row => row.map(escapeCell).join(','))
-    ];
-    const csvContent = csvLines.join('\n');
+    const excelBuffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
     const className = students[0]?.classId?.name || 'All';
-    const filename = `Students_${className}_${Date.now()}.csv`;
+    const filename = `Students_${className}_${Date.now()}.xlsx`;
 
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send('\uFEFF' + csvContent); // BOM for Excel UTF-8 compatibility
+    res.send(excelBuffer);
   } catch (error) {
     console.error('Error in exportStudents:', error);
     res.status(500).json({ message: error.message });

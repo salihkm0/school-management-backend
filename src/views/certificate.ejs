@@ -270,10 +270,10 @@ const sonDaughter = gender === 'M' ? 'S/O' : 'D/O';
             
             <div class="certificate-content">
                 Certified that <span class="student-name"><%= prefix %> <%= studentData.name %></span> 
-                <%= sonDaughter %> <span class="highlight"><%= studentData.parentName %></span>, 
-                <span class="highlight"><%= studentData.houseName %></span>, <%= studentData.houseAddress %> House, 
-                <span class="highlight"><%= studentData.postOffice %></span> PO is studying in the institution in 
-                <span class="highlight"><%= studentData.className %> standard</span> with admission Number 
+                <%= sonDaughter %> <%= studentData.parentName %>, 
+                <%= studentData.houseName %>, <%= studentData.houseAddress %> House, 
+                <%= studentData.postOffice %> PO is studying in the institution in 
+                <%= studentData.className %> standard with admission Number 
                 <span class="highlight"><%= studentData.admissionNo %></span> during the Academic year 
                 <span class="highlight"><%= academicYearDisplay %></span> and certify that <%= gender === 'M' ? 'his' : 'her' %> 
                 date of birth according to the school record is <span class="highlight"><%= studentData.dob %></span>
@@ -291,8 +291,8 @@ const sonDaughter = gender === 'M' ? 'S/O' : 'D/O';
         
         <!-- Date and Place - Bottom -->
         <div class="date-place">
-            <span class="date-item">Date: <span class="highlight"><%= certificateDateDisplay %></span></span>
-            <span class="place-item">Place: <span class="highlight"><%= placeDisplay %></span></span>
+            <span class="date-item">Date: <%= certificateDateDisplay %></span>
+            <span class="place-item">Place: <%= placeDisplay %></span>
         </div>
         
         <!-- Footer -->

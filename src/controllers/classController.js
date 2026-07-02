@@ -980,28 +980,43 @@ exports.syncAllSubjectTemplates = async (req, res) => {
     let skippedCount = 0;
 
     for (const classItem of classes) {
-      const template = await SubjectClassTemplate.findOne({ 
-        className: classItem.name, 
-        academicYearId,
-        isActive: true 
-      });
+      // 1. Get subjects from template (re-using the proven autoAssign function)
+      const templateSubjectIds = await autoAssignSubjectsFromTemplate(classItem.name, classItem.section);
 
-      if (!template) {
-        skippedCount++;
-        continue;
+      // 2. Extract language subjects from all active students in this class
+      const students = await Student.find({ classId: classItem._id, isActive: true });
+      const languageSet = new Set();
+      
+      for (const student of students) {
+        const languages = [
+          student.firstLanguagePaper1,
+          student.firstLanguagePaper2,
+          student.thirdLanguage,
+          student.additionalLanguage
+        ].filter(l => l);
+        
+        for (const lang of languages) {
+          if (lang && typeof lang === 'object' && lang.name) {
+            languageSet.add(lang.name);
+          } else if (lang && typeof lang === 'string') {
+            languageSet.add(lang);
+          }
+        }
       }
+      
+      // 3. Get or create the actual Subject records for these languages
+      const languageSubjectIds = await getOrCreateLanguageSubjects([...languageSet]);
+      
+      // 4. Merge template subjects and language subjects without duplicates
+      const allSubjectIds = [...new Set([
+        ...templateSubjectIds.map(s => s.toString()), 
+        ...languageSubjectIds.map(s => s.toString())
+      ])];
 
-      let subjectIds = [];
-      if (template.sectionSpecific && template.sectionSubjects && classItem.section) {
-        const sectionSubjects = template.sectionSubjects.get(classItem.section);
-        subjectIds = sectionSubjects || template.subjects;
-      } else {
-        subjectIds = template.subjects;
-      }
-
-      if (subjectIds.length > 0) {
+      if (allSubjectIds.length > 0) {
+        // OVERWRITE the class subjects with the complete synced list (just like individual sync)
         await Class.findByIdAndUpdate(classItem._id, {
-          $addToSet: { subjects: { $each: subjectIds } }
+          subjects: allSubjectIds
         });
         updatedCount++;
       } else {

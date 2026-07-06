@@ -1772,20 +1772,23 @@ exports.getStaffExams = async (req, res) => {
       return res.status(404).json({ message: 'Staff record not found' });
     }
     
-    // Get classes where this staff is class teacher
-    const classTeacherClasses = await Class.find({
-      classTeacherId: staff._id,
+    // Get classes where this staff is class teacher or subject teacher
+    const teacherClasses = await Class.find({
+      $or: [
+        { classTeacherId: staff._id },
+        { 'subjectTeachers.teacherId': staff._id }
+      ],
       academicYearId: academicYearId,
       isActive: true
     }).select('_id');
     
-    const classIds = classTeacherClasses.map(c => c._id);
+    const classIds = teacherClasses.map(c => c._id);
     
     if (classIds.length === 0) {
       return res.json({
         success: true,
         data: [],
-        message: 'No classes assigned as class teacher'
+        message: 'No classes assigned'
       });
     }
     
@@ -1837,14 +1840,17 @@ exports.createStaffExam = async (req, res) => {
       return res.status(404).json({ message: 'Staff record not found' });
     }
     
-    // Get classes where this staff is class teacher
-    const classTeacherClasses = await Class.find({
-      classTeacherId: staff._id,
+    // Get classes where this staff is class teacher or subject teacher
+    const allowedClasses = await Class.find({
+      $or: [
+        { classTeacherId: staff._id },
+        { 'subjectTeachers.teacherId': staff._id }
+      ],
       academicYearId: academicYearId,
       isActive: true
     }).select('_id');
     
-    const allowedClassIds = classTeacherClasses.map(c => c._id.toString());
+    const allowedClassIds = allowedClasses.map(c => c._id.toString());
     
     // Verify that all selected classes are taught by this teacher
     for (const classId of classIds) {

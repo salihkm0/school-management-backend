@@ -271,6 +271,17 @@ exports.deleteStaff = async (req, res) => {
       return res.status(404).json({ message: "Staff not found" });
     }
 
+    // Remove staff from assigned classes
+    await Class.updateMany(
+      { classTeacherId: staff._id },
+      { $unset: { classTeacherId: "" } }
+    );
+
+    await Class.updateMany(
+      { 'subjectTeachers.teacherId': staff._id },
+      { $pull: { subjectTeachers: { teacherId: staff._id } } }
+    );
+
     if (force === 'true') {
       const userId = staff.userId;
       await Staff.findByIdAndDelete(req.params.id);

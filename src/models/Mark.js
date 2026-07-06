@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { calculateGradeFromPercentage } = require("../services/gradingService");
 
 const MARK_STATUS = {
   DRAFT: "draft",
@@ -185,15 +186,7 @@ MarkSchema.pre("save", function (next) {
       subject.percentage = (subject.totalScore / subject.maxMarks) * 100;
       
       // Calculate grade for each subject
-      const pct = subject.percentage;
-      if (pct >= 90) subject.grade = "A+";
-      else if (pct >= 80) subject.grade = "A";
-      else if (pct >= 70) subject.grade = "B+";
-      else if (pct >= 60) subject.grade = "B";
-      else if (pct >= 50) subject.grade = "C+";
-      else if (pct >= 40) subject.grade = "C";
-      else if (pct >= 33) subject.grade = "D";
-      else subject.grade = "F";
+      subject.grade = calculateGradeFromPercentage(subject.percentage);
     }
     
     totalMarks += subject.totalScore;
@@ -207,15 +200,7 @@ MarkSchema.pre("save", function (next) {
     this.percentage = (totalMarks / totalMaxMarks) * 100;
     
     // Calculate overall grade
-    const overallPct = this.percentage;
-    if (overallPct >= 90) this.grade = "A+";
-    else if (overallPct >= 80) this.grade = "A";
-    else if (overallPct >= 70) this.grade = "B+";
-    else if (overallPct >= 60) this.grade = "B";
-    else if (overallPct >= 50) this.grade = "C+";
-    else if (overallPct >= 40) this.grade = "C";
-    else if (overallPct >= 33) this.grade = "D";
-    else this.grade = "F";
+    this.grade = calculateGradeFromPercentage(this.percentage);
   }
   
   next();

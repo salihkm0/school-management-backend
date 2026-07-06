@@ -2,6 +2,7 @@
 const Student = require('../models/Student');
 const Mark = require('../models/Mark');
 const { Exam } = require('../models/Exam');
+const { calculateGradeFromPercentage } = require('../services/gradingService');
 const Class = require('../models/Class');
 
 // Grade order for comparison
@@ -13,18 +14,6 @@ const GRADE_ORDER = {
 // Helper: Compare grades
 function isGradeBetterOrEqual(grade1, grade2) {
   return GRADE_ORDER[grade1] >= GRADE_ORDER[grade2];
-}
-
-// Helper: Calculate grade based on percentage
-function calculateGrade(percentage) {
-  if (percentage >= 90) return 'A+';
-  if (percentage >= 80) return 'A';
-  if (percentage >= 70) return 'B+';
-  if (percentage >= 60) return 'B';
-  if (percentage >= 50) return 'C+';
-  if (percentage >= 40) return 'C';
-  if (percentage >= 33) return 'D';
-  return 'F';
 }
 
 // Helper: Get filter conditions based on criteria
@@ -217,12 +206,12 @@ function transformMarksToResults(marksData, exam) {
         let ceGrade = null;
         if (ceMax > 0) {
           cePercentage = (ceScore / ceMax) * 100;
-          ceGrade = calculateGrade(cePercentage);
+          ceGrade = calculateGradeFromPercentage(cePercentage);
         }
         
         // Calculate grades
-        const grade = calculateGrade(percentage);
-        const theoryGrade = calculateGrade(theoryPercentage);
+        const grade = calculateGradeFromPercentage(percentage);
+        const theoryGrade = calculateGradeFromPercentage(theoryPercentage);
         
         subjectResults.push({
           subjectId: subjectMark.subjectId,
@@ -259,12 +248,12 @@ function transformMarksToResults(marksData, exam) {
     }
     
     const overallPercentage = totalMaxMarks > 0 ? (totalMarks / totalMaxMarks) * 100 : 0;
-    const overallGrade = calculateGrade(overallPercentage);
+    const overallGrade = calculateGradeFromPercentage(overallPercentage);
     const theoryOverallPercentage = theoryMaxTotal > 0 ? (theoryTotal / theoryMaxTotal) * 100 : 0;
     
     // Only calculate CE overall percentage if there are CE subjects
     const ceOverallPercentage = ceMaxTotal > 0 ? (ceTotal / ceMaxTotal) * 100 : null;
-    const ceOverallGrade = ceOverallPercentage !== null ? calculateGrade(ceOverallPercentage) : null;
+    const ceOverallGrade = ceOverallPercentage !== null ? calculateGradeFromPercentage(ceOverallPercentage) : null;
     
     results.push({
       _id: mark._id,
@@ -282,7 +271,7 @@ function transformMarksToResults(marksData, exam) {
       percentage: overallPercentage,
       grade: overallGrade,
       theoryOnlyPercentage: theoryOverallPercentage,
-      theoryGrade: calculateGrade(theoryOverallPercentage),
+      theoryGrade: calculateGradeFromPercentage(theoryOverallPercentage),
       ceOnlyPercentage: ceOverallPercentage,
       ceGrade: ceOverallGrade,
       rank: 0,

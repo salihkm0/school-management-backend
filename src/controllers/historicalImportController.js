@@ -825,6 +825,7 @@ const path = require('path');
 const ejs = require('ejs');
 const { HistoricalImport, HistoricalStudent } = require('../models/HistoricalImport');
 const { getBrowser, closeBrowser } = require('../services/pdf/browserHelper');
+const { calculateGrade } = require('../services/gradingService');
 const { Exam } = require('../models/Exam');
 const Mark = require('../models/Mark');
 const AcademicYear = require('../models/AcademicYear');
@@ -1116,21 +1117,7 @@ const PRESET_CONFIGS = {
 // ─────────────────────────────────────────────────────────────────────────────
 // GRADE CALCULATION & SUBJECT SORTING
 // ─────────────────────────────────────────────────────────────────────────────
-
-function calculateGrade(obtained, maxMarks) {
-  if (!maxMarks || obtained === undefined || obtained === null || obtained === '-') return '-';
-  const percentage = (obtained / maxMarks) * 100;
-  if (percentage >= 90) return 'A+';
-  if (percentage >= 80) return 'A';
-  if (percentage >= 70) return 'B+';
-  if (percentage >= 60) return 'B';
-  if (percentage >= 50) return 'C+';
-  if (percentage >= 40) return 'C';
-  if (percentage >= 30) return 'D+';
-  if (percentage >= 20) return 'D';
-  return 'E';
-}
-
+// Removed local calculateGrade in favor of imported gradingService
 const subjectOrder = [
   'First language', 'Malayalam', 'English', 'Hindi', 'Arabic', 'Urdu',
   'Social Science', 'Basic Science', 'Science', 'Physics', 'Chemistry', 'Biology', 'Mathematics', 'Maths',

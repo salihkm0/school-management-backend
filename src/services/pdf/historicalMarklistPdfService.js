@@ -5,36 +5,12 @@
 const path = require('path');
 const ejs  = require('ejs');
 const { getBrowser } = require('./browserHelper');
+const { calculateGrade } = require('../../services/gradingService');
 
 const TEMPLATE_PATH = path.join(__dirname, '../../views/historicalMarklist.ejs');
 
 const SCHOOL_LOGO_URL =
   'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Grade helper (same scale as main marklist)
-// ─────────────────────────────────────────────────────────────────────────────
-function calculateGrade(obtained, maxMarks) {
-  if (
-    !maxMarks ||
-    obtained === undefined ||
-    obtained === null ||
-    obtained === '-' ||
-    obtained === ''
-  )
-    return '-';
-
-  const pct = (obtained / maxMarks) * 100;
-  if (pct >= 90) return 'A+';
-  if (pct >= 80) return 'A';
-  if (pct >= 70) return 'B+';
-  if (pct >= 60) return 'B';
-  if (pct >= 50) return 'C+';
-  if (pct >= 40) return 'C';
-  if (pct >= 30) return 'D+';
-  if (pct >= 20) return 'D';
-  return 'E';
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Subject ordering

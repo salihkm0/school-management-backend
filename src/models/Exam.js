@@ -332,7 +332,7 @@ const ExamSchema = new mongoose.Schema({
   },
   termEntryDeadline: Date,
   resultDeclarationDate: Date
-}, { timestamps: true });
+}, { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } });
 
 // Virtuals
 ExamSchema.virtual('displayName').get(function() {

@@ -203,6 +203,9 @@ exports.login = async (req, res) => {
       return res.status(401).json({ message: 'Account disabled' });
     }
 
+    console.log('DEBUG AUTH - Provided Password:', password);
+    console.log('DEBUG AUTH - DB Hashed Password:', user.password);
+    
     const isMatch = await user.comparePassword(password);
     console.log('Password match:', isMatch);
 

@@ -347,11 +347,14 @@ ExamSchema.virtual('displayName').get(function() {
     annual: 'Annual examination'
   };
   
+  const uniqueStandards = [...new Set((this.classDetails || []).map(c => c.className).filter(Boolean))];
+  const stdText = uniqueStandards.length > 0 ? ` (Std ${uniqueStandards.join(', ')})` : '';
+
   if (this.examType !== 'custom') {
     const typeName = typeNames[this.examType] || this.examType;
-    return `${typeName} Exam - ${this.academicYear}`;
+    return `${typeName}${stdText} - ${this.academicYear}`;
   }
-  return `${this.name} - ${this.academicYear}`;
+  return `${this.name}${stdText} - ${this.academicYear}`;
 });
 
 ExamSchema.virtual('totalMaxMarks').get(function() {

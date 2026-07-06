@@ -49,8 +49,7 @@ const StaffSchema = new mongoose.Schema({
     default: 'Permanent'
   },
   qualification: {
-    type: String,
-    required: true
+    type: String
   },
   specialization: [{
     type: String
@@ -74,8 +73,7 @@ const StaffSchema = new mongoose.Schema({
     pincode: String
   },
   dateOfJoining: {
-    type: Date,
-    required: true
+    type: Date
   },
   emergencyContact: {
     name: String,

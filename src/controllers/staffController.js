@@ -163,7 +163,7 @@ exports.createStaff = async (req, res) => {
       employeeType: employeeType || 'Permanent',
       qualification,
       contact,
-      dateOfJoining: new Date(dateOfJoining),
+      dateOfJoining: dateOfJoining ? new Date(dateOfJoining) : null,
       subjectExpertise: subjectExpertise || [],
       gender,
       dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
@@ -217,8 +217,13 @@ exports.createStaff = async (req, res) => {
 
 exports.updateStaff = async (req, res) => {
   try {
-    const { shortName, ...otherFields } = req.body;
+    const { shortName, dateOfJoining, ...otherFields } = req.body;
     
+    // Parse dates if present, set to null if empty string
+    if (dateOfJoining !== undefined) {
+      otherFields.dateOfJoining = dateOfJoining ? new Date(dateOfJoining) : null;
+    }
+
     const staff = await Staff.findByIdAndUpdate(
       req.params.id, 
       {

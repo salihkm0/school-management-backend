@@ -803,21 +803,23 @@ exports.getParentByUserId = async (req, res) => {
 
 exports.updateParent = async (req, res) => {
   try {
-    const { fullName, email, phone, alternatePhone, address, occupation } = req.body;
+    const { fullName, email, phone, alternatePhone, address, occupation, password } = req.body;
     
     const parent = await Parent.findById(req.params.id);
     if (!parent) {
       return res.status(404).json({ message: 'Parent not found' });
     }
     
-    // Update User model name/phone/email if they are changed
-    const userUpdates = {};
-    if (fullName) userUpdates.name = fullName;
-    if (phone) userUpdates.phone = phone;
-    if (email) userUpdates.email = email;
-    
-    if (Object.keys(userUpdates).length > 0) {
-      await User.findByIdAndUpdate(parent.userId, userUpdates);
+    // Update User model name/phone/email/password if they are changed
+    if (fullName || phone || email || password) {
+      const userToUpdate = await User.findById(parent.userId);
+      if (userToUpdate) {
+        if (fullName) userToUpdate.name = fullName;
+        if (phone) userToUpdate.phone = phone;
+        if (email) userToUpdate.email = email;
+        if (password) userToUpdate.password = password;
+        await userToUpdate.save();
+      }
     }
     
     // Update parent

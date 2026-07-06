@@ -240,12 +240,15 @@ exports.updateStaff = async (req, res) => {
       return res.status(404).json({ message: "Staff not found" });
     }
 
-    if (req.body.name || req.body.contact || req.body.email) {
-      await User.findByIdAndUpdate(staff.userId, {
-        name: req.body.name || staff.name,
-        phone: req.body.contact || staff.contact,
-        email: req.body.email || staff.email
-      });
+    if (req.body.name || req.body.contact || req.body.email || req.body.password) {
+      const userToUpdate = await User.findById(staff.userId);
+      if (userToUpdate) {
+        if (req.body.name) userToUpdate.name = req.body.name;
+        if (req.body.contact) userToUpdate.phone = req.body.contact;
+        if (req.body.email) userToUpdate.email = req.body.email;
+        if (req.body.password) userToUpdate.password = req.body.password;
+        await userToUpdate.save();
+      }
     }
 
     broadcastToRole('admin', 'staff:updated', {

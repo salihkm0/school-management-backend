@@ -97,9 +97,9 @@ const studentValidation = [
 const staffValidation = [
   body('name').notEmpty().withMessage('Name required'),
   body('role').notEmpty().withMessage('Role required'),
-  body('qualification').notEmpty().withMessage('Qualification required'),
+  body('qualification').optional({ checkFalsy: true }).isString(),
   body('contact').notEmpty().withMessage('Contact required'),
-  body('dateOfJoining').isISO8601().withMessage('Valid date required')
+  body('dateOfJoining').optional({ checkFalsy: true }).isISO8601().withMessage('Valid date required')
 ];
 
 const classValidation = [

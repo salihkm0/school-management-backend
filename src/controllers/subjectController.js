@@ -241,34 +241,96 @@ exports.updateSubject = async (req, res) => {
 
 exports.deleteSubject = async (req, res) => {
   try {
+    const { force } = req.query;
     const subject = await Subject.findById(req.params.id);
 
     if (!subject) {
       return res.status(404).json({ message: 'Subject not found' });
     }
 
-    // Soft delete allows keeping historical records intact.
-    // We don't block deactivation even if it's used in classes or exams.
+    // Get current academic year
+    const currentYear = await require('../models/AcademicYear').findOne({ isCurrent: true });
+    
+    if (currentYear) {
+      // Remove from Class.subjects, languageSubjects, coreSubjects, subjectTeachers
+      await require('../models/Class').updateMany(
+        { 
+          academicYearId: currentYear._id,
+          $or: [
+            { subjects: subject._id },
+            { languageSubjects: subject._id },
+            { coreSubjects: subject._id },
+            { 'subjectTeachers.subjectId': subject._id }
+          ]
+        },
+        {
+          $pull: {
+            subjects: subject._id,
+            languageSubjects: subject._id,
+            coreSubjects: subject._id,
+            subjectTeachers: { subjectId: subject._id }
+          }
+        }
+      );
 
-    await sendSubjectNotification(
-      subject._id,
-      subject.name,
-      'Subject Deactivation Notice',
-      `Subject ${subject.name} (${subject.code}) is being deactivated.`,
-      'warning',
-      { deactivated: true }
-    );
+      // Remove from SubjectClassTemplate
+      await SubjectClassTemplate.updateMany(
+        {
+          academicYearId: currentYear._id,
+          $or: [
+            { subjects: subject._id },
+            { languageSubjects: subject._id }
+          ]
+        },
+        {
+          $pull: {
+            subjects: subject._id,
+            languageSubjects: subject._id
+          }
+        }
+      );
 
-    subject.isActive = false;
-    await subject.save();
+      // Remove from StaffAssignment (assignedSubjects)
+      await require('../models/StaffAssignment').updateMany(
+        { academicYearId: currentYear._id, 'subjectsTaught.subjectId': subject._id },
+        { $pull: { subjectsTaught: { subjectId: subject._id } } }
+      );
+    }
 
-    broadcastToRole('admin', 'subject:deactivated', {
-      subjectId: subject._id,
-      subjectName: subject.name,
-      timestamp: new Date()
-    });
+    if (force === 'true') {
+      await Subject.findByIdAndDelete(subject._id);
+      
+      broadcastToRole('admin', 'subject:deleted', {
+        subjectId: subject._id,
+        subjectName: subject.name,
+        timestamp: new Date()
+      });
 
-    res.json({ message: 'Subject deactivated successfully' });
+      return res.json({ message: 'Subject force deleted successfully along with active assignments' });
+    } else {
+      // Soft delete allows keeping historical records intact.
+      // We don't block deactivation even if it's used in classes or exams.
+
+      await sendSubjectNotification(
+        subject._id,
+        subject.name,
+        'Subject Deactivation Notice',
+        `Subject ${subject.name} (${subject.code}) is being deactivated.`,
+        'warning',
+        { deactivated: true }
+      );
+
+      subject.isActive = false;
+      await subject.save();
+
+      broadcastToRole('admin', 'subject:deactivated', {
+        subjectId: subject._id,
+        subjectName: subject.name,
+        timestamp: new Date()
+      });
+
+      return res.json({ message: 'Subject deactivated successfully' });
+    }
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -488,11 +550,17 @@ exports.getLanguageSubjects = async (req, res) => {
 exports.getSubjectsByTemplate = async (req, res) => {
   try {
     const { className } = req.params;
+    const { academicYearId } = req.query;
     
-    const template = await SubjectClassTemplate.findOne({ 
-      className,
-      isActive: true 
-    }).populate('subjects', 'name code type department creditHours');
+    let query = { className, isActive: true };
+    if (academicYearId) {
+      query.academicYearId = academicYearId;
+    } else {
+      const currentYear = await require('../models/AcademicYear').findOne({ isCurrent: true });
+      if (currentYear) query.academicYearId = currentYear._id;
+    }
+
+    const template = await SubjectClassTemplate.findOne(query).populate('subjects', 'name code type department creditHours');
     
     if (!template) {
       return res.json({ subjects: [], message: 'No template found for this class' });

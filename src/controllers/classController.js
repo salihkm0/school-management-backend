@@ -112,12 +112,17 @@ async function sendClassNotification(classId, title, message, type, data) {
 }
 
 // Auto-assign subjects from template
-async function autoAssignSubjectsFromTemplate(className, section) {
+async function autoAssignSubjectsFromTemplate(className, section, academicYearId) {
   try {
-    const template = await SubjectClassTemplate.findOne({ 
-      className: className,
-      isActive: true 
-    });
+    let query = { className, isActive: true };
+    if (academicYearId) {
+      query.academicYearId = academicYearId;
+    } else {
+      const currentYear = await require('../models/AcademicYear').findOne({ isCurrent: true });
+      if (currentYear) query.academicYearId = currentYear._id;
+    }
+
+    const template = await SubjectClassTemplate.findOne(query);
     
     if (!template) {
       console.log(`No subject template found for class ${className}`);
@@ -226,7 +231,10 @@ exports.getClass = async (req, res) => {
     const displayName = await getClassDisplayName(classItem);
     const baseName = classItem.section ? `${classItem.name}-${classItem.section}` : classItem.name;
 
-    const template = await SubjectClassTemplate.findOne({ className: classItem.name });
+    const currentYear = await require('../models/AcademicYear').findOne({ isCurrent: true });
+    let query = { className: classItem.name };
+    if (currentYear) query.academicYearId = currentYear._id;
+    const template = await SubjectClassTemplate.findOne(query);
     
     const subjectsWithTeachers = classItem.subjectTeachers.map(st => ({
       subject: st.subjectId,

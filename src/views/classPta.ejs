@@ -147,7 +147,7 @@ html, body {
 .main-table th,
 .main-table td {
     border: 1.5px solid #000;
-    padding: 6px 3px;
+    padding: 3.5px 3px;
     text-align: center;
     vertical-align: middle;
 }
@@ -157,7 +157,7 @@ html, body {
     font-weight: 900;
     text-transform: uppercase;
     font-size: 9px;
-    padding: 6px 3px;
+    padding: 4px 3px;
 }
 
 .main-table td {
@@ -258,7 +258,7 @@ html, body {
 <body>
 
 <%
-const studentsPerPage = 30;
+const studentsPerPage = 45;
 
 const girls = students.filter(s => s.gender === 'F').sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 const boys = students.filter(s => s.gender === 'M').sort((a, b) => (a.name || '').localeCompare(b.name || ''));

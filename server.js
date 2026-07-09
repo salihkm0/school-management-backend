@@ -197,7 +197,7 @@ app.use(morgan('dev'));
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 1000
+  max: process.env.NODE_ENV === 'development' ? 50000 : 1000
 });
 app.use('/api/', limiter);
 

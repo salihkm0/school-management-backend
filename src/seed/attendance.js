@@ -1,4 +1,4 @@
-const generateAttendance = (students, classId) => {
+const generateAttendance = (students, classId, academicYearId) => {
   const attendanceRecords = [];
   const currentYear = 2024;
   
@@ -11,8 +11,9 @@ const generateAttendance = (students, classId) => {
       
       attendanceRecords.push({
         studentId: student._id,
-        studentName: student.name,  // Required field
+        studentName: student.fullName,
         classId: classId,
+        academicYearId: academicYearId,
         year: currentYear,
         month: month,
         absentDays: absentDays,

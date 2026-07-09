@@ -9,16 +9,16 @@ const SCHOOL_LOGO_URL = 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769
 
 // Dummy data for testing
 const DUMMY_STUDENTS = [
-    { admissionNo: '39331', name: 'ABHISHA K' },
-    { admissionNo: '38662', name: 'ABISHA C M' },
-    { admissionNo: '39311', name: 'AMEYA V' },
-    { admissionNo: '38630', name: 'ANAGHA KRISHNAN A' },
-    { admissionNo: '38816', name: 'ANAGHA V' },
-    { admissionNo: '38481', name: 'ANAMIKA A' },
-    { admissionNo: '39271', name: 'ANANYA P' },
-    { admissionNo: '38539', name: 'ANIKA K P' },
-    { admissionNo: '38475', name: 'ANUPAMA P' },
-    { admissionNo: '39266', name: 'AYISHA HIBA K P' }
+    { admissionNo: '39331', name: 'ABHISHA K', gender: 'F' },
+    { admissionNo: '38662', name: 'ABISHA C M', gender: 'F' },
+    { admissionNo: '39311', name: 'AMEYA V', gender: 'F' },
+    { admissionNo: '38630', name: 'ANAGHA KRISHNAN A', gender: 'F' },
+    { admissionNo: '38816', name: 'ANAGHA V', gender: 'F' },
+    { admissionNo: '38481', name: 'ANAMIKA A', gender: 'F' },
+    { admissionNo: '39271', name: 'ANANYA P', gender: 'F' },
+    { admissionNo: '38539', name: 'ANIKA K P', gender: 'F' },
+    { admissionNo: '38475', name: 'ANUPAMA P', gender: 'F' },
+    { admissionNo: '39266', name: 'AYISHA HIBA K P', gender: 'F' }
 ];
 
 /**
@@ -73,6 +73,7 @@ exports.generateClassPtaPDF = async (req, res) => {
     const studentList = students.map(student => ({
       admissionNo: student.admissionNo || '-',
       name: student.fullName || student.name || '-',
+      gender: student.gender || '-',
       parentName: student.fatherFullName || student.guardian || ''
     }));
 

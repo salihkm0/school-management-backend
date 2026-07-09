@@ -259,15 +259,42 @@ html, body {
 
 <%
 const studentsPerPage = 30;
-const totalPages = Math.ceil(students.length / studentsPerPage);
+
+const girls = students.filter(s => s.gender === 'F').sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+const boys = students.filter(s => s.gender === 'M').sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+const others = students.filter(s => s.gender !== 'F' && s.gender !== 'M').sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+const pagesData = [];
+let globalIndex = 0;
+
+const addPagesForGroup = (groupStudents) => {
+    if (groupStudents.length === 0) return;
+    const groupPages = Math.ceil(groupStudents.length / studentsPerPage);
+    for (let p = 0; p < groupPages; p++) {
+        const start = p * studentsPerPage;
+        const pageStudents = groupStudents.slice(start, start + studentsPerPage).map(s => {
+            globalIndex++;
+            return { ...s, slNo: globalIndex };
+        });
+        pagesData.push(pageStudents);
+    }
+};
+
+addPagesForGroup(girls);
+addPagesForGroup(boys);
+addPagesForGroup(others);
+
+if (pagesData.length === 0) {
+    pagesData.push([]);
+}
+
+const totalPages = pagesData.length;
 const displayAcademicYear = typeof academicYear !== 'undefined' ? academicYear : '2025-2026';
 const displayClassName = typeof className !== 'undefined' ? className : '10 A';
 const schoolLogo = typeof schoolLogoUrl !== 'undefined' ? schoolLogoUrl : 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
 
 for (let page = 0; page < totalPages; page++) {
-    const startIndex = page * studentsPerPage;
-    const endIndex = Math.min(startIndex + studentsPerPage, students.length);
-    const pageStudents = students.slice(startIndex, endIndex);
+    const pageStudents = pagesData[page];
     const isLastPage = page === totalPages - 1;
 %>
 
@@ -306,10 +333,9 @@ for (let page = 0; page < totalPages; page++) {
                 </thead>
                 <tbody>
                     <% pageStudents.forEach(function(student, index) { 
-                        const slNo = startIndex + index + 1;
                     %>
                     <tr>
-                        <td><%= slNo %></td>
+                        <td><%= student.slNo || '' %></td>
                         <td><%= student.admissionNo %></td>
                         <td style="text-align: left; padding-left: 5px;"><%= student.name %></td>
                         <td style="text-align: left; padding-left: 5px;"><%= student.parentName || '' %></td>

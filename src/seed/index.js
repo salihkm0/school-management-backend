@@ -8,9 +8,10 @@ const Staff = require('../models/Staff');
 const Student = require('../models/Student');
 const Class = require('../models/Class');
 const Subject = require('../models/Subject');
-const Exam = require('../models/Exam');
-const Attendance = require('../models/Attendance');
+const { Exam } = require('../models/Exam');
+const { Attendance } = require('../models/Attendance');
 const Mark = require('../models/Mark');
+const AcademicYear = require('../models/AcademicYear');
 
 // Seed Data
 const subjectsData = require('./subjects');
@@ -35,6 +36,7 @@ const seedDatabase = async () => {
 
     // Clear existing data
     console.log('\n🧹 Clearing existing data...');
+    await AcademicYear.deleteMany({});
     await User.deleteMany({});
     await Staff.deleteMany({});
     await Student.deleteMany({});
@@ -54,9 +56,22 @@ const seedDatabase = async () => {
     const subjectMap = {};
     subjects.forEach(s => { subjectMap[s.name] = s; });
 
+    // 1.5 Create Academic Year
+    console.log('\n📅 Creating academic year...');
+    const academicYear = await AcademicYear.create({
+      name: '2023-2024',
+      year: '2023-2024',
+      startDate: new Date('2023-06-01'),
+      endDate: new Date('2024-05-31'),
+      isCurrent: true,
+      isActive: true
+    });
+    console.log(`   ✅ Created academic year: ${academicYear.name}`);
+
     // 2. Create Classes
     console.log('\n🏫 Creating classes...');
-    const classes = await Class.insertMany(classesData);
+    const classesDataWithYear = classesData.map(c => ({ ...c, academicYearId: academicYear._id }));
+    const classes = await Class.insertMany(classesDataWithYear);
     console.log(`   ✅ Created ${classes.length} classes`);
 
     // Create a map for easy class lookup
@@ -101,7 +116,7 @@ const seedDatabase = async () => {
     // Admin user
     const adminUser = await User.create({
       email: 'admin@ksmschool.edu',
-      password: await bcrypt.hash('Admin@123', 10),
+      password: 'Admin@123',
       name: 'System Administrator',
       role: 'admin',
       phone: '9876543210',
@@ -113,7 +128,7 @@ const seedDatabase = async () => {
     for (const staffInfo of staffNames) {
       const user = await User.create({
         email: staffInfo.email,
-        password: await bcrypt.hash('Staff@123', 10),
+        password: 'Staff@123',
         name: staffInfo.name.replace(/Dr\. |Smt\. |Shri\. /g, ''),
         role: 'staff',
         phone: `9${Math.floor(8000000000 + Math.random() * 1999999999)}`,
@@ -287,6 +302,10 @@ const seedDatabase = async () => {
       
       return {
         ...student,
+        fullName: student.name,
+        admissionNo: student.admissionNumber,
+        studentCode: `STU${student.admissionNumber}`,
+        academicYearId: targetClass.academicYearId || academicYear._id,
         classId: targetClass._id
       };
     }).filter(s => s !== null);
@@ -341,7 +360,11 @@ const seedDatabase = async () => {
 
       return {
         ...exam,
+        examType: exam.type || 'first_term', 
         classIds,
+        academicYearId: academicYear._id,
+        academicYear: academicYear.name,
+        term: 'first',
         subjectConfigs
       };
     });
@@ -363,6 +386,20 @@ const seedDatabase = async () => {
         const studentClass = classes.find(c => c._id.toString() === student.classId?.toString());
         if (!studentClass) continue;
         
+        const studentMarks = {
+          studentId: student._id,
+          studentName: student.fullName,
+          classId: studentClass._id,
+          academicYearId: academicYear._id,
+          examId: firstExam._id,
+          examName: firstExam.name,
+          subjects: [],
+          totalMarks: 0,
+          totalMaxMarks: 0,
+          status: 'published',
+          enteredBy: users[0]._id
+        };
+        
         for (const subId of studentClass.subjects || []) {
           const subject = subjects.find(s => s._id.toString() === subId.toString());
           if (!subject) continue;
@@ -370,21 +407,23 @@ const seedDatabase = async () => {
           const theoryMarks = Math.floor(55 + Math.random() * 35);
           const practicalMarks = Math.floor(12 + Math.random() * 13);
           
-          marksToInsert.push({
-            studentId: student._id,
-            studentName: student.name,
-            examId: firstExam._id,
-            examName: firstExam.name,
+          studentMarks.subjects.push({
             subjectId: subject._id,
             subjectName: subject.name,
-            theoryMarks,
-            practicalMarks,
+            theoryScore: theoryMarks,
+            practicalScore: practicalMarks,
             totalMarks: theoryMarks + practicalMarks,
             maxMarks: 100,
             passingMarks: 35,
-            enteredBy: users[0]._id,
-            isEditable: true
+            isEntered: true
           });
+          studentMarks.totalMarks += (theoryMarks + practicalMarks);
+          studentMarks.totalMaxMarks += 100;
+        }
+        
+        if (studentMarks.subjects.length > 0) {
+          studentMarks.percentage = (studentMarks.totalMarks / studentMarks.totalMaxMarks) * 100;
+          marksToInsert.push(studentMarks);
         }
       }
       
@@ -405,8 +444,9 @@ const seedDatabase = async () => {
       if (classStudents.length === 0) continue;
       
       const attendanceRecords = generateAttendance(
-        classStudents.map(s => ({ _id: s._id, name: s.name })),
-        cls._id
+        classStudents.map(s => ({ _id: s._id, fullName: s.fullName })),
+        cls._id,
+        academicYear._id
       );
       
       // Process in chunks

@@ -12,8 +12,10 @@
     "build": "chmod +x render-build.sh && ./render-build.sh",
     "dev": "nodemon server.js",
     "test": "jest",
+    "test:load": "npx artillery run tests/load/advanced-test.yml",
     "seed": "node src/seed/index.js",
     "seed:dev": "NODE_ENV=development node src/seed/index.js",
+    "seed:loadtest": "NODE_ENV=development node src/seed/load-seed.js",
     "postinstall": "echo 'Postinstall completed - keeping puppeteer'"
   },
   "dependencies": {

@@ -7,7 +7,7 @@ const connectDB = async () => {
       useNewUrlParser: true,
       useUnifiedTopology: true,
       // ── Connection Pool ──────────────────────────────────────────
-      maxPoolSize: 20,          // max concurrent connections (was default 5)
+      maxPoolSize: 100,         // Increased to handle high load concurrency (was 20)
       minPoolSize: 5,           // keep at least 5 alive
       maxIdleTimeMS: 30000,     // close idle connections after 30s
       // ── Timeouts ────────────────────────────────────────────────

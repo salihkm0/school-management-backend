@@ -1202,7 +1202,7 @@ exports.assignSubjectTeacher = async (req, res) => {
     const subject = await Subject.findById(subjectId);
     
     const existingIndex = classItem.subjectTeachers.findIndex(
-      st => st.subjectId?.toString() === subjectId
+      st => st.subjectId?.toString() === subjectId && st.teacherId?.toString() === teacherId
     );
     
     const subjectTeacherData = {
@@ -1335,7 +1335,7 @@ exports.bulkAssignSubjectTeachers = async (req, res) => {
         const subject = await Subject.findById(assignment.subjectId);
         
         const existingIndex = classItem.subjectTeachers.findIndex(
-          st => st.subjectId?.toString() === assignment.subjectId
+          st => st.subjectId?.toString() === assignment.subjectId && st.teacherId?.toString() === assignment.teacherId
         );
         
         const subjectTeacherData = {
@@ -1452,6 +1452,7 @@ exports.bulkAssignSubjectTeachers = async (req, res) => {
 exports.removeSubjectTeacher = async (req, res) => {
   try {
     const { subjectId } = req.params;
+    const { teacherId } = req.query; // Added teacherId
     const classId = req.params.id;
     
     const classItem = await Class.findById(classId);
@@ -1459,38 +1460,49 @@ exports.removeSubjectTeacher = async (req, res) => {
       return res.status(404).json({ message: 'Class not found' });
     }
     
-    const removedTeacher = classItem.subjectTeachers.find(
-      st => st.subjectId?.toString() === subjectId
-    );
+    // Find the specific teacher if teacherId is provided, else just find the first one (fallback for older clients)
+    const removedTeachers = classItem.subjectTeachers.filter(st => {
+      const matchSubject = st.subjectId?.toString() === subjectId;
+      const matchTeacher = teacherId ? st.teacherId?.toString() === teacherId : true;
+      return matchSubject && matchTeacher;
+    });
     
     const subject = await Subject.findById(subjectId);
     
-    classItem.subjectTeachers = classItem.subjectTeachers.filter(
-      st => st.subjectId?.toString() !== subjectId
-    );
+    // Filter out the matched teachers
+    classItem.subjectTeachers = classItem.subjectTeachers.filter(st => {
+      const matchSubject = st.subjectId?.toString() === subjectId;
+      const matchTeacher = teacherId ? st.teacherId?.toString() === teacherId : true;
+      return !(matchSubject && matchTeacher);
+    });
     
     await classItem.save();
     
-    if (removedTeacher && removedTeacher.teacherId) {
-      const staffAssignment = await StaffAssignment.findOne({
-        staffId: removedTeacher.teacherId,
-        academicYearId: classItem.academicYearId
-      });
-      
-      if (staffAssignment) {
-        staffAssignment.subjectsTaught = staffAssignment.subjectsTaught.filter(
-          s => !(s.subjectId?.toString() === subjectId && s.classId?.toString() === classId)
-        );
-        await staffAssignment.save();
+    // Update StaffAssignment for all removed teachers
+    for (const removedTeacher of removedTeachers) {
+      if (removedTeacher.teacherId) {
+        const staffAssignment = await StaffAssignment.findOne({
+          staffId: removedTeacher.teacherId,
+          academicYearId: classItem.academicYearId
+        });
+        
+        if (staffAssignment) {
+          staffAssignment.subjectsTaught = staffAssignment.subjectsTaught.filter(
+            s => !(s.subjectId?.toString() === subjectId && s.classId?.toString() === classId)
+          );
+          await staffAssignment.save();
+        }
       }
     }
     
     const displayName = await getClassDisplayName(classItem);
 
-    if (removedTeacher) {
+    if (removedTeachers.length > 0) {
+      const teacherName = removedTeachers[0].teacherName || removedTeachers[0].teacherId?.name || 'Unknown Teacher';
       await createRecentActivity({
         title: `Subject Teacher Removed: ${displayName}`,
-        description: `${removedTeacher.teacherName} was removed from teaching ${subject?.name || 'a subject'} in ${displayName}`,
+        description: `Teacher ${teacherName} was removed from ${subject?.name || 'Unknown Subject'}`,
+        previousState: removedTeachers[0],
         activityType: ACTIVITY_TYPES.SUBJECT_TEACHER_REMOVED,
         entityType: ENTITY_TYPES.CLASS,
         entityId: classId,

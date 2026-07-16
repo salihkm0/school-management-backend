@@ -217,6 +217,8 @@ exports.getClass = async (req, res) => {
     const classItem = await Class.findById(req.params.id)
       .populate('classTeacherId', 'name email phone qualification staffCode')
       .populate('subjects', 'name code description type creditHours')
+      .populate('languageSubjects', 'name code description type creditHours')
+      .populate('coreSubjects', 'name code description type creditHours')
       .populate('subjectTeachers.teacherId', 'name email contact qualification')
       .populate('subjectTeachers.subjectId', 'name code type')
       .populate('academicYearId', 'year name');
@@ -1190,7 +1192,13 @@ exports.assignSubjectTeacher = async (req, res) => {
       return res.status(404).json({ message: 'Class not found' });
     }
     
-    if (!classItem.subjects.includes(subjectId)) {
+    const allSubjects = [
+      ...(classItem.subjects || []),
+      ...(classItem.languageSubjects || []),
+      ...(classItem.coreSubjects || [])
+    ].map(s => s.toString());
+    
+    if (!allSubjects.includes(subjectId.toString())) {
       return res.status(400).json({ message: 'Subject not assigned to this class' });
     }
     

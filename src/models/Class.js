@@ -63,6 +63,11 @@ const ClassSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  studentSortPreference: {
+    type: String,
+    enum: ['alphabetic', 'roll_number'],
+    default: 'alphabetic'
+  },
   academicYearId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'AcademicYear',

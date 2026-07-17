@@ -18,7 +18,8 @@ const {
   getStudentsByClass,
   getStudentMarks,
   getStudentAcademicInfo,
-  exportStudents
+  exportStudents,
+  bulkUpdateRollNumbers
 } = require('../controllers/studentController');
 
 router.use(protect);
@@ -33,6 +34,9 @@ router.post('/promote', authorize('admin'), promoteStudents);
 
 // FIXED: Use classIdParam instead of idParam
 router.get('/class/:classId', validate([classIdParam]), getStudentsByClass);
+
+// Bulk Update Roll Numbers
+router.put('/bulk-update-roll-numbers', authorize('admin', 'staff'), bulkUpdateRollNumbers);
 
 // Export all students as CSV (must be before /:id)
 router.get('/export/excel', exportStudents);

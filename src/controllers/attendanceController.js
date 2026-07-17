@@ -4,6 +4,7 @@ const Class = require('../models/Class');
 const AcademicYear = require('../models/AcademicYear');
 const Notification = require('../models/Notification');
 const { broadcastToUser, broadcastToClass } = require('../config/socket');
+const { sortStudents } = require('../utils/studentSorter');
 
 // Helper function to send attendance warning
 async function sendAttendanceWarning(student, month, year, attendancePercentage, classId) {
@@ -322,11 +323,13 @@ exports.getAttendanceByClass = async (req, res) => {
     const { classId } = req.params;
     const { year, month } = req.query;
 
+    const classObj = await Class.findById(classId);
+    const sortPreference = classObj?.studentSortPreference || 'alphabetic';
+
     // Run all 3 independent queries in parallel
-    const [allStudents, attendanceRecords, template] = await Promise.all([
+    const [rawStudents, attendanceRecords, template] = await Promise.all([
       Student.find({ classId, status: 'active' })
-        .select('_id fullName studentCode admissionNo rollNumber')
-        .sort({ rollNumber: 1, fullName: 1 }),
+        .select('_id fullName studentCode admissionNo rollNumber gender'),
       Attendance.find({
         classId,
         year: parseInt(year),
@@ -339,6 +342,8 @@ exports.getAttendanceByClass = async (req, res) => {
         isActive: true
       }),
     ]);
+
+    const allStudents = sortStudents(rawStudents, sortPreference);
 
     if (!allStudents || allStudents.length === 0) {
       return res.json({
@@ -705,10 +710,14 @@ exports.getAttendanceSummary = async (req, res) => {
   try {
     const { classId, year, month } = req.query;
 
+    const classObj = await Class.findById(classId);
+    const sortPreference = classObj?.studentSortPreference || 'alphabetic';
+
     // Get all students in the class FIRST
-    const allStudents = await Student.find({ classId, status: 'active' })
-      .select('_id fullName rollNumber admissionNo')
-      .sort({ rollNumber: 1, fullName: 1 });
+    const rawStudents = await Student.find({ classId, status: 'active' })
+      .select('_id fullName rollNumber admissionNo gender');
+
+    const allStudents = sortStudents(rawStudents, sortPreference);
 
     if (!allStudents || allStudents.length === 0) {
       return res.json({

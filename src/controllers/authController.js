@@ -183,9 +183,9 @@ exports.login = async (req, res) => {
 
     let query = {};
     if (email) {
-      query.email = email;
+      query.email = email.trim().toLowerCase();
     } else if (phone) {
-      query.phone = phone;
+      query.phone = phone.trim();
     } else {
       return res.status(400).json({ message: 'Email or phone number is required' });
     }

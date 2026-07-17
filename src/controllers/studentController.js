@@ -9,6 +9,7 @@ const Notification = require('../models/Notification');
 const SamboornaImportService = require('../services/samboornaImportService');
 const { broadcastToClass, broadcastToUser, broadcastToRole } = require('../config/socket');
 const { parseCSV, parseExcel } = require('../services/excelService');
+const { sortStudents } = require('../utils/studentSorter');
 const path = require('path');
 const fs = require('fs');
 
@@ -50,15 +51,35 @@ exports.getStudents = async (req, res) => {
       ];
     }
 
-    const students = await Student.find(query)
-      .populate('classId', 'name section displayName')
+    let studentsQuery = Student.find(query)
+      .populate('classId', 'name section displayName studentSortPreference')
       .populate('academicYearId', 'year name')
-      .populate('parentIds', 'fullName email phone')
+      .populate('parentIds', 'fullName email phone');
+
+    if (classId) {
+      const classObj = await Class.findById(classId);
+      const sortPreference = classObj?.studentSortPreference || 'alphabetic';
+      const allStudentsInClass = await studentsQuery;
+      const sortedStudents = sortStudents(allStudentsInClass, sortPreference);
+      
+      const total = sortedStudents.length;
+      const paginatedStudents = sortedStudents.slice((page - 1) * limit, page * limit);
+
+      return res.json({
+        data: paginatedStudents,
+        pagination: {
+          total,
+          page: parseInt(page),
+          pages: Math.ceil(total / limit)
+        }
+      });
+    }
+
+    const totalCount = await Student.countDocuments(query);
+    const students = await studentsQuery
       .skip((page - 1) * limit)
       .limit(parseInt(limit))
       .sort({ className: 1, division: 1, fullName: 1 });
-
-    const total = await Student.countDocuments(query);
 
     res.json({
       success: true,
@@ -66,8 +87,8 @@ exports.getStudents = async (req, res) => {
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / limit)
+        total: totalCount,
+        pages: Math.ceil(totalCount / limit)
       }
     });
   } catch (error) {
@@ -529,14 +550,19 @@ exports.promoteStudents = async (req, res) => {
 
 exports.getStudentsByClass = async (req, res) => {
   try {
+    const classId = req.params.classId;
+    const classObj = await Class.findById(classId);
+    const sortPreference = classObj?.studentSortPreference || 'alphabetic';
+
     const students = await Student.find({ 
-      classId: req.params.classId,
+      classId,
       isActive: true 
     })
-      .select('fullName studentCode admissionNo rollNumber status gender photoUrl')
-      .sort({ fullName: 1 });
+      .select('fullName studentCode admissionNo rollNumber status gender photoUrl');
 
-    res.json(students);
+    const sortedStudents = sortStudents(students, sortPreference);
+
+    res.json(sortedStudents);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -817,6 +843,30 @@ exports.exportStudents = async (req, res) => {
     res.send(excelBuffer);
   } catch (error) {
     console.error('Error in exportStudents:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.bulkUpdateRollNumbers = async (req, res) => {
+  try {
+    const { updates } = req.body; // Expecting array of { studentId, rollNumber }
+    if (!Array.isArray(updates)) {
+      return res.status(400).json({ message: "Invalid updates format. Expected an array." });
+    }
+
+    const bulkOps = updates.map((update) => ({
+      updateOne: {
+        filter: { _id: update.studentId },
+        update: { $set: { rollNumber: update.rollNumber || '' } }
+      }
+    }));
+
+    if (bulkOps.length > 0) {
+      await Student.bulkWrite(bulkOps);
+    }
+
+    res.json({ message: "Roll numbers updated successfully" });
+  } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };

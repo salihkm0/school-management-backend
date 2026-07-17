@@ -225,30 +225,29 @@ exports.getExams = async (req, res) => {
     // Apply staff visibility filtering
     if (req.user.role === 'staff') {
       const staff = await Staff.findOne({ userId: req.user.id });
-      let myClassIds = [];
+      let staffOrConditions = [{ createdBy: req.user.id }];
       
       if (staff) {
         const staffAssignment = await StaffAssignment.findOne({ staffId: staff._id });
         if (staffAssignment) {
           if (staffAssignment.classTeacherOf) {
-            myClassIds.push(staffAssignment.classTeacherOf.toString());
+            staffOrConditions.push({ classIds: staffAssignment.classTeacherOf });
           }
           if (staffAssignment.subjectsTaught && staffAssignment.subjectsTaught.length > 0) {
             staffAssignment.subjectsTaught.forEach(ta => {
-              if (ta.classId) {
-                myClassIds.push(ta.classId.toString());
+              if (ta.classId && ta.subjectId) {
+                staffOrConditions.push({
+                  classIds: ta.classId,
+                  'subjects.subjectId': ta.subjectId
+                });
               }
             });
           }
         }
       }
-      myClassIds = [...new Set(myClassIds)];
       
-      if (myClassIds.length > 0) {
-        query.$or = [
-          { classIds: { $in: myClassIds } },
-          { createdBy: req.user.id }
-        ];
+      if (staffOrConditions.length > 1) {
+        query.$or = staffOrConditions;
       } else {
         query.createdBy = req.user.id;
       }
@@ -333,7 +332,7 @@ exports.getExam = async (req, res) => {
       });
       
       const submissionStatus = exam.classSubmissionStatus.find(
-        cs => cs.classId.toString() === classItem._id.toString()
+        cs => cs.classId && cs.classId.toString() === classItem._id.toString()
       );
       
       const marksEntered = await Mark.countDocuments({
@@ -380,7 +379,11 @@ exports.getExam = async (req, res) => {
     
     // Enhance subjects with schedule info
     const enhancedSubjects = exam.subjects.map(subject => {
-      const scheduleInfo = exam.schedule.find(s => s.subjectId.toString() === subject.subjectId.toString());
+      const subjectIdStr = subject.subjectId?._id?.toString() || subject.subjectId?.toString();
+      const scheduleInfo = exam.schedule.find(s => {
+        const sSubjectIdStr = s.subjectId?._id?.toString() || s.subjectId?.toString();
+        return subjectIdStr && sSubjectIdStr && subjectIdStr === sSubjectIdStr;
+      });
       return {
         ...subject.toObject(),
         schedule: scheduleInfo ? {
@@ -1780,21 +1783,40 @@ exports.getStaffExams = async (req, res) => {
       ],
       academicYearId: academicYearId,
       isActive: true
-    }).select('_id');
+    }).select('_id classTeacherId subjectTeachers');
     
-    const classIds = teacherClasses.map(c => c._id);
-    
-    if (classIds.length === 0) {
-      return res.json({
-        success: true,
-        data: [],
-        message: 'No classes assigned'
-      });
+    let staffOrConditions = [{ createdBy: userId }];
+
+    teacherClasses.forEach(cls => {
+      if (cls.classTeacherId && cls.classTeacherId.toString() === staff._id.toString()) {
+        staffOrConditions.push({ classIds: cls._id });
+      } else if (cls.subjectTeachers && cls.subjectTeachers.length > 0) {
+        const theirSubjects = cls.subjectTeachers.filter(st => st.teacherId && st.teacherId.toString() === staff._id.toString());
+        theirSubjects.forEach(st => {
+          if (st.subjectId) {
+            staffOrConditions.push({
+              classIds: cls._id,
+              'subjects.subjectId': st.subjectId
+            });
+          }
+        });
+      }
+    });
+
+    if (staffOrConditions.length === 1) { // Only createdBy condition, so no classes assigned
+      const createdExamsCount = await Exam.countDocuments({ createdBy: userId, academicYearId });
+      if (createdExamsCount === 0) {
+        return res.json({
+          success: true,
+          data: [],
+          message: 'No classes assigned'
+        });
+      }
     }
     
-    // Find exams for these classes
+    // Find exams for these classes matching specific subjects, or created by staff
     const exams = await Exam.find({
-      classIds: { $in: classIds },
+      $or: staffOrConditions,
       academicYearId: academicYearId,
       isActive: true
     })

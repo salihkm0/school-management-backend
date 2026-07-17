@@ -9,6 +9,7 @@ const StaffAssignment = require("../models/StaffAssignment");
 const Class = require("../models/Class");
 const Subject = require("../models/Subject");
 const Notification = require("../models/Notification");
+const { sortStudents } = require("../utils/studentSorter");
 const {
   broadcastToUser,
   broadcastToClass,
@@ -355,24 +356,30 @@ exports.getMarksheetsByClass = async (req, res) => {
           const teacherId = st.teacherId?._id || st.teacherId;
           return teacherId && teacherId.toString() === staffOrAdmin._id.toString();
         })
-        .map(st => (st.subjectId?._id || st.subjectId).toString());
+        .map(st => st.subjectId?._id || st.subjectId)
+        .filter(Boolean)
+        .map(id => id.toString());
 
       // Get subjects from staffAssignment.subjectsTaught for this class
       const subjectsTaughtList = (staffAssignment?.subjectsTaught || [])
         .filter(s => s.classId && s.classId.toString() === classId.toString())
-        .map(s => s.subjectId.toString());
+        .map(s => s.subjectId)
+        .filter(Boolean)
+        .map(id => id.toString());
 
       allowedSubjectIds = [...new Set([...subjectTeachersList, ...subjectsTaughtList])];
     }
 
     // Get all active students with their language subjects
-    const students = await Student.find({ classId, status: "active" })
-      .select("_id fullName studentCode rollNumber admissionNo className firstLanguagePaper1 firstLanguagePaper2 thirdLanguage additionalLanguage")
+    const rawStudents = await Student.find({ classId, status: "active" })
+      .select("_id fullName studentCode rollNumber admissionNo className gender firstLanguagePaper1 firstLanguagePaper2 thirdLanguage additionalLanguage")
       .populate("firstLanguagePaper1", "name code type department")
       .populate("firstLanguagePaper2", "name code type department")
       .populate("thirdLanguage", "name code type department")
-      .populate("additionalLanguage", "name code type department")
-      .sort({ rollNumber: 1, fullName: 1 });
+      .populate("additionalLanguage", "name code type department");
+
+    const sortPreference = classObj?.studentSortPreference || 'alphabetic';
+    const students = sortStudents(rawStudents, sortPreference);
 
     // Get existing marksheets
     const marksheets = await Mark.find({ examId, classId });
@@ -549,6 +556,7 @@ exports.getMarksheetsByClass = async (req, res) => {
     const allSubjectsMap = new Map();
     studentMarksData.forEach(student => {
       student.subjects.forEach(subject => {
+        if (!subject.examSubjectId) return;
         const key = subject.examSubjectId.toString();
         if (!allSubjectsMap.has(key)) {
           allSubjectsMap.set(key, {
@@ -577,14 +585,14 @@ exports.getMarksheetsByClass = async (req, res) => {
     
     // Calculate progress for each unique subject
     const subjectProgress = uniqueSubjects.map(subject => {
-      const subjectIdStr = subject.examSubjectId.toString();
+      const subjectIdStr = subject.examSubjectId ? subject.examSubjectId.toString() : '';
       
       let totalStudentsTaking = 0;
       let enteredCount = 0;
       
       studentMarksData.forEach(student => {
         const studentSubj = student.subjects.find(
-          s => s.examSubjectId.toString() === subjectIdStr
+          s => s.examSubjectId && s.examSubjectId.toString() === subjectIdStr
         );
         if (studentSubj) {
           totalStudentsTaking++;
@@ -607,12 +615,12 @@ exports.getMarksheetsByClass = async (req, res) => {
     // Securely filter subjects data for non-admins
     if (!isAdmin) {
       uniqueSubjects = uniqueSubjects.filter(s => 
-        allowedSubjectIds.includes(s.examSubjectId.toString())
+        s.examSubjectId && allowedSubjectIds.includes(s.examSubjectId.toString())
       );
       
       studentMarksData.forEach(student => {
         student.subjects = student.subjects.filter(s => 
-          allowedSubjectIds.includes(s.examSubjectId.toString())
+          s.examSubjectId && allowedSubjectIds.includes(s.examSubjectId.toString())
         );
       });
     }
@@ -1044,7 +1052,7 @@ exports.bulkUpdateMarks = async (req, res) => {
         const examDoc = await Exam.findById(examId);
         if (examDoc) {
           const classSubmission = examDoc.classSubmissionStatus.find(
-            (cs) => cs.classId.toString() === classId,
+            (cs) => cs.classId && cs.classId.toString() === classId.toString(),
           );
           if (classSubmission) {
             await examDoc.updateClassSubmissionStats(classId);
@@ -1096,7 +1104,7 @@ exports.submitMarksForReview = async (req, res) => {
     }
 
     const classSubmission = exam.classSubmissionStatus.find(
-      (cs) => cs.classId.toString() === classId,
+      (cs) => cs.classId && cs.classId.toString() === classId.toString(),
     );
 
     if (!classSubmission) {
@@ -1182,7 +1190,7 @@ exports.reviewMarks = async (req, res) => {
     }
 
     const classSubmission = exam.classSubmissionStatus.find(
-      (cs) => cs.classId.toString() === classId,
+      (cs) => cs.classId && cs.classId.toString() === classId.toString(),
     );
 
     if (!classSubmission) {
@@ -1323,7 +1331,7 @@ exports.getTeacherPermissions = async (req, res) => {
       }));
 
       const classSubmission = exam.classSubmissionStatus.find(
-        (cs) => cs.classId.toString() === classId,
+        (cs) => cs.classId && cs.classId.toString() === classId.toString(),
       );
 
       return res.json({
@@ -1399,6 +1407,7 @@ exports.getTeacherPermissions = async (req, res) => {
           for (const teacherSubject of teacherSubjects) {
             const subjectId =
               teacherSubject.subjectId?._id || teacherSubject.subjectId;
+            if (!subjectId) continue;
             const examSubject = exam.subjects.find((s) => {
               const examSubjectId = s.subjectId?._id || s.subjectId;
               return (
@@ -1439,6 +1448,7 @@ exports.getTeacherPermissions = async (req, res) => {
           for (const teacherSubject of teacherSubjects) {
             const subjectId =
               teacherSubject.subjectId?._id || teacherSubject.subjectId;
+            if (!subjectId) continue;
             const examSubject = exam.subjects.find((s) => {
               const examSubjectId = s.subjectId?._id || s.subjectId;
               return (
@@ -1466,7 +1476,7 @@ exports.getTeacherPermissions = async (req, res) => {
     }
 
     const classSubmission = exam.classSubmissionStatus.find(
-      (cs) => cs.classId.toString() === classId,
+      (cs) => cs.classId && cs.classId.toString() === classId.toString(),
     );
 
     const canSubmit =
@@ -1540,7 +1550,7 @@ exports.publishResults = async (req, res) => {
     exam.resultsPublishedBy = userId;
 
     const classSubmission = exam.classSubmissionStatus.find(
-      (cs) => cs.classId.toString() === classId,
+      (cs) => cs.classId && cs.classId.toString() === classId.toString(),
     );
     if (classSubmission) {
       classSubmission.status = "published";

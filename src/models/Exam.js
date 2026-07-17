@@ -358,16 +358,16 @@ ExamSchema.virtual('displayName').get(function() {
 });
 
 ExamSchema.virtual('totalMaxMarks').get(function() {
-  return this.subjects.reduce((sum, s) => sum + (s.termMaxMarks || 0) + (s.ceMaxMarks || 0), 0);
+  return (this.subjects || []).reduce((sum, s) => sum + (s.termMaxMarks || 0) + (s.ceMaxMarks || 0), 0);
 });
 
 // Methods
 ExamSchema.methods.getSubjectConfig = function(subjectId) {
-  return this.subjects.find(s => s.subjectId.toString() === subjectId.toString());
+  return (this.subjects || []).find(s => s.subjectId.toString() === subjectId.toString());
 };
 
 ExamSchema.methods.getSubjectSchedule = function(subjectId) {
-  return this.schedule.find(s => s.subjectId.toString() === subjectId.toString());
+  return (this.schedule || []).find(s => s.subjectId.toString() === subjectId.toString());
 };
 
 ExamSchema.methods.getSubjectCeConfig = function(subjectId) {
@@ -406,7 +406,7 @@ ExamSchema.methods.updateClassSubmissionStats = async function(classId) {
       isFinalized: true
     });
     
-    const totalSubjects = this.subjects.length;
+    const totalSubjects = (this.subjects || []).length;
     const totalExpectedTermMarks = totalStudents * totalSubjects;
     
     classStatus.totalStudents = totalStudents;

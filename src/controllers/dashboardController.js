@@ -461,9 +461,10 @@ exports.getStaffDashboard = async (req, res) => {
     }));
     
     // Quick Stats
+    const uniqueSubjects = new Set(subjectsTaught.map(s => s.subjectId?._id?.toString() || s.subjectId?.toString()).filter(Boolean));
     const quickStats = {
       classesTaught: teachingClasses.length + classTeacherClasses.length,
-      subjectsTaught: subjectsTaught.length,
+      subjectsTaught: uniqueSubjects.size,
       totalStudents: totalStudents,
       pendingTasks: 0
     };

@@ -69,6 +69,7 @@ const ACTIVITY_TYPES = {
   
   // User related
   USER_REGISTERED: 'user_registered',
+  USER_UPDATED: 'user_updated',
   USER_LOGIN: 'user_login',
   USER_LOGOUT: 'user_logout',
   PASSWORD_CHANGED: 'password_changed',
@@ -277,7 +278,7 @@ RecentActivitySchema.methods.getIcon = function() {
     // Academic Year
     academic_year_created: '📅', academic_year_updated: '📝', academic_year_deleted: '🗑️', academic_year_set_current: '⭐',
     // User
-    user_registered: '👤', user_login: '🔑', user_logout: '🚪', password_changed: '🔒', password_reset_requested: '📧',
+    user_registered: '👤', user_updated: '👤', user_login: '🔑', user_logout: '🚪', password_changed: '🔒', password_reset_requested: '📧',
     // Notification
     notification_sent: '🔔', notification_bulk_sent: '📢',
     // System
@@ -320,7 +321,14 @@ RecentActivitySchema.statics.getDashboardActivities = async function(limit = 10,
     // Staff see class-related activities
     query.$or = [
       { performedByRole: 'staff' },
-      { 'details.staffAccessible': true }
+      { 'details.staffAccessible': true },
+      { activityType: { $in: [
+        'subject_assigned', 'subject_teacher_assigned', 
+        'class_teacher_assigned', 'timetable_updated', 
+        'exam_created', 'exam_published', 'exam_results_published',
+        'notification_sent', 'notification_bulk_sent',
+        'academic_year_set_current', 'student_added'
+      ]}}
     ];
   }
   
@@ -372,7 +380,8 @@ RecentActivitySchema.pre('save', function(next) {
       class_created: 'Class Created',
       user_login: 'User Login',
       user_logout: 'User Logout',
-      password_changed: 'Password Changed'
+      password_changed: 'Password Changed',
+      user_updated: 'User Updated'
     };
     this.title = activityLabels[this.activityType] || 'Activity';
   }

@@ -856,7 +856,7 @@ exports.bulkUpdateRollNumbers = async (req, res) => {
 
     const bulkOps = updates.map((update) => ({
       updateOne: {
-        filter: { _id: update.studentId },
+        filter: { _id: update.studentId || update.id },
         update: { $set: { rollNumber: update.rollNumber || '' } }
       }
     }));

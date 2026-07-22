@@ -612,18 +612,10 @@ exports.getMarksheetsByClass = async (req, res) => {
       };
     });
 
-    // Securely filter subjects data for non-admins
-    if (!isAdmin) {
-      uniqueSubjects = uniqueSubjects.filter(s => 
-        s.examSubjectId && allowedSubjectIds.includes(s.examSubjectId.toString())
-      );
-      
-      studentMarksData.forEach(student => {
-        student.subjects = student.subjects.filter(s => 
-          s.examSubjectId && allowedSubjectIds.includes(s.examSubjectId.toString())
-        );
-      });
-    }
+    // Removed filtering block. The frontend uses the full uniqueSubjects list 
+    // to check if ALL subjects are entered (completedSubjects < subjects.length). 
+    // If not, it blocks the UI with "Marks Pending".
+    // For marks entry, the frontend explicitly filters by allowedSubjects.
 
     // Include information about which students take which languages
     const languageMapping = {};

@@ -37,6 +37,16 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  preferences: {
+    notificationsEnabled: {
+      type: Boolean,
+      default: true
+    },
+    biometricEnabled: {
+      type: Boolean,
+      default: false
+    }
+  },
   isActive: {
     type: Boolean,
     default: true

@@ -253,7 +253,8 @@ exports.login = async (req, res) => {
         phone: user.phone,
         name: user.name,
         role: user.role,
-        photoUrl: user.photoUrl
+        photoUrl: user.photoUrl,
+        preferences: user.preferences
       },
       ...additionalData
     });
@@ -480,7 +481,8 @@ exports.getMe = async (req, res) => {
           email: req.user.email,
           name: 'Open Dashboard',
           role: 'open',
-          photoUrl: null
+          photoUrl: null,
+          preferences: { notificationsEnabled: true, biometricEnabled: false }
         }
       });
     }
@@ -499,7 +501,15 @@ exports.getMe = async (req, res) => {
     }
 
     res.json({
-      user,
+      user: {
+        id: user._id,
+        email: user.email,
+        phone: user.phone,
+        name: user.name,
+        role: user.role,
+        photoUrl: user.photoUrl,
+        preferences: user.preferences
+      },
       ...additionalData
     });
   } catch (error) {
@@ -509,7 +519,7 @@ exports.getMe = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   try {
-    const { name, phone, email } = req.body;
+    const { name, phone, email, preferences } = req.body;
     const user = await User.findById(req.user.id);
     
     if (!user) {
@@ -535,6 +545,14 @@ exports.updateProfile = async (req, res) => {
     if (name) user.name = name;
     if (phone) user.phone = phone;
     if (email) user.email = email;
+    if (preferences) {
+      if (preferences.notificationsEnabled !== undefined) {
+        user.preferences.notificationsEnabled = preferences.notificationsEnabled;
+      }
+      if (preferences.biometricEnabled !== undefined) {
+        user.preferences.biometricEnabled = preferences.biometricEnabled;
+      }
+    }
     await user.save();
 
     // Sync with corresponding role collections
@@ -574,7 +592,8 @@ exports.updateProfile = async (req, res) => {
         phone: user.phone,
         name: user.name,
         role: user.role,
-        photoUrl: user.photoUrl
+        photoUrl: user.photoUrl,
+        preferences: user.preferences
       }
     });
   } catch (error) {

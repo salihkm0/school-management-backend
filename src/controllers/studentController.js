@@ -118,9 +118,19 @@ exports.getStudent = async (req, res) => {
   }
 };
 
+const cleanEmptyObjectIds = (data) => {
+  const objectIdFields = ['classId', 'academicYearId', 'firstLanguagePaper1', 'firstLanguagePaper2', 'thirdLanguage', 'additionalLanguage'];
+  objectIdFields.forEach(field => {
+    if (data[field] === "") {
+      data[field] = null;
+    }
+  });
+  return data;
+};
+
 exports.createStudent = async (req, res) => {
   try {
-    const studentData = { ...req.body };
+    const studentData = cleanEmptyObjectIds({ ...req.body });
     
     if (studentData.classId) {
       const classInfo = await Class.findById(studentData.classId);
@@ -165,6 +175,8 @@ exports.updateStudent = async (req, res) => {
     if (!oldStudent) {
       return res.status(404).json({ message: 'Student not found' });
     }
+
+    cleanEmptyObjectIds(req.body);
 
     const student = await Student.findByIdAndUpdate(
       req.params.id,

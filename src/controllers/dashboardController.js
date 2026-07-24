@@ -279,33 +279,33 @@ exports.getStaffDashboard = async (req, res) => {
   try {
     const userId = req.user.id;
     
-    // Get staff info
-    const staff = await Staff.findOne({ userId }).populate('userId', 'name email phone');
+    // 1. Parallelize initial profile fetches
+    const [staff, currentYear] = await Promise.all([
+      Staff.findOne({ userId }).populate('userId', 'name email phone').lean(),
+      AcademicYear.findOne({ isCurrent: true }).lean()
+    ]);
+    
     if (!staff) {
       return res.status(404).json({ message: 'Staff profile not found' });
     }
     
-    const currentYear = await AcademicYear.findOne({ isCurrent: true });
-    
-    // Get class where staff is class teacher
-    const classTeacherClass = await Class.findOne({
-      classTeacherId: staff._id,
-      isActive: true,
-      academicYearId: currentYear?._id
-    }).populate('subjects', 'name code');
+    // 2. Parallelize assignments
+    const [classTeacherClass, staffAssignment] = await Promise.all([
+      Class.findOne({
+        classTeacherId: staff._id,
+        isActive: true,
+        academicYearId: currentYear?._id
+      }).populate('subjects', 'name code').lean(),
+      
+      StaffAssignment.findOne({
+        staffId: staff._id,
+        academicYearId: currentYear?._id
+      }).populate('subjectsTaught.subjectId', 'name code type department')
+        .populate('subjectsTaught.classId', 'name section displayName').lean()
+    ]);
+
     const classTeacherClasses = classTeacherClass ? [classTeacherClass] : [];
-    
-    // Get staff assignment for current year
-    const staffAssignment = await StaffAssignment.findOne({
-      staffId: staff._id,
-      academicYearId: currentYear?._id
-    }).populate('subjectsTaught.subjectId', 'name code type department')
-      .populate('subjectsTaught.classId', 'name section displayName');
-    
-    // Get subjects taught by staff
     const subjectsTaught = staffAssignment?.subjectsTaught || [];
-    
-    // Get unique classes where staff teaches
     const teachingClasses = [...new Map(
       subjectsTaught.map(s => [s.classId?._id?.toString(), s.classId])
     ).values()];
@@ -313,22 +313,24 @@ exports.getStaffDashboard = async (req, res) => {
     // Today's Schedule
     const today = new Date();
     const dayName = today.toLocaleDateString('en-US', { weekday: 'long' });
-    
     const todaySchedule = [];
     
-    // Helper to add schedule items
     const addScheduleItem = (time, subject, className, classId, room, isClassTeacher = false) => {
-      todaySchedule.push({
-        time,
-        subject,
-        className,
-        classId,
-        type: 'class',
-        room,
-        isClassTeacher
-      });
+      todaySchedule.push({ time, subject, className, classId, type: 'class', room, isClassTeacher });
     };
     
+    // Pre-fetch all subject IDs required for the schedule to avoid N+1 queries
+    const subjectIdsToFetch = new Set();
+    for (const cls of classTeacherClasses) {
+      const timetable = cls.timetable || [];
+      const daySchedule = timetable.find(t => t.day === dayName);
+      if (daySchedule && daySchedule.periods) {
+        daySchedule.periods.forEach(p => p.subjectId && subjectIdsToFetch.add(p.subjectId.toString()));
+      }
+    }
+    const prefetchedSubjects = await Subject.find({ _id: { $in: Array.from(subjectIdsToFetch) } }).lean();
+    const subjectMap = new Map(prefetchedSubjects.map(s => [s._id.toString(), s]));
+
     // Add class teacher classes to schedule
     for (const cls of classTeacherClasses) {
       const timetable = cls.timetable || [];
@@ -336,7 +338,7 @@ exports.getStaffDashboard = async (req, res) => {
       
       if (daySchedule && daySchedule.periods) {
         for (const period of daySchedule.periods) {
-          const subject = await Subject.findById(period.subjectId);
+          const subject = period.subjectId ? subjectMap.get(period.subjectId.toString()) : null;
           addScheduleItem(
             `${period.startTime || '09:00'} - ${period.endTime || '10:00'}`,
             subject?.name || 'Class',
@@ -347,7 +349,6 @@ exports.getStaffDashboard = async (req, res) => {
           );
         }
       } else {
-        // If no timetable, add default entry
         addScheduleItem('09:00 - 10:00', 'Class Teacher Period', cls.displayName || `${cls.name}-${cls.section}`, cls._id, '', true);
       }
     }
@@ -364,7 +365,7 @@ exports.getStaffDashboard = async (req, res) => {
             if (period.subjectId?.toString() === subject.subjectId?._id?.toString()) {
               addScheduleItem(
                 `${period.startTime || '09:00'} - ${period.endTime || '10:00'}`,
-                subject.subjectName,
+                subject.subjectId?.name || subject.subjectName,
                 classItem.displayName || `${classItem.name}-${classItem.section}`,
                 classItem._id,
                 period.room
@@ -374,19 +375,33 @@ exports.getStaffDashboard = async (req, res) => {
         }
       }
     }
-    
-    // Sort schedule by time
     todaySchedule.sort((a, b) => a.time.localeCompare(b.time));
     
-    // Pending Tasks logic removed as requested by user
-    
-    // Upcoming Duties
-    const upcomingDuties = await StaffDuty.find({
+    // 3. Parallelize duties, student counts, and attendance aggregation
+    const dutyPromise = StaffDuty.find({
       staffId: staff._id,
       status: 'assigned',
       'duties.date': { $gte: new Date() }
-    }).sort({ 'duties.date': 1 });
-    
+    }).sort({ 'duties.date': 1 }).lean();
+
+    const studentCountPromises = classTeacherClasses.map(cls => 
+      Student.countDocuments({ classId: cls._id, status: 'active' })
+    );
+
+    // Optimized attendance aggregation
+    const attendancePromises = classTeacherClasses.map(cls => 
+      Attendance.aggregate([
+        { $match: { classId: cls._id, academicYearId: currentYear?._id, totalWorkingDays: { $gt: 0 } } },
+        { $group: { _id: null, avgAttendance: { $avg: { $divide: ["$presentDays", "$totalWorkingDays"] } } } }
+      ])
+    );
+
+    const [upcomingDuties, studentCounts, attendanceStatsList] = await Promise.all([
+      dutyPromise,
+      Promise.all(studentCountPromises),
+      Promise.all(attendancePromises)
+    ]);
+
     const formattedDuties = [];
     for (const duty of upcomingDuties) {
       for (const dutyDate of duty.duties) {
@@ -402,40 +417,21 @@ exports.getStaffDashboard = async (req, res) => {
         }
       }
     }
-    
-    // Sort duties by date
     formattedDuties.sort((a, b) => new Date(a.date) - new Date(b.date));
     
-    // Student Stats for Class Teacher
-    let totalStudents = 0;
+    // Calculate total students and attendance
+    const totalStudents = studentCounts.reduce((acc, count) => acc + count, 0);
+    const pendingParentRequests = 0;
+    
     let totalAttendanceSum = 0;
-    let totalAttendanceCount = 0;
-    let pendingParentRequests = 0;
-    
-    for (const cls of classTeacherClasses) {
-      const studentsInClass = await Student.countDocuments({ classId: cls._id, status: 'active' });
-      totalStudents += studentsInClass;
-      
-      // Get average attendance for this class — filter to current academic year only
-      const attendanceRecords = await Attendance.find({
-        classId: cls._id,
-        academicYearId: currentYear?._id
-      });
-      let classAttendanceSum = 0;
-      let classAttendanceCount = 0;
-      for (const record of attendanceRecords) {
-        if (record.totalWorkingDays > 0) {
-          classAttendanceSum += (record.presentDays / record.totalWorkingDays) * 100;
-          classAttendanceCount++;
-          totalAttendanceCount++;
-        }
+    let attendanceClassesCount = 0;
+    attendanceStatsList.forEach(stats => {
+      if (stats && stats.length > 0 && stats[0].avgAttendance != null) {
+        totalAttendanceSum += (stats[0].avgAttendance * 100);
+        attendanceClassesCount++;
       }
-      if (classAttendanceCount > 0) {
-        totalAttendanceSum += classAttendanceSum / classAttendanceCount;
-      }
-    }
-    
-    const averageAttendance = classTeacherClasses.length > 0 ? totalAttendanceSum / classTeacherClasses.length : 0;
+    });
+    const averageAttendance = attendanceClassesCount > 0 ? totalAttendanceSum / attendanceClassesCount : 0;
     
     // Recent Activities (staff-related)
     const recentActivities = await RecentActivity.find({

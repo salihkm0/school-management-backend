@@ -96,8 +96,8 @@ const io = socketIO(server, {
     credentials: true,
     allowedHeaders: ['Authorization', 'Content-Type']
   },
-  // IMPORTANT: Use polling first, then upgrade to websocket
-  transports: ['polling', 'websocket'],
+  // IMPORTANT: Use websocket exclusively in cluster mode to prevent sticky-session issues
+  transports: ['websocket'],
   allowEIO3: true,
   pingTimeout: 120000, // Increased for Render's slower responses
   pingInterval: 25000,
@@ -119,12 +119,25 @@ connectDB();
 // Connect to Redis (optional - won't crash if fails)
 const { connectRedis, disconnectRedis } = require('./src/config/redis');
 
-connectRedis().then(client => {
+const { createAdapter } = require('@socket.io/redis-adapter');
+
+connectRedis().then(async client => {
   if (client) {
     const redisType = process.env.UPSTASH_REDIS_REST_URL ? 'Upstash' 
       : process.env.REDIS_URL ? 'Redis URL'
       : `local Redis (${process.env.REDIS_HOST || '127.0.0.1'}:${process.env.REDIS_PORT || 6379})`;
     console.log(`🎯 Redis cache layer ready — ${redisType}`);
+    
+    try {
+      // Set up Redis Adapter for Socket.io PM2 Cluster Mode
+      const pubClient = client.duplicate();
+      const subClient = client.duplicate();
+      await Promise.all([pubClient.connect(), subClient.connect()]);
+      io.adapter(createAdapter(pubClient, subClient));
+      console.log('🔗 Socket.IO Redis Adapter connected (Cluster mode enabled)');
+    } catch (err) {
+      console.error('⚠️ Failed to connect Socket.IO Redis Adapter:', err.message);
+    }
   } else {
     console.log('⚠️ Running without Redis cache (fallback mode)');
   }

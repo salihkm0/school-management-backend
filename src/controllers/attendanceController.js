@@ -186,8 +186,9 @@ exports.applyTemplateToMonth = async (req, res) => {
           attendance.totalHolidays = template.holidays.length;
           attendance.holidays = template.holidays;
           attendance.templateId = template._id;
-          attendance.percentage = attendance.totalWorkingDays > 0 
-            ? (attendance.presentDays / attendance.totalWorkingDays) * 100 
+          const markedDays = attendance.presentDays + attendance.absentDays;
+          attendance.percentage = markedDays > 0 
+            ? (attendance.presentDays / markedDays) * 100 
             : 0;
           await attendance.save();
           results.updated.push(student.fullName);
@@ -480,7 +481,8 @@ exports.createAttendance = async (req, res) => {
 
     const finalPresentDays = presentDays !== undefined ? presentDays : (workingDays - (absentDays || 0));
     const finalAbsentDays = absentDays !== undefined ? absentDays : (workingDays - (presentDays || 0));
-    const percentage = workingDays > 0 ? (finalPresentDays / workingDays) * 100 : 0;
+    const markedDays = finalPresentDays + finalAbsentDays;
+    const percentage = markedDays > 0 ? (finalPresentDays / markedDays) * 100 : 0;
 
     const attendance = await Attendance.create({
       studentId,
@@ -565,7 +567,8 @@ exports.bulkCreateAttendance = async (req, res) => {
 
       absentDays = Math.min(Math.max(absentDays, 0), workingDays);
       presentDays = workingDays - absentDays;
-      const percentage = workingDays > 0 ? (presentDays / workingDays) * 100 : 0;
+      const markedDays = presentDays + absentDays;
+      const percentage = markedDays > 0 ? (presentDays / markedDays) * 100 : 0;
 
       return {
         updateOne: {
@@ -663,7 +666,8 @@ exports.updateAttendance = async (req, res) => {
     const workingDays = totalWorkingDays || attendance.totalWorkingDays || 25;
     const finalPresentDays = presentDays !== undefined ? presentDays : (workingDays - (absentDays || attendance.absentDays));
     const finalAbsentDays = absentDays !== undefined ? absentDays : (workingDays - finalPresentDays);
-    const percentage = workingDays > 0 ? (finalPresentDays / workingDays) * 100 : 0;
+    const markedDays = finalPresentDays + finalAbsentDays;
+    const percentage = markedDays > 0 ? (finalPresentDays / markedDays) * 100 : 0;
 
     attendance.presentDays = finalPresentDays;
     attendance.absentDays = finalAbsentDays;
@@ -779,15 +783,16 @@ exports.getAttendanceSummary = async (req, res) => {
       if (record) {
         presentDays = record.presentDays || 0;
         absentDays = record.absentDays || 0;
-        percentage = workingDays > 0 ? (presentDays / workingDays) * 100 : 0;
+        const markedDays = presentDays + absentDays;
+        percentage = markedDays > 0 ? (presentDays / markedDays) * 100 : 0;
       } else {
-        absentDays = workingDays;
+        absentDays = 0; // If no record, absent should be 0, not workingDays (which is 25)
         presentDays = 0;
         percentage = 0;
       }
       
       totalPresent += presentDays;
-      totalPossibleDays += workingDays;
+      totalPossibleDays += (presentDays + absentDays);
       totalStudents++;
       
       if (percentage >= 75) goodStanding++;
@@ -818,7 +823,8 @@ exports.getAttendanceSummary = async (req, res) => {
       const monthRecords = attendanceRecords.filter(a => a.month === m);
       if (monthRecords.length > 0) {
         const monthPresent = monthRecords.reduce((sum, a) => sum + (a.presentDays || 0), 0);
-        const monthPossible = monthRecords.length * workingDays;
+        const monthAbsent = monthRecords.reduce((sum, a) => sum + (a.absentDays || 0), 0);
+        const monthPossible = monthPresent + monthAbsent;
         monthlySummary[m] = {
           totalPresent: monthPresent,
           totalDays: monthPossible,

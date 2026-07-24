@@ -13,7 +13,9 @@ const {
   getAuditLogs,
   toggleMaintenanceMode,
   createUser,
-  updateUser
+  updateUser,
+  getSystemMetrics,
+  getDailyActiveUsers
 } = require('../controllers/administrationController');
 
 // All administration routes are protected and restricted to 'administration' role
@@ -35,6 +37,8 @@ router.get('/system/active-users', protect, authorize('administration'), getActi
 router.post('/system/clear-cache', protect, authorize('administration'), clearCache);
 router.post('/system/maintenance', protect, authorize('administration'), toggleMaintenanceMode);
 router.get('/system/db-stats', protect, authorize('administration'), getDbStats);
+router.get('/system/metrics', protect, authorize('administration'), getSystemMetrics);
+router.get('/system/daily-users', protect, authorize('administration'), getDailyActiveUsers);
 router.get('/audit-logs', protect, authorize('administration'), getAuditLogs);
 router.post('/fcm/test', protect, authorize('administration'), testFcmNotification);
 

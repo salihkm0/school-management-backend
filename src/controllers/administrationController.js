@@ -8,6 +8,7 @@ const Staff = require('../models/Staff');
 const Parent = require('../models/Parent');
 const { Exam } = require('../models/Exam');
 const AppConfig = require('../models/AppConfig');
+const SystemMetric = require('../models/SystemMetric');
 const cache = require('../config/cache');
 const { getConnectedUsers } = require('../config/socket');
 const admin = require('firebase-admin');
@@ -239,7 +240,97 @@ exports.getActiveUsers = async (req, res) => {
     res.json({ success: true, count: users.length, data: users });
   } catch (error) {
     console.error('Active Users Error:', error);
-    res.status(500).json({ message: 'Error getting active users' });
+    res.status(500).json({ message: 'Error retrieving active users' });
+  }
+};
+
+// ==========================================
+// ADVANCED CHARTS & METRICS
+// ==========================================
+
+exports.getSystemMetrics = async (req, res) => {
+  try {
+    const range = req.query.range || '48h'; // 24h, 48h, 7d, 30d
+    let hoursToFetch = 48;
+    
+    if (range === '24h') hoursToFetch = 24;
+    if (range === '7d') hoursToFetch = 24 * 7;
+    if (range === '30d') hoursToFetch = 24 * 30;
+    
+    const since = new Date(Date.now() - hoursToFetch * 60 * 60 * 1000);
+    
+    // Fetch metrics
+    const metrics = await SystemMetric.find({ timestamp: { $gte: since } })
+      .select('timestamp cpuLoad memoryUsed totalMemory')
+      .sort({ timestamp: 1 })
+      .lean();
+      
+    res.json({
+      success: true,
+      data: metrics
+    });
+  } catch (error) {
+    console.error('System Metrics Error:', error);
+    res.status(500).json({ message: 'Error retrieving system metrics' });
+  }
+};
+
+exports.getDailyActiveUsers = async (req, res) => {
+  try {
+    const days = parseInt(req.query.days, 10) || 7;
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    
+    // We group by year, month, day to get unique logins per day
+    const dauStats = await RecentActivity.aggregate([
+      {
+        $match: {
+          activityType: 'user_login',
+          createdAt: { $gte: since }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            year: { $year: "$createdAt" },
+            month: { $month: "$createdAt" },
+            day: { $dayOfMonth: "$createdAt" },
+            user: "$performedBy" // group by user first to get unique users per day
+          }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            year: "$_id.year",
+            month: "$_id.month",
+            day: "$_id.day"
+          },
+          activeUsers: { $sum: 1 }
+        }
+      },
+      {
+        $sort: { "_id.year": 1, "_id.month": 1, "_id.day": 1 }
+      }
+    ]);
+    
+    // Format the response to be chart-friendly
+    const formattedData = dauStats.map(stat => {
+      // Create a date string (e.g. "2026-07-24")
+      const dateStr = `${stat._id.year}-${String(stat._id.month).padStart(2, '0')}-${String(stat._id.day).padStart(2, '0')}`;
+      return {
+        date: dateStr,
+        activeUsers: stat.activeUsers
+      };
+    });
+
+    res.json({
+      success: true,
+      data: formattedData
+    });
+  } catch (error) {
+    console.error('DAU Error:', error);
+    res.status(500).json({ message: 'Error retrieving daily active users' });
   }
 };
 

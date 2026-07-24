@@ -143,9 +143,19 @@ connectRedis().then(async client => {
   }
 });
 
+// Start system metrics collection for advanced dashboard
+const { initMetricsCollection, stopMetricsCollection } = require('./src/services/metricsService');
+// Use a small delay before starting to avoid startup PM2 cluster race conditions blocking main thread
+setTimeout(() => {
+  if (process.env.NODE_ENV !== 'test') {
+    initMetricsCollection();
+  }
+}, 5000);
+
 // Update shutdown handlers
 const gracefulShutdown = async () => {
   console.log('Received shutdown signal, closing connections...');
+  stopMetricsCollection();
   await disconnectRedis();
   server.close(() => {
     console.log('Server closed');

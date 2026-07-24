@@ -43,6 +43,7 @@
     "nodemailer": "^6.9.7",
     "phantomjs-prebuilt": "^2.1.16",
     "puppeteer": "^24.43.0",
+    "rate-limit-redis": "^6.0.0",
     "redis": "^4.6.12",
     "socket.io": "^4.7.2",
     "socket.io-client": "^4.7.2",

@@ -195,9 +195,22 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('dev'));
 
 // Rate limiting
+const { getRedisClient, isRedisConnected } = require('./src/config/redis');
+const { RedisStore } = require('rate-limit-redis');
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'development' ? 50000 : 1000
+  max: process.env.NODE_ENV === 'development' ? 50000 : 1000,
+  // Use Redis store if Redis is connected, otherwise fallback to memory
+  store: (() => {
+    const redisClient = getRedisClient();
+    if (redisClient && isRedisConnected()) {
+      return new RedisStore({
+        sendCommand: (...args) => redisClient.sendCommand(args),
+      });
+    }
+    return undefined; // fallback to default memory store
+  })()
 });
 app.use('/api/', limiter);
 

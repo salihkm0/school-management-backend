@@ -250,20 +250,60 @@ exports.getActiveUsers = async (req, res) => {
 
 exports.getSystemMetrics = async (req, res) => {
   try {
-    const range = req.query.range || '48h'; // 24h, 48h, 7d, 30d
-    let hoursToFetch = 48;
-    
-    if (range === '24h') hoursToFetch = 24;
-    if (range === '7d') hoursToFetch = 24 * 7;
-    if (range === '30d') hoursToFetch = 24 * 30;
-    
-    const since = new Date(Date.now() - hoursToFetch * 60 * 60 * 1000);
-    
-    // Fetch metrics
-    const metrics = await SystemMetric.find({ timestamp: { $gte: since } })
-      .select('timestamp cpuLoad memoryUsed totalMemory')
-      .sort({ timestamp: 1 })
-      .lean();
+    const range = req.query.range || '24h';
+    let since = new Date();
+    let groupBy = null;
+
+    if (range === '24h') {
+      since.setHours(since.getHours() - 24);
+      // For 24h, we can return raw data or group by hour/15min. Since it's max 96 points, raw is fine.
+    } else if (range === '7d') {
+      since.setDate(since.getDate() - 7);
+      // Group by Hour
+      groupBy = {
+        year: { $year: "$timestamp" },
+        month: { $month: "$timestamp" },
+        day: { $dayOfMonth: "$timestamp" },
+        hour: { $hour: "$timestamp" }
+      };
+    } else if (range === '30d') {
+      since.setDate(since.getDate() - 30);
+      // Group by Day
+      groupBy = {
+        year: { $year: "$timestamp" },
+        month: { $month: "$timestamp" },
+        day: { $dayOfMonth: "$timestamp" }
+      };
+    }
+
+    let metrics;
+
+    if (groupBy) {
+      const agg = await SystemMetric.aggregate([
+        { $match: { timestamp: { $gte: since } } },
+        {
+          $group: {
+            _id: groupBy,
+            cpuLoad: { $avg: "$cpuLoad" },
+            memoryUsed: { $avg: "$memoryUsed" },
+            totalMemory: { $avg: "$totalMemory" },
+            timestamp: { $first: "$timestamp" } // Use the first timestamp in the group for ordering/display
+          }
+        },
+        { $sort: { timestamp: 1 } }
+      ]);
+      metrics = agg.map(m => ({
+        timestamp: m.timestamp,
+        cpuLoad: m.cpuLoad,
+        memoryUsed: m.memoryUsed,
+        totalMemory: m.totalMemory
+      }));
+    } else {
+      metrics = await SystemMetric.find({ timestamp: { $gte: since } })
+        .select('timestamp cpuLoad memoryUsed totalMemory')
+        .sort({ timestamp: 1 })
+        .lean();
+    }
       
     res.json({
       success: true,

@@ -15,7 +15,8 @@ const generateReportCardPDF = async (data) => {
     page = await browser.newPage();
 
     await page.setContent(html, {
-      waitUntil: 'networkidle0'
+      waitUntil: 'networkidle0',
+      timeout: 0
     });
 
     await page.emulateMediaType('screen');
@@ -29,7 +30,8 @@ const generateReportCardPDF = async (data) => {
         right: '0mm',
         bottom: '0mm',
         left: '0mm'
-      }
+      },
+      timeout: 0
     });
 
     await page.close();
@@ -54,7 +56,8 @@ const generateMultiReportCardPDF = async (data) => {
     page = await browser.newPage();
 
     await page.setContent(html, {
-      waitUntil: 'networkidle0'
+      waitUntil: 'networkidle0',
+      timeout: 0
     });
 
     await page.emulateMediaType('screen');
@@ -68,7 +71,8 @@ const generateMultiReportCardPDF = async (data) => {
         right: '0mm',
         bottom: '0mm',
         left: '0mm'
-      }
+      },
+      timeout: 0
     });
 
     await page.close();

@@ -655,6 +655,7 @@ exports.getParentDashboard = async (req, res) => {
     
     // School Announcements
     const announcements = await Notification.find({ 
+      userId: parent.userId,
       type: { $in: ['announcement', 'info'] },
       createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
     })

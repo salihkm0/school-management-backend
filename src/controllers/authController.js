@@ -155,7 +155,7 @@ exports.register = async (req, res) => {
 
 exports.login = async (req, res) => {
   try {
-    const { email, phone, password, rememberMe } = req.body;
+    const { email, phone, password, rememberMe, deviceInfo } = req.body;
 
     console.log("body :" , req.body)
 
@@ -217,6 +217,12 @@ exports.login = async (req, res) => {
     const userAgent = req.headers['user-agent'];
 
     user.lastLogin = new Date();
+    if (deviceInfo) {
+      user.deviceInfo = {
+        ...deviceInfo,
+        lastUpdated: new Date()
+      };
+    }
     await user.save();
 
     const token = user.generateAuthToken();
@@ -341,21 +347,24 @@ exports.forgotPassword = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const resetToken = crypto.randomBytes(32).toString('hex');
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
     user.resetPasswordToken = crypto
       .createHash('sha256')
-      .update(resetToken)
+      .update(otp)
       .digest('hex');
-    user.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
+    user.resetPasswordExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
 
     await user.save();
 
-    const resetUrl = `${req.protocol}://${req.get('host')}/reset-password/${resetToken}`;
-    const message = `You requested a password reset. Click the link to reset your password: ${resetUrl}`;
+    const message = `
+      <h3>Password Reset Request</h3>
+      <p>You requested a password reset. Your OTP is: <strong>${otp}</strong></p>
+      <p>This OTP will expire in 10 minutes.</p>
+    `;
 
     await sendEmail({
       email: user.email,
-      subject: 'Password Reset Request',
+      subject: 'Password Reset Request OTP',
       message
     });
 
@@ -385,21 +394,28 @@ exports.forgotPassword = async (req, res) => {
 
 exports.resetPassword = async (req, res) => {
   try {
+    const { email, otp, password } = req.body;
+
+    if (!email || !otp || !password) {
+      return res.status(400).json({ message: 'Please provide email, otp, and new password' });
+    }
+
     const resetPasswordToken = crypto
       .createHash('sha256')
-      .update(req.params.token)
+      .update(otp)
       .digest('hex');
 
     const user = await User.findOne({
+      email,
       resetPasswordToken,
       resetPasswordExpire: { $gt: Date.now() }
     });
 
     if (!user) {
-      return res.status(400).json({ message: 'Invalid or expired token' });
+      return res.status(400).json({ message: 'Invalid email, OTP, or expired OTP' });
     }
 
-    user.password = req.body.password;
+    user.password = password;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
     await user.save();
@@ -519,7 +535,7 @@ exports.getMe = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   try {
-    const { name, phone, email, preferences } = req.body;
+    const { name, phone, email, preferences, deviceInfo } = req.body;
     const user = await User.findById(req.user.id);
     
     if (!user) {
@@ -552,6 +568,12 @@ exports.updateProfile = async (req, res) => {
       if (preferences.biometricEnabled !== undefined) {
         user.preferences.biometricEnabled = preferences.biometricEnabled;
       }
+    }
+    if (deviceInfo) {
+      user.deviceInfo = {
+        ...deviceInfo,
+        lastUpdated: new Date()
+      };
     }
     await user.save();
 

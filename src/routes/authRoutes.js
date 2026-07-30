@@ -19,7 +19,7 @@ router.post('/register', validate(registerValidation), register);
 router.post('/login', validate(loginValidation), login);
 router.post('/refresh-token', refreshToken);
 router.post('/forgot-password', forgotPassword);
-router.put('/reset-password/:token', resetPassword);
+router.post('/reset-password', resetPassword);
 
 // Protected routes
 router.use(protect);

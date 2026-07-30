@@ -113,8 +113,7 @@ const io = socketIO(server, {
   }
 });
 
-// Connect to MongoDB
-connectDB();
+// MongoDB connection will be established before starting the server
 
 // Connect to Redis (optional - won't crash if fails)
 const { connectRedis, disconnectRedis } = require('./src/config/redis');
@@ -331,19 +330,24 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 5055;
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📡 Socket.IO server ready`);
-  console.log(`📍 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`📄 Views directory: ${path.join(__dirname, 'src', 'views')}`);
+connectDB().then(() => {
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📡 Socket.IO server ready`);
+    console.log(`📍 Health check: http://localhost:${PORT}/api/health`);
+    console.log(`📄 Views directory: ${path.join(__dirname, 'src', 'views')}`);
+  });
+
+  // Start background workers
+  require('./src/services/queue/workers/pdfWorker');
+
+  // Register Redis connection on app so health endpoint can read status
+  const { redisConnection } = require('./src/services/queue/jobQueue');
+  app.set('redisClient', redisConnection);
+}).catch(err => {
+  console.error("Failed to connect to DB:", err);
+  process.exit(1);
 });
-
-// Start background workers
-require('./src/services/queue/workers/pdfWorker');
-
-// Register Redis connection on app so health endpoint can read status
-const { redisConnection } = require('./src/services/queue/jobQueue');
-app.set('redisClient', redisConnection);
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {

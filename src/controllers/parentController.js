@@ -97,7 +97,7 @@ exports.registerParent = async (req, res) => {
           email: user.email,
           subject: 'Welcome to School Management System',
           template: 'parent_welcome',
-          data: { name: fullName, email, phone }
+          data: { name: fullName, email, phone, password: req.body.password }
         });
       } catch (error) {
         console.error('Email error:', error);
@@ -132,54 +132,61 @@ exports.registerParent = async (req, res) => {
 exports.connectStudent = async (req, res) => {
   try {
     const parentId = req.params.id;
-    const { studentCode, dateOfBirth, relation } = req.body;
+    const { studentCode: inputCode, dateOfBirth, relation } = req.body;
     
     const parent = await Parent.findById(parentId);
     if (!parent) {
       return res.status(404).json({ message: 'Parent not found' });
     }
     
-    // Check if already connected
-    if (parent.hasConnection && parent.hasConnection(studentCode)) {
-      return res.status(400).json({ message: 'Student already connected' });
-    }
-    
     const parsedDOB = new Date(dateOfBirth);
     
-    // Find student by studentCode and dateOfBirth (across all years)
+    // Find student by studentCode or admissionNo and dateOfBirth (across all years)
     const student = await Student.findOne({
-      studentCode: studentCode,
+      $or: [
+        { studentCode: inputCode },
+        { admissionNo: inputCode }
+      ],
       dateOfBirth: {
         $gte: new Date(parsedDOB.setHours(0, 0, 0, 0)),
         $lt: new Date(parsedDOB.setHours(23, 59, 59, 999))
       }
     }).sort({ academicYearId: -1 });
     
+    // Resolve the actual student code to use for connection
+    const actualStudentCode = student ? student.studentCode : inputCode;
+
+    // Check if already connected
+    if (parent.hasConnection && parent.hasConnection(actualStudentCode)) {
+      return res.status(400).json({ message: 'Student already connected' });
+    }
+    
     if (!student) {
       // Store the connection request for future matching
       if (parent.addStudentConnection) {
-        await parent.addStudentConnection(studentCode, parsedDOB, relation);
+        await parent.addStudentConnection(actualStudentCode, parsedDOB, relation);
       }
       
       return res.status(202).json({ 
         success: true,
         message: 'Connection request saved. Student will be connected when data is imported.',
         pending: true,
-        studentCode,
+        studentCode: actualStudentCode,
         relation
       });
     }
     
     // Student found - add connection
     if (parent.addStudentConnection) {
-      await parent.addStudentConnection(studentCode, parsedDOB, relation);
+      await parent.addStudentConnection(actualStudentCode, parsedDOB, relation);
     }
     
     // Update cached details immediately
-    const connection = parent.students.find(s => s.studentCode === studentCode);
+    const connection = parent.students.find(s => s.studentCode === actualStudentCode);
     if (connection) {
-      connection.studentFullName = student.fullName;
-      connection.className = `${student.className || ''} ${student.division || ''}`.trim();
+      connection.studentName = student.fullName;
+      connection.className = student.className;
+      connection.division = student.division;
       await parent.save();
     }
     

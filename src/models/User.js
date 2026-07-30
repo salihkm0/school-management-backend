@@ -37,6 +37,13 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  deviceInfo: {
+    deviceName: String,
+    osVersion: String,
+    appVersion: String,
+    platform: String,
+    lastUpdated: Date,
+  },
   preferences: {
     notificationsEnabled: {
       type: Boolean,

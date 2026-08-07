@@ -6,7 +6,8 @@ const { Exam } = require('../../models/Exam');
 const Mark = require('../../models/Mark');
 const Staff = require('../../models/Staff');
 const { Attendance } = require('../../models/Attendance');
-const { generateReportCardPDF, generateMultiReportCardPDF } = require('../../services/pdf/reportCardService');
+const { generateReportCardPDF, generateMultiReportCardPDF, generateClassMarksTablePDF } = require('../../services/pdf/reportCardService');
+const markController = require('../markController');
 
 // School logo URL
 const SCHOOL_LOGO_URL = 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
@@ -522,6 +523,91 @@ exports.downloadClassReportCardsPDF = async (req, res) => {
     
   } catch (error) {
     console.error("Class report cards PDF download error:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+/**
+ * Download Class Marks Table PDF
+ * GET /api/pdf/report-card/class-marks/download/:classId/:examId?
+ */
+exports.downloadClassMarksTablePDF = async (req, res) => {
+  try {
+    let { classId, examId } = req.params;
+
+    classId = classId?.trim();
+    examId = examId?.trim();
+
+    if (!classId || !classId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: "Invalid class ID format" });
+    }
+
+    const classDetails = await Class.findById(classId);
+    if (!classDetails) {
+      return res.status(404).json({ message: "Class not found" });
+    }
+
+    // Reuse markController logic to get marks data
+    // We mock req and res to capture the JSON response
+    const mockReq = { 
+      params: { classId, examId }, 
+      user: req.user 
+    };
+    
+    let marksData = null;
+    let authError = null;
+    
+    const mockRes = {
+      status: (code) => {
+        return {
+          json: (data) => {
+            if (code >= 400) authError = { code, ...data };
+            else marksData = data;
+          }
+        };
+      },
+      json: (data) => {
+        marksData = data;
+      }
+    };
+
+    await markController.getMarksheetsByClass(mockReq, mockRes);
+
+    if (authError) {
+      return res.status(authError.code).json({ message: authError.message || "Failed to fetch marks data" });
+    }
+    if (!marksData || !marksData.success) {
+      return res.status(500).json({ message: "Failed to fetch marks data from controller" });
+    }
+
+    const { subjects, students, examName, className } = marksData.data;
+
+    let academicYear = await AcademicYear.findOne({ isCurrent: true });
+    const academicYearString = academicYear?.year || academicYear?.name || new Date().getFullYear().toString();
+
+    const templateData = {
+      schoolLogo: SCHOOL_LOGO_URL,
+      academicYear: academicYearString,
+      className: className || classDetails.displayName || classDetails.name,
+      examName: examName || 'Exam',
+      subjects: subjects || [],
+      students: students || [],
+      totalStudents: students ? students.length : 0
+    };
+    
+    const pdfBuffer = await generateClassMarksTablePDF(templateData);
+    
+    const filename = `Class_Marks_${classDetails.name}_${(examName || 'Exam').replace(/\s+/g, '_')}_${academicYearString}.pdf`;
+    
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Length", pdfBuffer.length);
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Cache-Control", "no-cache");
+
+    res.end(pdfBuffer);
+    
+  } catch (error) {
+    console.error("Class Marks Table PDF download error:", error);
     res.status(500).json({ message: error.message });
   }
 };

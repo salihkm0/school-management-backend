@@ -980,7 +980,7 @@ exports.syncAllSubjectTemplates = async (req, res) => {
       return res.status(400).json({ message: 'Academic Year ID is required' });
     }
 
-    const classes = await Class.find({ academicYearId, status: { $in: ['active', 'inactive'] } });
+    const classes = await Class.find({ academicYearId });
     
     if (!classes.length) {
       return res.status(404).json({ message: 'No classes found for the selected academic year' });
@@ -1598,7 +1598,7 @@ exports.getAllClassesSubjectTeachers = async (req, res) => {
   try {
     const { academicYearId } = req.params;
     
-    const classes = await Class.find({ academicYearId, status: { $in: ['active', 'inactive'] } })
+    const classes = await Class.find({ academicYearId })
       .populate('subjectTeachers.teacherId', 'name staffCode')
       .populate('subjectTeachers.subjectId', 'name code type')
       .populate('classTeacherId', 'name staffCode')
@@ -1783,7 +1783,7 @@ exports.syncAllClassesLanguageSubjects = async (req, res) => {
   try {
     const { academicYearId } = req.params;
     
-    const classes = await Class.find({ academicYearId, status: { $in: ['active', 'inactive'] } });
+    const classes = await Class.find({ academicYearId });
     const results = [];
     
     for (const classItem of classes) {
@@ -1963,8 +1963,7 @@ exports.getTeacherClassTeacherClasses = async (req, res) => {
     // Find classes where this teacher is class teacher ONLY
     const classes = await Class.find({
       classTeacherId: teacherId,
-      academicYearId: yearId,
-      status: { $in: ['active', 'inactive'] }
+      academicYearId: yearId
     }).populate('subjects', 'name code');
     
     console.log(`Found ${classes.length} classes where teacher ${teacherId} is class teacher`);
@@ -2014,15 +2013,13 @@ exports.getTeacherClasses = async (req, res) => {
     // Find classes where this teacher is class teacher
     const classTeacherClasses = await Class.find({
       classTeacherId: teacherId,
-      academicYearId: yearId,
-      status: { $in: ['active', 'inactive'] }
+      academicYearId: yearId
     }).populate('subjects', 'name code');
     
     // Find classes where this teacher teaches subjects
     const subjectTeacherClasses = await Class.find({
       'subjectTeachers.teacherId': teacherId,
-      academicYearId: yearId,
-      status: { $in: ['active', 'inactive'] }
+      academicYearId: yearId
     }).populate('subjects', 'name code');
     
     // Combine and deduplicate

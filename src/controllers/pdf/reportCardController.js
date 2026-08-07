@@ -637,10 +637,11 @@ exports.downloadClassMarksTablePDF = async (req, res) => {
       finalSubjects = sortedSubjects;
     }
 
+    const finalClassName = classDetails.displayName || `${classDetails.name} ${classDetails.section || ''}`.trim();
     const templateData = {
       schoolLogo: SCHOOL_LOGO_URL,
       academicYear: academicYearString,
-      className: className || classDetails.displayName || classDetails.name,
+      className: finalClassName,
       examName: examName || 'Exam',
       subjects: finalSubjects,
       students: students || [],
@@ -649,7 +650,7 @@ exports.downloadClassMarksTablePDF = async (req, res) => {
     
     const pdfBuffer = await generateClassMarksTablePDF(templateData);
     
-    const filename = `Class_Marks_${classDetails.name}_${(examName || 'Exam').replace(/\s+/g, '_')}_${academicYearString}.pdf`;
+    const filename = `Class_Marks_${finalClassName.replace(/\s+/g, '_')}_${(examName || 'Exam').replace(/\s+/g, '_')}_${academicYearString}.pdf`;
     
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Length", pdfBuffer.length);

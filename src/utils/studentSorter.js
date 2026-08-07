@@ -19,7 +19,8 @@ exports.sortStudents = (students, sortPreference = 'alphabetic') => {
     const hasRollA = rollA !== null && rollA !== '';
     const hasRollB = rollB !== null && rollB !== '';
 
-    if (sortPreference === 'roll_number') {
+    // Always sort by roll number first if available
+    if (hasRollA || hasRollB) {
       if (hasRollA && hasRollB) {
         if (typeof rollA === 'number' && typeof rollB === 'number') {
           if (rollA !== rollB) return rollA - rollB;
@@ -35,9 +36,7 @@ exports.sortStudents = (students, sortPreference = 'alphabetic') => {
       }
     }
 
-    // Fallback or if sortPreference === 'alphabetic'
-    
-    // Gender sort (Girls first)
+    // Fallback if neither has roll number (Gender then Alphabetical)
     const getGenderScore = (gender) => {
       const g = (gender || '').toLowerCase();
       if (g === 'f' || g === 'female' || g === 'girl') return 1;

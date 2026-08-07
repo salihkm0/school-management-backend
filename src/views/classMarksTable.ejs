@@ -6,7 +6,7 @@
 <style>
 @page {
     size: A4 landscape;
-    margin: 5mm;
+    margin: 10mm;
 }
 
 * {
@@ -15,38 +15,25 @@
     box-sizing: border-box;
 }
 
-html, body {
-    margin: 0;
-    padding: 0;
-    width: 287mm; /* landscape width */
+body {
     font-family: "Times New Roman", serif;
     background: #fff;
+    color: #000;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+    font-size: 10px;
 }
 
-.page-container {
-    width: 277mm;
-    min-height: 190mm;
-    margin: 0 auto;
-    padding: 10mm;
-    position: relative;
-    box-sizing: border-box;
-    background: #fff;
-    display: flex;
-    flex-direction: column;
-}
-
-/* Logo Watermark */
+/* Watermark */
 .logo-watermark {
-    position: absolute;
+    position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
     width: 140mm;
     height: 140mm;
     opacity: 0.04;
-    z-index: 1;
+    z-index: -1;
     pointer-events: none;
 }
 
@@ -56,26 +43,29 @@ html, body {
     object-fit: contain;
 }
 
-.content-layer {
-    position: relative;
-    z-index: 2;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    flex: 1;
+/* Table container to ensure full width */
+.table-container {
+    width: 100%;
 }
 
-/* Header Section */
-.header-section {
+/* Header Section inside thead to repeat on every page */
+.school-header-cell {
+    border: none !important;
+    padding: 0 !important;
     text-align: center;
-    margin-bottom: 20px;
+    background: #fff !important;
+}
+
+.header-content {
+    text-align: center;
+    margin-bottom: 10px;
     border-bottom: 2px solid #333;
-    padding-bottom: 15px;
+    padding-bottom: 10px;
 }
 
 .school-logo {
-    width: 20mm;
-    height: 20mm;
+    width: 18mm;
+    height: 18mm;
     margin: 0 auto 5px;
 }
 
@@ -103,17 +93,16 @@ html, body {
     font-size: 12px;
     font-weight: bold;
     text-transform: uppercase;
-    margin-top: 10px;
+    margin-top: 5px;
 }
 
-/* Info Grid */
 .info-grid {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 15px;
+    margin-bottom: 10px;
     font-size: 10px;
     border: 1px solid #000;
-    padding: 8px;
+    padding: 6px;
     background: #f9f9f9;
 }
 
@@ -131,17 +120,30 @@ table {
     width: 100%;
     border-collapse: collapse;
     font-size: 9px;
-    margin-bottom: 20px;
+    page-break-inside: auto;
+}
+
+tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+}
+
+thead {
+    display: table-header-group;
+}
+
+tfoot {
+    display: table-footer-group;
 }
 
 th, td {
     border: 1px solid #000;
-    padding: 5px;
+    padding: 4px;
     text-align: center;
     vertical-align: middle;
 }
 
-th {
+.col-header {
     background-color: #f0f0f0;
     font-weight: bold;
 }
@@ -162,118 +164,125 @@ td.text-left {
 }
 
 /* Footer */
-.footer {
-    margin-top: auto;
-    font-size: 8px;
+.footer-cell {
+    border: none !important;
     text-align: right;
+    padding-top: 10px !important;
+    font-size: 8px;
     color: #666;
 }
 </style>
 </head>
 <body>
-    <div class="page-container">
-        <!-- Watermark -->
-        <div class="logo-watermark">
-            <% if (schoolLogo) { %>
-                <img src="<%= schoolLogo %>" alt="Watermark" />
-            <% } %>
-        </div>
+    <!-- Watermark -->
+    <div class="logo-watermark">
+        <% if (schoolLogo) { %>
+            <img src="<%= schoolLogo %>" alt="Watermark" />
+        <% } %>
+    </div>
 
-        <div class="content-layer">
-            <!-- Header -->
-            <div class="header-section">
-                <% if (schoolLogo) { %>
-                    <div class="school-logo">
-                        <img src="<%= schoolLogo %>" alt="School Logo" />
-                    </div>
-                <% } %>
-                <div class="school-name">PPM HIGHER SECONDARY SCHOOL</div>
-                <div class="school-address">KOTTUKKARA, KONDOTTY, MALAPPURAM, KERALA 673638</div>
-                <div class="report-title">CLASS MARKS OVERVIEW</div>
-            </div>
+    <div class="table-container">
+        <table>
+            <thead>
+                <!-- School Header (spans all columns) -->
+                <tr>
+                    <th class="school-header-cell" colspan="<%= subjects.length + 5 %>">
+                        <div class="header-content">
+                            <% if (schoolLogo) { %>
+                                <div class="school-logo">
+                                    <img src="<%= schoolLogo %>" alt="School Logo" />
+                                </div>
+                            <% } %>
+                            <div class="school-name">PPM HIGHER SECONDARY SCHOOL</div>
+                            <div class="school-address">KOTTUKKARA, KONDOTTY, MALAPPURAM, KERALA 673638</div>
+                            <div class="report-title">CLASS MARKS OVERVIEW</div>
+                        </div>
 
-            <div class="info-grid">
-                <div class="info-item">
-                    <span class="info-label">CLASS:</span>
-                    <span><%= className %></span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">EXAM:</span>
-                    <span><%= examName %></span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">ACADEMIC YEAR:</span>
-                    <span><%= academicYear %></span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">TOTAL STUDENTS:</span>
-                    <span><%= totalStudents %></span>
-                </div>
-            </div>
-
-            <table>
-                <thead>
-                    <tr>
-                        <th style="width: 3%">Rank</th>
-                        <th style="width: 15%">Student</th>
-                        <% subjects.forEach(function(subj) { %>
-                            <th>
-                                <div><%= subj.displayName || subj.subjectName %></div>
-                                <div style="font-weight: normal; font-size: 8px; margin-top: 2px;">Max: <%= subj.maxMarks || 100 %></div>
-                            </th>
-                        <% }); %>
-                        <th style="width: 6%">Total</th>
-                        <th style="width: 5%">%</th>
-                        <th style="width: 5%">Grade</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <% students.forEach(function(student) { %>
-                        <tr>
-                            <td class="bold"><%= student.rank || '-' %></td>
-                            <td class="text-left">
-                                <div class="bold"><%= student.name || student.studentName || student.fullName %></div>
-                                <% if(student.admissionNo) { %><div style="font-size: 7px; color: #555;"><%= student.admissionNo %></div><% } %>
-                            </td>
-                            <% subjects.forEach(function(examSubj) { %>
-                                <% 
-                                   // Find the mark for this exact subject in the student's subjects array
-                                   var sm = student.subjects ? student.subjects.find(function(s) { 
-                                       return s.examSubjectId && (s.examSubjectId.toString() === examSubj.examSubjectId.toString()) 
-                                   }) : null;
-                                   
-                                   if (!sm && student.subjectMarks) {
-                                       sm = student.subjectMarks.find(function(s) {
-                                           return s.examSubjectId && (s.examSubjectId.toString() === examSubj.examSubjectId.toString());
-                                       });
-                                   }
-                                %>
-                                <td>
-                                    <% if(sm) { %>
-                                        <% if(sm.isAbsent) { %>
-                                            <span class="ab">AB</span>
-                                        <% } else if(!sm.isEntered) { %>
-                                            <span class="not-entered">—</span>
-                                        <% } else { %>
-                                            <span class="bold"><%= sm.totalScore !== undefined ? sm.totalScore : sm.total %></span>
-                                        <% } %>
-                                    <% } else { %>
-                                        <span class="not-entered">—</span>
-                                    <% } %>
-                                </td>
-                            <% }); %>
-                            <td class="bold" style="background-color: #f9f9f9;"><%= student.totalObtained !== undefined ? student.totalObtained : student.totalMarks %> / <%= student.totalMax !== undefined ? student.totalMax : student.totalMaxMarks %></td>
-                            <td class="bold" style="background-color: #f9f9f9;"><%= (student.percentage !== undefined ? student.percentage : 0).toFixed(1) %>%</td>
-                            <td class="bold" style="background-color: #f9f9f9;"><%= student.gradeInfo ? student.gradeInfo.grade : student.grade %></td>
-                        </tr>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <span class="info-label">CLASS:</span>
+                                <span><%= className %></span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">EXAM:</span>
+                                <span><%= examName %></span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">ACADEMIC YEAR:</span>
+                                <span><%= academicYear %></span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">TOTAL STUDENTS:</span>
+                                <span><%= totalStudents %></span>
+                            </div>
+                        </div>
+                    </th>
+                </tr>
+                
+                <!-- Table Column Headers -->
+                <tr>
+                    <th class="col-header" style="width: 3%">Rank</th>
+                    <th class="col-header" style="width: 15%">Student</th>
+                    <% subjects.forEach(function(subj) { %>
+                        <th class="col-header">
+                            <div><%= subj.displayName || subj.subjectName %></div>
+                            <div style="font-weight: normal; font-size: 8px; margin-top: 2px;">Max: <%= subj.maxMarks || 100 %></div>
+                        </th>
                     <% }); %>
-                </tbody>
-            </table>
-            
-            <div class="footer">
-                Generated on <%= new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) %>
-            </div>
-        </div>
+                    <th class="col-header" style="width: 6%">Total</th>
+                    <th class="col-header" style="width: 5%">%</th>
+                    <th class="col-header" style="width: 5%">Grade</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% students.forEach(function(student) { %>
+                    <tr>
+                        <td class="bold"><%= student.rank || '-' %></td>
+                        <td class="text-left">
+                            <div class="bold"><%= student.name || student.studentName || student.fullName %></div>
+                            <% if(student.admissionNo) { %><div style="font-size: 7px; color: #555;"><%= student.admissionNo %></div><% } %>
+                        </td>
+                        <% subjects.forEach(function(examSubj) { %>
+                            <% 
+                               // Find the mark for this exact subject in the student's subjects array
+                               var sm = student.subjects ? student.subjects.find(function(s) { 
+                                   return s.examSubjectId && (s.examSubjectId.toString() === examSubj.examSubjectId.toString()) 
+                               }) : null;
+                               
+                               if (!sm && student.subjectMarks) {
+                                   sm = student.subjectMarks.find(function(s) {
+                                       return s.examSubjectId && (s.examSubjectId.toString() === examSubj.examSubjectId.toString());
+                                   });
+                               }
+                            %>
+                            <td>
+                                <% if(sm) { %>
+                                    <% if(sm.isAbsent) { %>
+                                        <span class="ab">AB</span>
+                                    <% } else if(!sm.isEntered) { %>
+                                        <span class="not-entered">—</span>
+                                    <% } else { %>
+                                        <span class="bold"><%= sm.totalScore !== undefined ? sm.totalScore : sm.total %></span>
+                                    <% } %>
+                                <% } else { %>
+                                    <span class="not-entered">—</span>
+                                <% } %>
+                            </td>
+                        <% }); %>
+                        <td class="bold" style="background-color: #f9f9f9;"><%= student.totalObtained !== undefined ? student.totalObtained : student.totalMarks %> / <%= student.totalMax !== undefined ? student.totalMax : student.totalMaxMarks %></td>
+                        <td class="bold" style="background-color: #f9f9f9;"><%= (student.percentage !== undefined ? student.percentage : 0).toFixed(1) %>%</td>
+                        <td class="bold" style="background-color: #f9f9f9;"><%= student.gradeInfo ? student.gradeInfo.grade : student.grade %></td>
+                    </tr>
+                <% }); %>
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td class="footer-cell" colspan="<%= subjects.length + 5 %>">
+                        Generated on <%= new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) %>
+                    </td>
+                </tr>
+            </tfoot>
+        </table>
     </div>
 </body>
 </html>

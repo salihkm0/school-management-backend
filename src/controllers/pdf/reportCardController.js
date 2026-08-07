@@ -55,23 +55,31 @@ const prepareStudentReportData = async (student, examId, academicYear) => {
   let totalTE = 0;
   
   if (marksheet && marksheet.subjects && marksheet.subjects.length > 0) {
-    // Define standard subject order
+    // Define standard subject order for Kerala syllabus
     const subjectOrder = [
-      'Malayalam', 'English', 'Hindi', 'Arabic', 'Urdu',
-      'Mathematics', 'Maths', 'Physics', 'Chemistry', 'Biology',
-      'Science', 'Social Science', 'Social', 'History', 'Geography',
-      'Computer Science', 'IT', 'Information Technology'
+      'first language', 'language i', 'language 1',
+      'second language', 'language ii', 'language 2', 'malayalam', 'arabic', 'urdu', 'sanskrit',
+      'english',
+      'hindi',
+      'social science', 'ss', 'social', 'history', 'geography',
+      'physics',
+      'chemistry',
+      'biology',
+      'science', // generic science if not split
+      'mathematics', 'maths',
+      'information technology', 'it', 'computer science'
     ];
     
     // Sort subjects by predefined order
     const sortedSubjects = [];
     subjectOrder.forEach(orderName => {
-      const subject = marksheet.subjects.find(s => 
-        s.subjectName?.toLowerCase().includes(orderName.toLowerCase())
-      );
-      if (subject && !sortedSubjects.includes(subject)) {
+      const matchingSubjects = marksheet.subjects.filter(s => {
+        const name = (s.subjectName || '').toLowerCase();
+        return name.includes(orderName) && !sortedSubjects.includes(s);
+      });
+      matchingSubjects.forEach(subject => {
         sortedSubjects.push(subject);
-      }
+      });
     });
     
     // Add remaining subjects
@@ -585,12 +593,56 @@ exports.downloadClassMarksTablePDF = async (req, res) => {
     let academicYear = await AcademicYear.findOne({ isCurrent: true });
     const academicYearString = academicYear?.year || academicYear?.name || new Date().getFullYear().toString();
 
+    let finalSubjects = subjects || [];
+    if (finalSubjects.length > 0) {
+      // Define standard subject order for Kerala syllabus
+      const subjectOrder = [
+        'first language', 'language i', 'language 1',
+        'second language', 'language ii', 'language 2', 'malayalam', 'arabic', 'urdu', 'sanskrit',
+        'english',
+        'hindi',
+        'social science', 'ss', 'social', 'history', 'geography',
+        'physics',
+        'chemistry',
+        'biology',
+        'science', // generic science if not split
+        'mathematics', 'maths',
+        'information technology', 'it', 'computer science'
+      ];
+      
+      const sortedSubjects = [];
+      
+      // Iterate through our preferred order
+      subjectOrder.forEach(orderName => {
+        // Find ALL subjects that match this keyword and haven't been added yet
+        const matchingSubjects = finalSubjects.filter(s => {
+          const name = (s.displayName || s.subjectName || '').toLowerCase();
+          // exact match or starts with or ends with to prevent 'social' matching 'social science' twice, 
+          // but includes() is okay if we only add if not already in sortedSubjects.
+          return name.includes(orderName) && !sortedSubjects.includes(s);
+        });
+        
+        matchingSubjects.forEach(subject => {
+          sortedSubjects.push(subject);
+        });
+      });
+      
+      // Add any remaining subjects
+      finalSubjects.forEach(subject => {
+        if (!sortedSubjects.includes(subject)) {
+          sortedSubjects.push(subject);
+        }
+      });
+      
+      finalSubjects = sortedSubjects;
+    }
+
     const templateData = {
       schoolLogo: SCHOOL_LOGO_URL,
       academicYear: academicYearString,
       className: className || classDetails.displayName || classDetails.name,
       examName: examName || 'Exam',
-      subjects: subjects || [],
+      subjects: finalSubjects,
       students: students || [],
       totalStudents: students ? students.length : 0
     };

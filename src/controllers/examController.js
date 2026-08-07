@@ -271,7 +271,7 @@ exports.getExams = async (req, res) => {
       // Add summary stats
       const totalStudents = await Student.countDocuments({
         classId: { $in: exam.classIds },
-        status: 'active'
+        status: { $in: ['active', 'inactive'] }
       });
       
       return {
@@ -328,7 +328,7 @@ exports.getExam = async (req, res) => {
     const classDetails = await Promise.all(exam.classIds.map(async (classItem) => {
       const studentCount = await Student.countDocuments({ 
         classId: classItem._id, 
-        status: 'active' 
+        status: { $in: ['active', 'inactive'] } 
       });
       
       const submissionStatus = exam.classSubmissionStatus.find(
@@ -622,7 +622,7 @@ exports.createExam = async (req, res) => {
     // Build class submission status
     const classNamesMap = await getClassNamesForStatus(classIds);
     examData.classSubmissionStatus = await Promise.all(classIds.map(async (classId) => {
-      const totalStudents = await Student.countDocuments({ classId, status: 'active' });
+      const totalStudents = await Student.countDocuments({ classId, status: { $in: ['active', 'inactive'] } });
       const totalSubjects = examData.subjects.length;
       
       return {
@@ -1269,7 +1269,7 @@ exports.getExamAnalytics = async (req, res) => {
     
     for (const classStatus of exam.classSubmissionStatus) {
       const classInfo = await Class.findById(classStatus.classId).select('name section displayName');
-      const students = await Student.find({ classId: classStatus.classId, status: 'active' });
+      const students = await Student.find({ classId: classStatus.classId, status: { $in: ['active', 'inactive'] } });
       
       const marks = await Mark.find({
         examId: exam._id,
@@ -1457,7 +1457,7 @@ module.exports.generateAndPublishResults = async (examId, classId, publishedBy) 
   const exam = await Exam.findById(examId);
   if (!exam) return;
   
-  const students = await Student.find({ classId, status: 'active' });
+  const students = await Student.find({ classId, status: { $in: ['active', 'inactive'] } });
   const results = [];
   
   for (const student of students) {
@@ -2021,7 +2021,7 @@ exports.createStaffExam = async (req, res) => {
     // Build class submission status
     const classNamesMap = await getClassNamesForStatus(classIds);
     examData.classSubmissionStatus = await Promise.all(classIds.map(async (classId) => {
-      const totalStudents = await Student.countDocuments({ classId, status: 'active' });
+      const totalStudents = await Student.countDocuments({ classId, status: { $in: ['active', 'inactive'] } });
       return {
         classId,
         className: classNamesMap.get(classId.toString()) || 'Unknown',

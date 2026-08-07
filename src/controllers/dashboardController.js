@@ -24,7 +24,7 @@ exports.getAdminDashboard = async (req, res) => {
     const currentYear = await AcademicYear.findOne({ isCurrent: true });
     
     // Basic Stats
-    const totalStudents = await Student.countDocuments({ status: 'active' });
+    const totalStudents = await Student.countDocuments({ status: { $in: ['active', 'inactive'] } });
     const totalStaff = await Staff.countDocuments({ isActive: true });
     const totalClasses = await Class.countDocuments({ isActive: true });
     const totalParents = await Parent.countDocuments({ isActive: true });
@@ -385,7 +385,7 @@ exports.getStaffDashboard = async (req, res) => {
     }).sort({ 'duties.date': 1 }).lean();
 
     const studentCountPromises = classTeacherClasses.map(cls => 
-      Student.countDocuments({ classId: cls._id, status: 'active' })
+      Student.countDocuments({ classId: cls._id, status: { $in: ['active', 'inactive'] } })
     );
 
     // Optimized attendance aggregation
@@ -532,7 +532,7 @@ exports.getParentDashboard = async (req, res) => {
     const students = await Student.find({ 
       studentCode: { $in: studentCodes },
       academicYearId: currentYear?._id,
-      status: 'active'
+      status: { $in: ['active', 'inactive'] }
     }).populate('classId', 'name section displayName classTeacherName');
     
     const studentDetails = [];
@@ -810,7 +810,7 @@ async function getTopPerformingClasses(academicYearId, limit = 5) {
   const classPerformance = [];
   
   for (const classItem of classes) {
-    const students = await Student.find({ classId: classItem._id, status: 'active' });
+    const students = await Student.find({ classId: classItem._id, status: { $in: ['active', 'inactive'] } });
     if (students.length === 0) continue;
     
     const studentIds = students.map(s => s._id);
@@ -903,7 +903,7 @@ async function getClassDistributionStats(academicYearId) {
   
   const distribution = [];
   for (const classItem of classes) {
-    const studentCount = await Student.countDocuments({ classId: classItem._id, status: 'active' });
+    const studentCount = await Student.countDocuments({ classId: classItem._id, status: { $in: ['active', 'inactive'] } });
     totalStudents += studentCount;
     distribution.push({
       classId: classItem._id,

@@ -472,7 +472,7 @@ exports.promoteStudents = async (req, res) => {
     }
 
     const targetAcademicYearId = newAcademicYearId || toClass.academicYearId;
-    const students = await Student.find({ classId: fromClassId, status: 'active' });
+    const students = await Student.find({ classId: fromClassId, status: { $in: ['active', 'inactive'] } });
     const results = [];
 
     for (const student of students) {

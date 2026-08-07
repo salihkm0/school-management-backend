@@ -339,7 +339,7 @@ exports.generateClassReportCardsPDF = async (req, res) => {
     // Get all active students in the class
     const students = await Student.find({ 
       classId: classId,
-      status: 'active'
+      status: { $in: ['active', 'inactive'] }
     }).populate('classId', 'name section displayName').sort({ rollNumber: 1, fullName: 1 });
 
     if (students.length === 0) {
@@ -463,7 +463,7 @@ exports.downloadClassReportCardsPDF = async (req, res) => {
 
     const students = await Student.find({ 
       classId: classId,
-      status: 'active'
+      status: { $in: ['active', 'inactive'] }
     }).populate('classId', 'name section displayName').sort({ rollNumber: 1, fullName: 1 });
 
     if (students.length === 0) {

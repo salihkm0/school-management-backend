@@ -371,7 +371,7 @@ exports.getMarksheetsByClass = async (req, res) => {
     }
 
     // Get all active students with their language subjects
-    const rawStudents = await Student.find({ classId, status: "active" })
+    const rawStudents = await Student.find({ classId, status: { $in: ['active', 'inactive'] } })
       .select("_id fullName studentCode rollNumber admissionNo className gender firstLanguagePaper1 firstLanguagePaper2 thirdLanguage additionalLanguage")
       .populate("firstLanguagePaper1", "name code type department")
       .populate("firstLanguagePaper2", "name code type department")
@@ -852,7 +852,7 @@ exports.bulkUpdateMarks = async (req, res) => {
     // Get all students with their language subjects for mapping
     const students = await Student.find({ 
       _id: { $in: studentsData.map(s => s.studentId) },
-      status: 'active'
+      status: { $in: ['active', 'inactive'] }
     }).populate("firstLanguagePaper1", "name code")
       .populate("firstLanguagePaper2", "name code")
       .populate("thirdLanguage", "name code")

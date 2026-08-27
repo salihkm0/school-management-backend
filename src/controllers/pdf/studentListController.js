@@ -3,6 +3,7 @@ const Student = require('../../models/Student');
 const AcademicYear = require('../../models/AcademicYear');
 const Class = require('../../models/Class');
 const { generateStudentListPDF } = require('../../services/pdf/studentListPdfService');
+const { sortStudents } = require('../../utils/studentSorter');
 
 // School logo URL
 const SCHOOL_LOGO_URL = 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
@@ -39,10 +40,12 @@ exports.generateStudentListPDF = async (req, res) => {
 
     const academicYearString = academicYear?.year || "2025-2026";
 
-    const students = await Student.find({ 
+    const rawStudents = await Student.find({ 
       classId: classId,
-      isActive: true 
-    }).sort({ rollNumber: 1, fullName: 1 });
+      isActive: true,
+      status: 'active'
+    });
+    const students = sortStudents(rawStudents);
 
     console.log(`Found ${students.length} students`);
 

@@ -172,7 +172,7 @@ exports.getClasses = async (req, res) => {
     const classesWithDetails = await Promise.all(classes.map(async (classItem) => {
       const studentCount = await Student.countDocuments({ 
         classId: classItem._id,
-        status: { $in: ['active', 'inactive'] } 
+        status: 'active' 
       });
       
       const displayName = await getClassDisplayName(classItem);
@@ -193,7 +193,7 @@ exports.getClasses = async (req, res) => {
     const allMatchingClassIds = await Class.find(query).select('_id').lean();
     const totalStudents = await Student.countDocuments({
       classId: { $in: allMatchingClassIds.map(c => c._id) },
-      status: { $in: ['active', 'inactive'] }
+      status: 'active'
     });
 
     res.json({
@@ -227,7 +227,7 @@ exports.getClass = async (req, res) => {
       return res.status(404).json({ message: 'Class not found' });
     }
 
-    const students = await Student.find({ classId: req.params.id, status: { $in: ['active', 'inactive'] } })
+    const students = await Student.find({ classId: req.params.id, status: 'active' })
       .select('fullName studentCode admissionNo rollNumber status gender');
 
     const displayName = await getClassDisplayName(classItem);
@@ -994,7 +994,7 @@ exports.syncAllSubjectTemplates = async (req, res) => {
       const templateSubjectIds = await autoAssignSubjectsFromTemplate(classItem.name, classItem.section);
 
       // 2. Extract language subjects from all active students in this class
-      const students = await Student.find({ classId: classItem._id, status: { $in: ['active', 'inactive'] } });
+      const students = await Student.find({ classId: classItem._id, status: 'active' });
       const languageSet = new Set();
       
       for (const student of students) {
@@ -1066,7 +1066,7 @@ exports.syncClassSubjects = async (req, res) => {
     
     const templateSubjectIds = await autoAssignSubjectsFromTemplate(classItem.name, classItem.section);
     
-    const students = await Student.find({ classId: classItem._id, status: { $in: ['active', 'inactive'] } });
+    const students = await Student.find({ classId: classItem._id, status: 'active' });
     const languageSet = new Set();
     
     for (const student of students) {
@@ -1712,7 +1712,7 @@ exports.syncLanguageSubjects = async (req, res) => {
     const beforeCount = classItem.subjects.length;
     
     // Get language subjects from students
-    const students = await Student.find({ classId: classItem._id, status: { $in: ['active', 'inactive'] } });
+    const students = await Student.find({ classId: classItem._id, status: 'active' });
     const languageSet = new Set();
     
     for (const student of students) {
@@ -1788,7 +1788,7 @@ exports.syncAllClassesLanguageSubjects = async (req, res) => {
     
     for (const classItem of classes) {
       try {
-        const students = await Student.find({ classId: classItem._id, status: { $in: ['active', 'inactive'] } });
+        const students = await Student.find({ classId: classItem._id, status: 'active' });
         const languageSet = new Set();
         
         for (const student of students) {
@@ -1882,7 +1882,7 @@ exports.getClassLanguageSubjects = async (req, res) => {
     }).select('name code type creditHours');
     
     // Get student-wise language distribution
-    const students = await Student.find({ classId: classItem._id, status: { $in: ['active', 'inactive'] } })
+    const students = await Student.find({ classId: classItem._id, status: 'active' })
       .select('fullName studentCode firstLanguagePaper1 firstLanguagePaper2 thirdLanguage additionalLanguage')
       .populate('firstLanguagePaper1', 'name code')
       .populate('firstLanguagePaper2', 'name code')
@@ -1972,7 +1972,7 @@ exports.getTeacherClassTeacherClasses = async (req, res) => {
     const classesWithCount = await Promise.all(classes.map(async (cls) => {
       const studentCount = await Student.countDocuments({ 
         classId: cls._id, 
-        status: { $in: ['active', 'inactive'] } 
+        status: 'active' 
       });
       return {
         ...cls.toObject(),
@@ -2030,7 +2030,7 @@ exports.getTeacherClasses = async (req, res) => {
     const classesWithCount = await Promise.all(uniqueClasses.map(async (cls) => {
       const studentCount = await Student.countDocuments({ 
         classId: cls._id, 
-        status: { $in: ['active', 'inactive'] } 
+        status: 'active' 
       });
       return {
         ...cls.toObject(),

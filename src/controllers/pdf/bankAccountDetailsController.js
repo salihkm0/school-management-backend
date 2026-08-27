@@ -3,6 +3,7 @@ const Student = require('../../models/Student');
 const AcademicYear = require('../../models/AcademicYear');
 const Class = require('../../models/Class');
 const { generateBankAccountDetailsPDF } = require('../../services/pdf/bankAccountDetailsPdfService');
+const { sortStudents } = require('../../utils/studentSorter');
 
 // School logo URL
 const SCHOOL_LOGO_URL = 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
@@ -54,7 +55,7 @@ exports.generateBankAccountDetailsPDF = async (req, res) => {
     let useDummyData = false;
 
     // Build query
-    const query = { isActive: true };
+    const query = { isActive: true, status: 'active' };
     
     if (classId && classId.match(/^[0-9a-fA-F]{24}$/)) {
       query.classId = classId;
@@ -64,7 +65,8 @@ exports.generateBankAccountDetailsPDF = async (req, res) => {
       query.category = category;
     }
 
-    students = await Student.find(query).sort({ classId: 1, rollNumber: 1, fullName: 1 });
+    const rawStudents = await Student.find(query);
+    students = sortStudents(rawStudents);
 
     if (students.length === 0) {
       console.log('No students found, using dummy data');
@@ -160,7 +162,7 @@ exports.downloadBankAccountDetailsPDF = async (req, res) => {
     let students = [];
 
     // Build query
-    const query = { isActive: true };
+    const query = { isActive: true, status: 'active' };
     
     if (classId && classId.match(/^[0-9a-fA-F]{24}$/)) {
       query.classId = classId;
@@ -170,7 +172,8 @@ exports.downloadBankAccountDetailsPDF = async (req, res) => {
       query.category = category;
     }
 
-    students = await Student.find(query).sort({ classId: 1, rollNumber: 1, fullName: 1 });
+    const rawStudents = await Student.find(query);
+    students = sortStudents(rawStudents);
 
     if (students.length === 0) {
       console.log('No students found, using dummy data');

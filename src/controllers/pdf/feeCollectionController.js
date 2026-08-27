@@ -3,6 +3,7 @@ const Student = require('../../models/Student');
 const AcademicYear = require('../../models/AcademicYear');
 const Class = require('../../models/Class');
 const { generateFeeCollectionPDF } = require('../../services/pdf/feeCollectionPdfService');
+const { sortStudents } = require('../../utils/studentSorter');
 
 // School logo URL
 const SCHOOL_LOGO_URL = 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
@@ -58,10 +59,12 @@ exports.generateFeeCollectionPDF = async (req, res) => {
     let useDummyData = false;
 
     if (classId && classId.match(/^[0-9a-fA-F]{24}$/)) {
-      students = await Student.find({ 
+      const rawStudents = await Student.find({ 
         classId: classId,
-        isActive: true 
-      }).sort({ rollNumber: 1, fullName: 1 });
+        isActive: true,
+        status: 'active'
+      });
+      students = sortStudents(rawStudents);
     }
 
     if (students.length === 0) {
@@ -138,10 +141,12 @@ exports.downloadFeeCollectionPDF = async (req, res) => {
     let students = [];
 
     if (classId && classId.match(/^[0-9a-fA-F]{24}$/)) {
-      students = await Student.find({ 
+      const rawStudents = await Student.find({ 
         classId: classId,
-        isActive: true 
-      }).sort({ rollNumber: 1, fullName: 1 });
+        isActive: true,
+        status: 'active'
+      });
+      students = sortStudents(rawStudents);
     }
 
     if (students.length === 0) {
@@ -217,10 +222,12 @@ exports.getFeeCollectionList = async (req, res) => {
     let students = [];
 
     if (classId && classId.match(/^[0-9a-fA-F]{24}$/)) {
-      students = await Student.find({ 
+      const rawStudents = await Student.find({ 
         classId: classId,
-        isActive: true 
-      }).sort({ rollNumber: 1, fullName: 1 });
+        isActive: true,
+        status: 'active'
+      });
+      students = sortStudents(rawStudents);
     }
 
     if (students.length === 0) {

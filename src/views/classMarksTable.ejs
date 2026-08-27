@@ -186,7 +186,7 @@ td.text-left {
             <thead>
                 <!-- School Header (spans all columns) -->
                 <tr>
-                    <th class="school-header-cell" colspan="<%= subjects.length + 5 %>">
+                    <th class="school-header-cell" colspan="<%= subjects.length + 6 %>">
                         <div class="header-content">
                             <% if (schoolLogo) { %>
                                 <div class="school-logo">
@@ -221,7 +221,7 @@ td.text-left {
                 
                 <!-- Table Column Headers -->
                 <tr>
-                    <th class="col-header" style="width: 3%">Rank</th>
+                    <th class="col-header" style="width: 4%">Roll No</th>
                     <th class="col-header" style="width: 15%">Student</th>
                     <% subjects.forEach(function(subj) { %>
                         <th class="col-header">
@@ -231,13 +231,14 @@ td.text-left {
                     <% }); %>
                     <th class="col-header" style="width: 6%">Total</th>
                     <th class="col-header" style="width: 5%">%</th>
-                    <th class="col-header" style="width: 5%">Grade</th>
+                    <th class="col-header" style="width: 4%">Grade</th>
+                    <th class="col-header" style="width: 4%">Rank</th>
                 </tr>
             </thead>
             <tbody>
-                <% students.forEach(function(student) { %>
+                <% students.forEach(function(student, idx) { %>
                     <tr>
-                        <td class="bold"><%= student.rank || '-' %></td>
+                        <td class="bold"><%= student.rollNumber || student.slNo || (idx + 1) %></td>
                         <td class="text-left">
                             <div class="bold"><%= student.name || student.studentName || student.fullName %></div>
                             <% if(student.admissionNo) { %><div style="font-size: 7px; color: #555;"><%= student.admissionNo %></div><% } %>
@@ -246,12 +247,14 @@ td.text-left {
                             <% 
                                // Find the mark for this exact subject in the student's subjects array
                                var sm = student.subjects ? student.subjects.find(function(s) { 
-                                   return s.examSubjectId && (s.examSubjectId.toString() === examSubj.examSubjectId.toString()) 
+                                   return (s.examSubjectId && (s.examSubjectId.toString() === examSubj.examSubjectId.toString())) ||
+                                          (s.subjectId && (s.subjectId.toString() === (examSubj.subjectId ? examSubj.subjectId.toString() : '')));
                                }) : null;
                                
                                if (!sm && student.subjectMarks) {
                                    sm = student.subjectMarks.find(function(s) {
-                                       return s.examSubjectId && (s.examSubjectId.toString() === examSubj.examSubjectId.toString());
+                                       return (s.examSubjectId && (s.examSubjectId.toString() === examSubj.examSubjectId.toString())) ||
+                                              (s.subjectId && (s.subjectId.toString() === (examSubj.subjectId ? examSubj.subjectId.toString() : '')));
                                    });
                                }
                             %>
@@ -271,13 +274,14 @@ td.text-left {
                         <% }); %>
                         <td class="bold" style="background-color: #f9f9f9;"><%= student.totalObtained !== undefined ? student.totalObtained : student.totalMarks %> / <%= student.totalMax !== undefined ? student.totalMax : student.totalMaxMarks %></td>
                         <td class="bold" style="background-color: #f9f9f9;"><%= (student.percentage !== undefined ? student.percentage : 0).toFixed(1) %>%</td>
-                        <td class="bold" style="background-color: #f9f9f9;"><%= student.gradeInfo ? student.gradeInfo.grade : student.grade %></td>
+                        <td class="bold" style="background-color: #f9f9f9;"><%= student.gradeInfo ? student.gradeInfo.grade : (student.grade || '-') %></td>
+                        <td class="bold" style="background-color: #f9f9f9;"><%= student.rank || '-' %></td>
                     </tr>
                 <% }); %>
             </tbody>
             <tfoot>
                 <tr>
-                    <td class="footer-cell" colspan="<%= subjects.length + 5 %>">
+                    <td class="footer-cell" colspan="<%= subjects.length + 6 %>">
                         Generated on <%= new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) %>
                     </td>
                 </tr>

@@ -42,7 +42,11 @@ exports.getStudents = async (req, res) => {
     const query = { isActive: true };
     if (classId) query.classId = classId;
     if (academicYearId) query.academicYearId = academicYearId;
-    if (status) query.status = status;
+    if (status && status !== 'all') {
+      query.status = status;
+    } else if (!status) {
+      query.status = 'active';
+    }
     if (search) {
       query.$or = [
         { fullName: { $regex: search, $options: 'i' } },
@@ -472,7 +476,7 @@ exports.promoteStudents = async (req, res) => {
     }
 
     const targetAcademicYearId = newAcademicYearId || toClass.academicYearId;
-    const students = await Student.find({ classId: fromClassId, status: { $in: ['active', 'inactive'] } });
+    const students = await Student.find({ classId: fromClassId, status: 'active' });
     const results = [];
 
     for (const student of students) {

@@ -81,7 +81,7 @@ async function broadcastDashboardUpdate() {
     today.setHours(0, 0, 0, 0);
 
     const [totalStudents, totalStaff, totalClasses, currentYear, attendanceToday] = await Promise.all([
-      Student.countDocuments({ status: { $in: ['active', 'inactive'] } }),
+      Student.countDocuments({ status: 'active' }),
       Staff.countDocuments({ isActive: true }),
       Class.countDocuments({ isActive: true }),
       AcademicYear.findOne({ isCurrent: true }),
@@ -126,19 +126,19 @@ exports.getDashboardAnalytics = async (req, res) => {
       pendingAttendance,
       attendanceToday,
     ] = await Promise.all([
-      Student.countDocuments({ status: { $in: ['active', 'inactive'] } }),
+      Student.countDocuments({ status: 'active' }),
       Staff.countDocuments({ isActive: true }),
       Class.countDocuments({ isActive: true }),
       AcademicYear.findOne({ isCurrent: true }),
-      Student.countDocuments({ gender: 'M', status: { $in: ['active', 'inactive'] } }),
-      Student.countDocuments({ gender: 'F', status: { $in: ['active', 'inactive'] } }),
-      Student.countDocuments({ gender: 'Other', status: { $in: ['active', 'inactive'] } }),
+      Student.countDocuments({ gender: 'M', status: 'active' }),
+      Student.countDocuments({ gender: 'F', status: 'active' }),
+      Student.countDocuments({ gender: 'Other', status: 'active' }),
       Student.aggregate([
-        { $match: { status: { $in: ['active', 'inactive'] } } },
+        { $match: { status: 'active' } },
         { $group: { _id: '$category', count: { $sum: 1 } } }
       ]),
       Student.aggregate([
-        { $match: { status: { $in: ['active', 'inactive'] } } },
+        { $match: { status: 'active' } },
         { $group: { _id: { $month: '$createdAt' }, count: { $sum: 1 } } },
         { $sort: { _id: 1 } }
       ]),
@@ -1003,7 +1003,7 @@ exports.generateClassReportCards = async (req, res) => {
   try {
     const { classId, academicYearId } = req.params;
 
-    const students = await Student.find({ classId, status: { $in: ['active', 'inactive'] } }).sort({
+    const students = await Student.find({ classId, status: 'active' }).sort({
       rollNumber: 1,
       fullName: 1,
     });
@@ -1193,7 +1193,7 @@ exports.generateClassReportCardsPDF = async (req, res) => {
   try {
     const { classId, academicYearId } = req.params;
 
-    const students = await Student.find({ classId, status: { $in: ['active', 'inactive'] } }).limit(5);
+    const students = await Student.find({ classId, status: 'active' }).limit(5);
     const classItem = await Class.findById(classId);
     const academicYear = await AcademicYear.findById(academicYearId);
 
@@ -1256,7 +1256,7 @@ exports.subscribeDashboard = async (req, res) => {
       timestamp: new Date(),
     });
 
-    const totalStudents = await Student.countDocuments({ status: { $in: ['active', 'inactive'] } });
+    const totalStudents = await Student.countDocuments({ status: 'active' });
     const totalStaff = await Staff.countDocuments({ isActive: true });
     const totalClasses = await Class.countDocuments({ isActive: true });
     const currentYear = await AcademicYear.findOne({ isCurrent: true });

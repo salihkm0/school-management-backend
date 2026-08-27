@@ -3,6 +3,7 @@ const Student = require('../../models/Student');
 const AcademicYear = require('../../models/AcademicYear');
 const Class = require('../../models/Class');
 const { generateMidDayMealPDF } = require('../../services/pdf/midDayMealPdfService');
+const { sortStudents } = require('../../utils/studentSorter');
 
 // School logo URL
 const SCHOOL_LOGO_URL = 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
@@ -40,10 +41,12 @@ exports.generateMidDayMealPDF = async (req, res) => {
     const academicYearString = academicYear?.year || "2025-2026";
     const academicYearShort = academicYearString.replace(/\s+/g, '').slice(2);
 
-    const students = await Student.find({ 
+    const rawStudents = await Student.find({ 
       classId: classId,
-      isActive: true 
-    }).sort({ rollNumber: 1, fullName: 1 });
+      isActive: true,
+      status: 'active'
+    });
+    const students = sortStudents(rawStudents);
 
     console.log(`Found ${students.length} students`);
 
@@ -122,10 +125,12 @@ exports.getMidDayMealList = async (req, res) => {
 
     const academicYearString = academicYear?.year || "2025-2026";
 
-    const students = await Student.find({ 
+    const rawStudents = await Student.find({ 
       classId: classId,
-      isActive: true 
-    }).sort({ rollNumber: 1, fullName: 1 });
+      isActive: true,
+      status: 'active'
+    });
+    const students = sortStudents(rawStudents);
 
     const studentList = students.map((student, index) => ({
       slNo: index + 1,

@@ -41,7 +41,8 @@ exports.generateStatisticalDataPDF = async (req, res) => {
 
     const students = await Student.find({ 
       classId: classId,
-      isActive: true 
+      isActive: true,
+      status: 'active'
     }).sort({ rollNumber: 1, fullName: 1 });
 
     console.log(`Found ${students.length} students`);
@@ -156,7 +157,8 @@ exports.getStatisticalData = async (req, res) => {
 
     const students = await Student.find({ 
       classId: classId,
-      isActive: true 
+      isActive: true,
+      status: 'active'
     }).sort({ rollNumber: 1, fullName: 1 });
 
     const studentList = students.map(student => {

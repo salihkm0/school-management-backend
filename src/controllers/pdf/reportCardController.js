@@ -6,7 +6,8 @@ const { Exam } = require('../../models/Exam');
 const Mark = require('../../models/Mark');
 const Staff = require('../../models/Staff');
 const { Attendance } = require('../../models/Attendance');
-const { generateReportCardPDF, generateMultiReportCardPDF, generateClassMarksTablePDF } = require('../../services/pdf/reportCardService');
+const { generateReportCardPDF, generateMultiReportCardPDF, generateClassMarksTablePDF, generateClassReportCardsPDF } = require('../../services/pdf/reportCardService');
+const { sortStudents } = require('../../utils/studentSorter');
 const markController = require('../markController');
 
 // School logo URL
@@ -345,10 +346,11 @@ exports.generateClassReportCardsPDF = async (req, res) => {
     const academicYearString = academicYear?.year || academicYear?.name || new Date().getFullYear().toString();
 
     // Get all active students in the class
-    const students = await Student.find({ 
+    const rawStudents = await Student.find({ 
       classId: classId,
-      status: { $in: ['active', 'inactive'] }
-    }).populate('classId', 'name section displayName').sort({ rollNumber: 1, fullName: 1 });
+      status: 'active'
+    }).populate('classId', 'name section displayName');
+    const students = sortStudents(rawStudents);
 
     if (students.length === 0) {
       return res.status(404).json({ message: "No students found in this class" });
@@ -469,10 +471,11 @@ exports.downloadClassReportCardsPDF = async (req, res) => {
     
     const academicYearString = academicYear?.year || academicYear?.name || new Date().getFullYear().toString();
 
-    const students = await Student.find({ 
+    const rawStudents = await Student.find({ 
       classId: classId,
-      status: { $in: ['active', 'inactive'] }
-    }).populate('classId', 'name section displayName').sort({ rollNumber: 1, fullName: 1 });
+      status: 'active'
+    }).populate('classId', 'name section displayName');
+    const students = sortStudents(rawStudents);
 
     if (students.length === 0) {
       return res.status(404).json({ message: "No students found in this class" });
@@ -638,14 +641,33 @@ exports.downloadClassMarksTablePDF = async (req, res) => {
     }
 
     const finalClassName = classDetails.displayName || `${classDetails.name} ${classDetails.section || ''}`.trim();
+    
+    let formattedStudents = (students || []).map(student => {
+      const totalObtained = student.totalMarks !== undefined ? student.totalMarks : (student.totalObtained || 0);
+      const totalMax = student.totalMaxMarks !== undefined ? student.totalMaxMarks : (student.totalMax || 0);
+      const percentage = totalMax > 0 ? (totalObtained / totalMax) * 100 : 0;
+      return {
+        ...student,
+        totalObtained,
+        totalMax,
+        percentage
+      };
+    });
+
+    const rankedStudents = [...formattedStudents]
+      .sort((a, b) => b.percentage - a.percentage)
+      .map((s, idx) => ({ ...s, rank: idx + 1 }));
+
+    const finalSortedStudents = sortStudents(rankedStudents);
+
     const templateData = {
       schoolLogo: SCHOOL_LOGO_URL,
       academicYear: academicYearString,
       className: finalClassName,
       examName: examName || 'Exam',
       subjects: finalSubjects,
-      students: students || [],
-      totalStudents: students ? students.length : 0
+      students: finalSortedStudents,
+      totalStudents: finalSortedStudents.length
     };
     
     const pdfBuffer = await generateClassMarksTablePDF(templateData);

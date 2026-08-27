@@ -1,16 +1,19 @@
 /**
- * Sorts an array of students based on the class's sort preference.
+ * Sorts an array of students based on roll number numerically (1, 2, 3... 10, 11...).
  * @param {Array} students - Array of student documents (or objects)
- * @param {String} sortPreference - 'alphabetic' or 'roll_number' (default: 'alphabetic')
+ * @param {String} sortPreference - 'roll_number' or 'alphabetic' (default: 'roll_number')
  * @returns {Array} Sorted array of students
  */
-exports.sortStudents = (students, sortPreference = 'alphabetic') => {
+exports.sortStudents = (students = [], sortPreference = 'roll_number') => {
+  if (!Array.isArray(students)) return [];
   return [...students].sort((a, b) => {
-    // Helper to safely parse roll numbers
+    // Helper to safely parse roll numbers from any student property format
     const getRoll = (student) => {
-      if (!student.rollNumber) return null;
-      const num = parseInt(student.rollNumber, 10);
-      return isNaN(num) ? student.rollNumber : num; // fallback to string if not purely numeric
+      if (!student) return null;
+      const raw = student.rollNumber ?? student.rollNo ?? student.slNo ?? student.studentId?.rollNumber ?? student.studentId?.slNo;
+      if (raw === null || raw === undefined || raw === '') return null;
+      const parsed = parseInt(String(raw).trim(), 10);
+      return isNaN(parsed) ? String(raw).trim() : parsed;
     };
 
     const rollA = getRoll(a);
@@ -27,7 +30,8 @@ exports.sortStudents = (students, sortPreference = 'alphabetic') => {
         } else {
           const strA = String(rollA);
           const strB = String(rollB);
-          if (strA !== strB) return strA.localeCompare(strB, undefined, { numeric: true });
+          const comp = strA.localeCompare(strB, undefined, { numeric: true, sensitivity: 'base' });
+          if (comp !== 0) return comp;
         }
       } else if (hasRollA && !hasRollB) {
         return -1; // A comes first
@@ -36,7 +40,7 @@ exports.sortStudents = (students, sortPreference = 'alphabetic') => {
       }
     }
 
-    // Fallback if neither has roll number (Gender then Alphabetical)
+    // Fallback if roll numbers are identical or missing (Gender then Alphabetical)
     const getGenderScore = (gender) => {
       const g = (gender || '').toLowerCase();
       if (g === 'f' || g === 'female' || g === 'girl') return 1;
@@ -44,16 +48,16 @@ exports.sortStudents = (students, sortPreference = 'alphabetic') => {
       return 3;
     };
 
-    const genderA = getGenderScore(a.gender);
-    const genderB = getGenderScore(b.gender);
+    const genderA = getGenderScore(a.gender || a.studentId?.gender);
+    const genderB = getGenderScore(b.gender || b.studentId?.gender);
 
     if (genderA !== genderB) {
       return genderA - genderB;
     }
 
-    // Alphabetical sort
-    const nameA = a.fullName || a.studentName || '';
-    const nameB = b.fullName || b.studentName || '';
+    // Alphabetical sort fallback
+    const nameA = a.fullName || a.studentName || a.name || a.studentId?.fullName || '';
+    const nameB = b.fullName || b.studentName || b.name || b.studentId?.fullName || '';
     return nameA.localeCompare(nameB);
   });
 };

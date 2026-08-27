@@ -60,7 +60,8 @@ exports.generateTextBookDistributionPDF = async (req, res) => {
     if (classId && classId.match(/^[0-9a-fA-F]{24}$/)) {
       students = await Student.find({ 
         classId: classId,
-        isActive: true 
+        isActive: true,
+        status: 'active'
       }).sort({ rollNumber: 1, fullName: 1 });
     }
 
@@ -140,7 +141,8 @@ exports.downloadTextBookDistributionPDF = async (req, res) => {
     if (classId && classId.match(/^[0-9a-fA-F]{24}$/)) {
       students = await Student.find({ 
         classId: classId,
-        isActive: true 
+        isActive: true,
+        status: 'active'
       }).sort({ rollNumber: 1, fullName: 1 });
     }
 

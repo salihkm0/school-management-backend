@@ -167,7 +167,7 @@ exports.applyTemplateToMonth = async (req, res) => {
       return res.status(404).json({ message: 'Template not found' });
     }
     
-    const students = await Student.find({ classId, status: { $in: ['active', 'inactive'] } });
+    const students = await Student.find({ classId, status: 'active' });
     const academicYear = await AcademicYear.findOne({ isCurrent: true });
     
     const results = { success: [], updated: [], failed: [] };
@@ -329,7 +329,7 @@ exports.getAttendanceByClass = async (req, res) => {
 
     // Run all 3 independent queries in parallel
     const [rawStudents, attendanceRecords, template] = await Promise.all([
-      Student.find({ classId, status: { $in: ['active', 'inactive'] } })
+      Student.find({ classId, status: 'active' })
         .select('_id fullName studentCode admissionNo rollNumber gender'),
       Attendance.find({
         classId,
@@ -718,7 +718,7 @@ exports.getAttendanceSummary = async (req, res) => {
     const sortPreference = classObj?.studentSortPreference || 'alphabetic';
 
     // Get all students in the class FIRST
-    const rawStudents = await Student.find({ classId, status: { $in: ['active', 'inactive'] } })
+    const rawStudents = await Student.find({ classId, status: 'active' })
       .select('_id fullName rollNumber admissionNo gender');
 
     const allStudents = sortStudents(rawStudents, sortPreference);

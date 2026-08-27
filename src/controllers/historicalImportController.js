@@ -829,6 +829,7 @@ const { calculateGrade } = require('../services/gradingService');
 const { Exam } = require('../models/Exam');
 const Mark = require('../models/Mark');
 const AcademicYear = require('../models/AcademicYear');
+const { sortStudents } = require('../utils/studentSorter');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -1596,13 +1597,14 @@ exports.getHierarchicalStudents = async (req, res) => {
     if (!imports.length) return res.json({ success: true, data: [] });
 
     const importIds = imports.map(i => i._id);
-    const students = await HistoricalStudent.find({ 
+    const rawStudents = await HistoricalStudent.find({ 
       importId: { $in: importIds }, 
       grade: standard,
       medium: medium,
       division: division
-    }).sort({ slNo: 1, name: 1 });
+    });
     
+    const students = sortStudents(rawStudents);
     res.json({ success: true, data: students });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

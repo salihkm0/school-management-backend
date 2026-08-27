@@ -24,7 +24,7 @@ exports.getAdminDashboard = async (req, res) => {
     const currentYear = await AcademicYear.findOne({ isCurrent: true });
     
     // Basic Stats
-    const totalStudents = await Student.countDocuments({ status: { $in: ['active', 'inactive'] } });
+    const totalStudents = await Student.countDocuments({ status: 'active' });
     const totalStaff = await Staff.countDocuments({ isActive: true });
     const totalClasses = await Class.countDocuments({ isActive: true });
     const totalParents = await Parent.countDocuments({ isActive: true });
@@ -76,12 +76,28 @@ exports.getAdminDashboard = async (req, res) => {
     const femaleCount = genderDistribution.find(g => g._id === "F")?.count || 0;
     const otherCount = genderDistribution.find(g => g._id === "Other")?.count || 0;
     
-    // Category Distribution
-    const categoryDistribution = await Student.aggregate([
+    // Category Distribution with Gender Breakdown
+    const categoryAgg = await Student.aggregate([
       { $match: { status: "active", category: { $exists: true, $ne: "" } } },
-      { $group: { _id: "$category", count: { $sum: 1 } } },
-      { $sort: { count: -1 } }
+      { $group: { 
+          _id: { category: "$category", gender: "$gender" }, 
+          count: { $sum: 1 } 
+      } }
     ]);
+    
+    const categoryMap = {};
+    for (const item of categoryAgg) {
+      const cat = item._id.category || 'General';
+      const gender = item._id.gender || 'Unknown';
+      if (!categoryMap[cat]) {
+        categoryMap[cat] = { _id: cat, count: 0, male: 0, female: 0, other: 0 };
+      }
+      categoryMap[cat].count += item.count;
+      if (gender === 'M') categoryMap[cat].male += item.count;
+      else if (gender === 'F') categoryMap[cat].female += item.count;
+      else categoryMap[cat].other += item.count;
+    }
+    const categoryDistribution = Object.values(categoryMap).sort((a, b) => b.count - a.count);
 
     // Standard-wise Gender Distribution
     const standardGenderDistribution = await Student.aggregate([
@@ -113,11 +129,15 @@ exports.getAdminDashboard = async (req, res) => {
       return a.className.localeCompare(b.className, undefined, { numeric: true, sensitivity: 'base' });
     });
 
-    // Standard-wise Category Distribution
+    // Standard-wise Category & Gender Distribution
     const standardCategoryDistribution = await Student.aggregate([
       { $match: { status: "active" } },
       { $group: {
-          _id: { className: "$className", category: "$category" },
+          _id: { 
+            className: "$className", 
+            category: "$category", 
+            gender: "$gender" 
+          },
           count: { $sum: 1 }
       } }
     ]);
@@ -126,12 +146,48 @@ exports.getAdminDashboard = async (req, res) => {
     for (const item of standardCategoryDistribution) {
       const className = item._id.className || 'Unknown';
       const category = item._id.category || 'General';
+      const gender = item._id.gender || 'Unknown';
+      const count = item.count || 0;
+
       if (!standardCategoryMap[className]) {
-        standardCategoryMap[className] = { className, categories: {}, total: 0 };
+        standardCategoryMap[className] = { 
+          className, 
+          categories: {}, 
+          categoryDetails: {}, 
+          male: 0, 
+          female: 0, 
+          other: 0, 
+          total: 0 
+        };
       }
       const categoryLabel = category || 'General';
-      standardCategoryMap[className].categories[categoryLabel] = item.count;
-      standardCategoryMap[className].total += item.count;
+
+      // Keep legacy count in categories map
+      standardCategoryMap[className].categories[categoryLabel] = (standardCategoryMap[className].categories[categoryLabel] || 0) + count;
+      
+      // Detailed breakdown per category
+      if (!standardCategoryMap[className].categoryDetails[categoryLabel]) {
+        standardCategoryMap[className].categoryDetails[categoryLabel] = {
+          total: 0,
+          male: 0,
+          female: 0,
+          other: 0
+        };
+      }
+
+      standardCategoryMap[className].categoryDetails[categoryLabel].total += count;
+      if (gender === 'M') {
+        standardCategoryMap[className].categoryDetails[categoryLabel].male += count;
+        standardCategoryMap[className].male += count;
+      } else if (gender === 'F') {
+        standardCategoryMap[className].categoryDetails[categoryLabel].female += count;
+        standardCategoryMap[className].female += count;
+      } else {
+        standardCategoryMap[className].categoryDetails[categoryLabel].other += count;
+        standardCategoryMap[className].other += count;
+      }
+
+      standardCategoryMap[className].total += count;
     }
     const standardCategory = Object.values(standardCategoryMap).sort((a, b) => {
       const aNum = parseInt(a.className);
@@ -385,7 +441,7 @@ exports.getStaffDashboard = async (req, res) => {
     }).sort({ 'duties.date': 1 }).lean();
 
     const studentCountPromises = classTeacherClasses.map(cls => 
-      Student.countDocuments({ classId: cls._id, status: { $in: ['active', 'inactive'] } })
+      Student.countDocuments({ classId: cls._id, status: 'active' })
     );
 
     // Optimized attendance aggregation
@@ -532,7 +588,7 @@ exports.getParentDashboard = async (req, res) => {
     const students = await Student.find({ 
       studentCode: { $in: studentCodes },
       academicYearId: currentYear?._id,
-      status: { $in: ['active', 'inactive'] }
+      status: 'active'
     }).populate('classId', 'name section displayName classTeacherName');
     
     const studentDetails = [];
@@ -810,7 +866,7 @@ async function getTopPerformingClasses(academicYearId, limit = 5) {
   const classPerformance = [];
   
   for (const classItem of classes) {
-    const students = await Student.find({ classId: classItem._id, status: { $in: ['active', 'inactive'] } });
+    const students = await Student.find({ classId: classItem._id, status: 'active' });
     if (students.length === 0) continue;
     
     const studentIds = students.map(s => s._id);
@@ -903,7 +959,7 @@ async function getClassDistributionStats(academicYearId) {
   
   const distribution = [];
   for (const classItem of classes) {
-    const studentCount = await Student.countDocuments({ classId: classItem._id, status: { $in: ['active', 'inactive'] } });
+    const studentCount = await Student.countDocuments({ classId: classItem._id, status: 'active' });
     totalStudents += studentCount;
     distribution.push({
       classId: classItem._id,

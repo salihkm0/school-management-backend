@@ -1322,7 +1322,7 @@ exports.createSampleMarks = async (req, res) => {
       return res.status(404).json({ message: 'Exam not found' });
     }
     
-    const students = await Student.find({ classId, status: { $in: ['active', 'inactive'] } });
+    const students = await Student.find({ classId, status: 'active' });
     if (students.length === 0) {
       return res.status(404).json({ message: 'No students found in class' });
     }

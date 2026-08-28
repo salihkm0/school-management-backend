@@ -74,6 +74,7 @@ exports.getStudents = async (req, res) => {
         pagination: {
           total,
           page: parseInt(page),
+          limit: parseInt(limit),
           pages: Math.ceil(total / limit)
         }
       });

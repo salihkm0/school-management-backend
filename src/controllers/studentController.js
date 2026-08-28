@@ -633,7 +633,7 @@ exports.getStudentMarks = async (req, res) => {
             maxMarks: subject.maxMarks || 100,
             passingMarks: subject.passingMarks || 40,
             percentage: subject.percentage || (subject.maxMarks > 0 ? (((subject.totalScore || ((subject.theoryScore || 0) + (subject.practicalScore || 0) + (subject.ceScore || subject.ceMarks || 0))) / subject.maxMarks) * 100) : 0),
-            grade: subject.grade || 'F',
+            grade: subject.grade || 'E',
             remarks: subject.remarks || '',
             isAbsent: subject.isAbsent || false,
             status: markDocument.status,

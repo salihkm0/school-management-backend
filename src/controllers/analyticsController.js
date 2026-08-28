@@ -20,8 +20,9 @@ function getGradeFromPercentage(percentage) {
   if (percentage >= 60) return "B";
   if (percentage >= 50) return "C+";
   if (percentage >= 40) return "C";
-  if (percentage >= 33) return "D";
-  return "F";
+  if (percentage >= 30) return "D+";
+  if (percentage >= 20) return "D";
+  return "E";
 }
 
 function countAPlusGrades(subjectResults) {

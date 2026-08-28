@@ -104,8 +104,9 @@ function calculateGrade(percentage) {
   if (percentage >= 60) return "B";
   if (percentage >= 50) return "C+";
   if (percentage >= 40) return "C";
-  if (percentage >= 33) return "D";
-  return "F";
+  if (percentage >= 30) return "D+";
+  if (percentage >= 20) return "D";
+  return "E";
 }
 
 // Helper: Check teacher permission for a subject in a class
@@ -276,7 +277,7 @@ exports.getOrCreateMarksheet = async (req, res) => {
         ceScore: 0,
         totalScore: 0,
         percentage: 0,
-        grade: "F",
+        grade: "E",
         remarks: "",
         isAbsent: false,
       }));
@@ -483,7 +484,7 @@ exports.getMarksheetsByClass = async (req, res) => {
           passingMarks: examSubj.passingMarks,
           hasPractical: examSubj.hasPractical,
           percentage: 0,
-          grade: "F",
+          grade: "E",
           remarks: "",
           isAbsent: false,
           isEntered: false,
@@ -507,7 +508,7 @@ exports.getMarksheetsByClass = async (req, res) => {
             studentSubj.ceMarks = existingSubj.ceScore || 0;
             studentSubj.totalScore = existingSubj.totalScore || 0;
             studentSubj.percentage = existingSubj.percentage || 0;
-            studentSubj.grade = existingSubj.grade || "F";
+            studentSubj.grade = existingSubj.grade || "E";
             studentSubj.remarks = existingSubj.remarks || "";
             studentSubj.isAbsent = existingSubj.isAbsent || false;
             studentSubj.isEntered = existingSubj.isEntered || false;
@@ -545,7 +546,7 @@ exports.getMarksheetsByClass = async (req, res) => {
           totalMarks: 0,
           totalMaxMarks: totalMaxMarks,
           percentage: 0,
-          grade: "F",
+          grade: "E",
           status: "draft",
           isFinalized: false,
         };
@@ -728,7 +729,7 @@ exports.updateStudentMarks = async (req, res) => {
           ceScore: updatedSubject ? (updatedSubject.ceMarks || updatedSubject.ceScore || 0) : 0,
           totalScore: 0,
           percentage: 0,
-          grade: "F",
+          grade: "E",
           remarks: updatedSubject ? (updatedSubject.remarks || "") : "",
           isAbsent: updatedSubject ? (updatedSubject.isAbsent || false) : false,
           isEntered: updatedSubject ? true : false,
@@ -805,7 +806,7 @@ exports.updateStudentMarks = async (req, res) => {
                 ceScore: updatedSubject.ceMarks || updatedSubject.ceScore || 0,
                 totalScore: 0,
                 percentage: 0,
-                grade: "F",
+                grade: "E",
                 remarks: updatedSubject.remarks || "",
                 isAbsent: updatedSubject.isAbsent || false,
                 isEntered: true,

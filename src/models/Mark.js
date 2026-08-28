@@ -53,7 +53,7 @@ const SubjectMarkSchema = new mongoose.Schema({
   },
   grade: {
     type: String,
-    default: "F",
+    default: "E",
   },
   remarks: String,
   isAbsent: {
@@ -123,7 +123,7 @@ const MarkSchema = new mongoose.Schema(
     },
     grade: {
       type: String,
-      default: "F",
+      default: "E",
     },
     rank: Number,
     

@@ -587,8 +587,19 @@ exports.getStudentsByClass = async (req, res) => {
 
 exports.getStudentMarks = async (req, res) => {
   try {
-    const marks = await Mark.find({ studentId: req.params.id })
-      .populate('examId', 'name term academicYear')
+    const student = await Student.findById(req.params.id);
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    const marks = await Mark.find({
+      $or: [
+        { studentId: student._id },
+        { studentCode: student.studentCode },
+        { admissionNo: student.admissionNo }
+      ]
+    })
+      .populate('examId', 'name displayName term academicYear examType')
       .sort({ createdAt: -1 });
 
     // Flatten the marks to extract individual subject entries
@@ -617,10 +628,11 @@ exports.getStudentMarks = async (req, res) => {
             subjectCode: subject.subjectCode,
             theoryScore: subject.theoryScore || 0,
             practicalScore: subject.practicalScore || 0,
-            totalScore: subject.totalScore || 0,
-            maxMarks: subject.maxMarks || 0,
-            passingMarks: subject.passingMarks || 0,
-            percentage: subject.percentage || 0,
+            ceScore: subject.ceScore || subject.ceMarks || 0,
+            totalScore: subject.totalScore || ((subject.theoryScore || 0) + (subject.practicalScore || 0) + (subject.ceScore || subject.ceMarks || 0)),
+            maxMarks: subject.maxMarks || 100,
+            passingMarks: subject.passingMarks || 40,
+            percentage: subject.percentage || (subject.maxMarks > 0 ? (((subject.totalScore || ((subject.theoryScore || 0) + (subject.practicalScore || 0) + (subject.ceScore || subject.ceMarks || 0))) / subject.maxMarks) * 100) : 0),
             grade: subject.grade || 'F',
             remarks: subject.remarks || '',
             isAbsent: subject.isAbsent || false,
@@ -771,7 +783,12 @@ exports.getStudentAcademicInfo = async (req, res) => {
       .populate('firstLanguagePaper2', 'name code')
       .populate('thirdLanguage', 'name code')
       .populate('additionalLanguage', 'name code')
-      .populate('classId', 'name section displayName');
+      .populate({
+        path: 'classId',
+        select: 'name section displayName medium subjects',
+        populate: { path: 'subjects.subjectId', select: 'name code' }
+      })
+      .populate('academicYearId', 'year name');
 
     if (!student) {
       return res.status(404).json({ message: 'Student not found' });
@@ -782,10 +799,12 @@ exports.getStudentAcademicInfo = async (req, res) => {
       data: {
         admissionNo: student.admissionNo,
         admissionDate: student.admissionDate,
-        className: student.className,
-        division: student.division,
+        className: student.className || student.classId?.displayName || student.classId?.name,
+        division: student.division || student.classId?.section,
         rollNumber: student.rollNumber,
         status: student.status,
+        instructionMedium: student.instructionMedium || student.classId?.medium || 'Malayalam',
+        academicYear: student.academicYearId?.year || student.academicYearId?.name || '',
         firstLanguagePaper1: student.firstLanguagePaper1 || null,
         firstLanguagePaper2: student.firstLanguagePaper2 || null,
         thirdLanguage: student.thirdLanguage || null,

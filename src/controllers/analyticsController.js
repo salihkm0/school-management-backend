@@ -27,7 +27,12 @@ function getGradeFromPercentage(percentage) {
 
 function countAPlusGrades(subjectResults) {
   if (!subjectResults || !Array.isArray(subjectResults)) return 0;
-  return subjectResults.filter((s) => s.grade === "A+").length;
+  return subjectResults.filter((s) => 
+    s.grade === "A+" || 
+    s.grade === "A1" || 
+    (s.maxMarks > 0 && ((s.obtainedMarks || 0) / s.maxMarks) >= 0.90) ||
+    (s.percentage >= 90)
+  ).length;
 }
 
 async function createRecentActivity({
@@ -261,7 +266,7 @@ exports.getGradeAnalysis = async (req, res) => {
           },
         },
         gradeDistribution: {
-          "A+": 0, A: 0, "B+": 0, B: 0, "C+": 0, C: 0, D: 0, F: 0,
+          "A+": 0, "A": 0, "B+": 0, "B": 0, "C+": 0, "C": 0, "D+": 0, "D": 0, "E": 0,
         },
         subjectWiseAPlus: {},
         subjectWisePerformance: {},
@@ -283,7 +288,7 @@ exports.getGradeAnalysis = async (req, res) => {
 
     const studentResults = [];
     const gradeDistribution = {
-      "A+": 0, A: 0, "B+": 0, B: 0, "C+": 0, C: 0, D: 0, F: 0,
+      "A+": 0, "A": 0, "B+": 0, "B": 0, "C+": 0, "C": 0, "D+": 0, "D": 0, "E": 0,
     };
     const subjectWiseAPlus = {};
     const subjectWisePerformance = {};
@@ -377,28 +382,30 @@ exports.getGradeAnalysis = async (req, res) => {
 
       if (totalSubjects === 0) continue;
 
-      if (aplusCount === totalSubjects) {
+      if (aplusCount === totalSubjects && totalSubjects > 0) {
         analysis.fullAPlus.push(student);
         analysis.statistics.fullAPlusCount++;
-      } else if (aplusCount === 9) {
+      } else if (aplusCount === totalSubjects - 1 || aplusCount === 9) {
         analysis.nineAPlus.push(student);
         analysis.statistics.nineAPlusCount++;
-      } else if (aplusCount === 8) {
+      } else if (aplusCount === totalSubjects - 2 || aplusCount === 8) {
         analysis.eightAPlus.push(student);
         analysis.statistics.eightAPlusCount++;
-      } else if (aplusCount === 7) {
+      } else if (aplusCount === totalSubjects - 3 || aplusCount === 7) {
         analysis.sevenAPlus.push(student);
         analysis.statistics.sevenAPlusCount++;
-      } else if (aplusCount === 6) {
+      } else if (aplusCount === totalSubjects - 4 || aplusCount === 6) {
         analysis.sixAPlus.push(student);
         analysis.statistics.sixAPlusCount++;
-      } else if (aplusCount === 5) {
+      } else if (aplusCount === totalSubjects - 5 || aplusCount === 5) {
         analysis.fiveAPlus.push(student);
         analysis.statistics.fiveAPlusCount++;
       }
 
-      if (aplusCount === totalSubjects - 1 && totalSubjects > 0) {
-        const nonAPlusSubject = student.subjectResults.find(s => s.grade !== "A+");
+      if ((aplusCount === totalSubjects - 1 || aplusCount === 9) && totalSubjects > 0) {
+        const nonAPlusSubject = student.subjectResults.find(s => 
+          s.grade !== "A+" && s.grade !== "A1" && ((s.maxMarks > 0 ? (s.obtainedMarks / s.maxMarks) : (s.percentage / 100)) < 0.90)
+        );
         const missingSubject = nonAPlusSubject?.subjectName || "";
         
         const nearFullInfo = {
@@ -656,7 +663,7 @@ exports.getPerformanceAnalytics = async (req, res) => {
 
     const subjectPerformance = {};
     const gradeDistribution = {
-      "A+": 0, A: 0, "B+": 0, B: 0, "C+": 0, C: 0, D: 0, F: 0,
+      "A+": 0, "A": 0, "B+": 0, "B": 0, "C+": 0, "C": 0, "D+": 0, "D": 0, "E": 0,
     };
     const studentPercentages = {};
 

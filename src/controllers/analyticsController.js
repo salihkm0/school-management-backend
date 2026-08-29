@@ -403,6 +403,7 @@ exports.getGradeAnalysis = async (req, res) => {
       fullAPlusWithoutBiology: [],
       fullAPlusWithoutFirstLanguage: [],
       fullAPlusWithoutOther: [],
+      missingAPlusBySubject: {},
       statistics: {
         totalStudents: studentResults.length,
         fullAPlusCount: 0,
@@ -458,6 +459,11 @@ exports.getGradeAnalysis = async (req, res) => {
           missingSubjectGrade: missingGrade,
           missingSubjectMarks: nonAPlusSubject?.obtainedMarks || 0,
         };
+
+        if (!analysis.missingAPlusBySubject[missingSubjectName]) {
+          analysis.missingAPlusBySubject[missingSubjectName] = [];
+        }
+        analysis.missingAPlusBySubject[missingSubjectName].push(nearFullInfo);
 
         const missingLower = missingSubjectName.toLowerCase();
         if (missingLower.includes("math")) {

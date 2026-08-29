@@ -220,6 +220,26 @@ exports.getDashboardAnalytics = async (req, res) => {
 };
 
 
+const getClassDisplayName = (mark) => {
+  const classObj = mark.classId;
+  if (classObj && typeof classObj === "object") {
+    if (classObj.name && classObj.section) return `${classObj.name}-${classObj.section}`;
+    if (classObj.displayName) return classObj.displayName;
+    if (classObj.name) return classObj.name;
+  }
+  const studentClassObj = mark.studentId?.classId;
+  if (studentClassObj && typeof studentClassObj === "object") {
+    if (studentClassObj.name && studentClassObj.section) return `${studentClassObj.name}-${studentClassObj.section}`;
+    if (studentClassObj.displayName) return studentClassObj.displayName;
+    if (studentClassObj.name) return studentClassObj.name;
+  }
+  if (mark.className) {
+    if (mark.section) return `${mark.className}-${mark.section}`;
+    return mark.className;
+  }
+  return "-";
+};
+
 // ==================== GRADE ANALYSIS (USING MARK MODEL) ====================
 
 exports.getGradeAnalysis = async (req, res) => {
@@ -234,7 +254,12 @@ exports.getGradeAnalysis = async (req, res) => {
     console.log('Grade Analysis Query:', query);
 
     const marks = await Mark.find(query)
-      .populate("studentId", "fullName admissionNo rollNumber studentCode")
+      .populate({
+        path: "studentId",
+        select: "fullName admissionNo rollNumber studentCode classId",
+        populate: { path: "classId", select: "name section displayName" },
+      })
+      .populate("classId", "name section displayName")
       .sort({ percentage: -1 });
 
     // Default empty response
@@ -317,7 +342,7 @@ exports.getGradeAnalysis = async (req, res) => {
         studentCode: mark.studentCode,
         rollNumber: mark.rollNumber,
         admissionNumber: mark.admissionNo,
-        className: mark.className || mark.classId?.displayName || (mark.classId?.name ? `${mark.classId.name}${mark.classId.section ? `-${mark.classId.section}` : ''}` : ''),
+        className: getClassDisplayName(mark),
         totalMarks: mark.totalMarks || 0,
         totalMaxMarks: mark.totalMaxMarks || 0,
         percentage: mark.percentage || 0,
@@ -505,7 +530,12 @@ exports.getFullAPlusStudents = async (req, res) => {
     if (academicYearId) query.academicYearId = academicYearId;
 
     const marks = await Mark.find(query)
-      .populate("studentId", "fullName admissionNo rollNumber photoUrl")
+      .populate({
+        path: "studentId",
+        select: "fullName admissionNo rollNumber photoUrl classId",
+        populate: { path: "classId", select: "name section displayName" },
+      })
+      .populate("classId", "name section displayName")
       .sort({ percentage: -1 });
 
     const fullAPlusStudents = marks.filter((mark) => {
@@ -521,6 +551,7 @@ exports.getFullAPlusStudents = async (req, res) => {
         studentName: s.studentName,
         rollNumber: s.rollNumber,
         admissionNumber: s.admissionNo,
+        className: getClassDisplayName(s),
         totalMarks: s.totalMarks,
         totalMaxMarks: s.totalMaxMarks,
         percentage: s.percentage,
@@ -547,7 +578,12 @@ exports.getNearFullAPlusStudents = async (req, res) => {
     if (academicYearId) query.academicYearId = academicYearId;
 
     const marks = await Mark.find(query)
-      .populate("studentId", "fullName admissionNo rollNumber")
+      .populate({
+        path: "studentId",
+        select: "fullName admissionNo rollNumber classId",
+        populate: { path: "classId", select: "name section displayName" },
+      })
+      .populate("classId", "name section displayName")
       .sort({ percentage: -1 });
 
     const nearFullAPlus = marks.filter((mark) => {
@@ -578,7 +614,7 @@ exports.getNearFullAPlusStudents = async (req, res) => {
           studentId: s.studentId?._id,
           studentName: s.studentName,
           rollNumber: s.rollNumber,
-          className: s.className || s.classId?.displayName || (s.classId?.name ? `${s.classId.name}${s.classId.section ? `-${s.classId.section}` : ''}` : ''),
+          className: getClassDisplayName(s),
           totalMarks: s.totalMarks,
           totalMaxMarks: s.totalMaxMarks,
           percentage: s.percentage,

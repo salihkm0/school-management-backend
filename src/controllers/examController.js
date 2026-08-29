@@ -1297,13 +1297,20 @@ exports.getExamAnalytics = async (req, res) => {
           );
           
           // Check if it's considered "entered"
-          // We check isEntered (new format) OR if any score > 0 OR if marked absent (legacy format)
-          return s && (
-            s.isEntered === true || 
-            (s.theoryScore != null && s.theoryScore > 0) || 
-            (s.practicalScore != null && s.practicalScore > 0) || 
-            (s.ceScore != null && s.ceScore > 0) || 
-            s.isAbsent === true
+          // A mark is entered if student is marked absent, or explicitly entered, or has non-zero score
+          return Boolean(
+            s && (
+              s.isAbsent === true ||
+              s.isEnteredExplicitly === true ||
+              (s.isEntered === true && (
+                (s.theoryScore != null && Number(s.theoryScore) > 0) ||
+                (s.ceScore != null && Number(s.ceScore) > 0) ||
+                s.isAbsent === true ||
+                s.isEnteredExplicitly === true
+              )) ||
+              (s.theoryScore != null && Number(s.theoryScore) > 0) ||
+              (s.ceScore != null && Number(s.ceScore) > 0)
+            )
           );
         }).length;
         

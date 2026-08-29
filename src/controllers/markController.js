@@ -502,16 +502,29 @@ exports.getMarksheetsByClass = async (req, res) => {
                  s.subjectId?.toString() === studentSubj.actualSubjectId?.toString()
           );
           if (existingSubj) {
+            const isActuallyEntered = Boolean(
+              existingSubj.isAbsent ||
+              existingSubj.isEnteredExplicitly ||
+              (existingSubj.isEntered && (
+                (existingSubj.theoryScore != null && Number(existingSubj.theoryScore) > 0) ||
+                (existingSubj.ceScore != null && Number(existingSubj.ceScore) > 0) ||
+                existingSubj.isAbsent ||
+                existingSubj.isEnteredExplicitly
+              )) ||
+              (existingSubj.theoryScore != null && Number(existingSubj.theoryScore) > 0) ||
+              (existingSubj.ceScore != null && Number(existingSubj.ceScore) > 0)
+            );
             studentSubj.theoryScore = existingSubj.theoryScore || 0;
             studentSubj.practicalScore = existingSubj.practicalScore || 0;
             studentSubj.ceScore = existingSubj.ceScore || 0;
             studentSubj.ceMarks = existingSubj.ceScore || 0;
-            studentSubj.totalScore = existingSubj.totalScore || 0;
-            studentSubj.percentage = existingSubj.percentage || 0;
+            studentSubj.totalScore = isActuallyEntered ? (existingSubj.totalScore || 0) : 0;
+            studentSubj.percentage = isActuallyEntered ? (existingSubj.percentage || 0) : 0;
             studentSubj.grade = existingSubj.grade || "E";
             studentSubj.remarks = existingSubj.remarks || "";
             studentSubj.isAbsent = existingSubj.isAbsent || false;
-            studentSubj.isEntered = existingSubj.isEntered || false;
+            studentSubj.isEntered = isActuallyEntered;
+            studentSubj.isEnteredExplicitly = existingSubj.isEnteredExplicitly || false;
           }
         });
         
@@ -730,9 +743,9 @@ exports.updateStudentMarks = async (req, res) => {
           totalScore: 0,
           percentage: 0,
           grade: "E",
-          remarks: updatedSubject ? (updatedSubject.remarks || "") : "",
           isAbsent: updatedSubject ? (updatedSubject.isAbsent || false) : false,
-          isEntered: updatedSubject ? true : false,
+          isEntered: updatedSubject ? Boolean(updatedSubject.isAbsent || updatedSubject.isEnteredExplicitly || (updatedSubject.isEntered && (updatedSubject.theoryScore > 0 || updatedSubject.ceMarks > 0 || updatedSubject.ceScore > 0 || updatedSubject.isAbsent || updatedSubject.isEnteredExplicitly))) : false,
+          isEnteredExplicitly: updatedSubject ? Boolean(updatedSubject.isEnteredExplicitly) : false,
         });
       }
       
@@ -767,7 +780,8 @@ exports.updateStudentMarks = async (req, res) => {
             marksheet.subjects[subjectIndex].ceScore = updatedSubject.ceMarks || updatedSubject.ceScore || 0;
             marksheet.subjects[subjectIndex].remarks = updatedSubject.remarks || "";
             marksheet.subjects[subjectIndex].isAbsent = updatedSubject.isAbsent || false;
-            marksheet.subjects[subjectIndex].isEntered = true;
+            marksheet.subjects[subjectIndex].isEntered = Boolean(updatedSubject.isAbsent || updatedSubject.isEnteredExplicitly || (updatedSubject.isEntered && (updatedSubject.theoryScore > 0 || updatedSubject.ceMarks > 0 || updatedSubject.ceScore > 0 || updatedSubject.isAbsent || updatedSubject.isEnteredExplicitly)));
+            marksheet.subjects[subjectIndex].isEnteredExplicitly = Boolean(updatedSubject.isEnteredExplicitly);
           } else {
             // Dynamic add if not found (template sync mismatch or legacy)
             const examSubject = exam.subjects.find(
@@ -809,7 +823,8 @@ exports.updateStudentMarks = async (req, res) => {
                 grade: "E",
                 remarks: updatedSubject.remarks || "",
                 isAbsent: updatedSubject.isAbsent || false,
-                isEntered: true,
+                isEntered: Boolean(updatedSubject.isAbsent || updatedSubject.isEnteredExplicitly || (updatedSubject.isEntered && (updatedSubject.theoryScore > 0 || updatedSubject.ceMarks > 0 || updatedSubject.ceScore > 0 || updatedSubject.isAbsent || updatedSubject.isEnteredExplicitly))),
+                isEnteredExplicitly: Boolean(updatedSubject.isEnteredExplicitly),
               });
             }
           }
@@ -931,7 +946,8 @@ exports.bulkUpdateMarks = async (req, res) => {
               grade: 'F',
               remarks: submittedSubject ? (submittedSubject.remarks || '') : '',
               isAbsent: submittedSubject ? (submittedSubject.isAbsent || false) : false,
-              isEntered: submittedSubject ? (submittedSubject.isEntered !== undefined ? submittedSubject.isEntered : true) : false,
+              isEntered: submittedSubject ? Boolean(submittedSubject.isAbsent || submittedSubject.isEnteredExplicitly || (submittedSubject.isEntered && (submittedSubject.theoryScore > 0 || submittedSubject.ceMarks > 0 || submittedSubject.ceScore > 0 || submittedSubject.isAbsent || submittedSubject.isEnteredExplicitly))) : false,
+              isEnteredExplicitly: submittedSubject ? Boolean(submittedSubject.isEnteredExplicitly) : false,
             });
           }
 
@@ -966,7 +982,8 @@ exports.bulkUpdateMarks = async (req, res) => {
                 marksheet.subjects[subjectIndex].ceScore = updatedSubject.ceMarks || 0;
                 marksheet.subjects[subjectIndex].remarks = updatedSubject.remarks || '';
                 marksheet.subjects[subjectIndex].isAbsent = updatedSubject.isAbsent || false;
-                marksheet.subjects[subjectIndex].isEntered = updatedSubject.isEntered !== undefined ? updatedSubject.isEntered : true;
+                marksheet.subjects[subjectIndex].isEntered = Boolean(updatedSubject.isAbsent || updatedSubject.isEnteredExplicitly || (updatedSubject.isEntered && (updatedSubject.theoryScore > 0 || updatedSubject.ceMarks > 0 || updatedSubject.ceScore > 0 || updatedSubject.isAbsent || updatedSubject.isEnteredExplicitly)));
+                marksheet.subjects[subjectIndex].isEnteredExplicitly = Boolean(updatedSubject.isEnteredExplicitly);
               } else {
                 const examSubject = exam.subjects.find(
                   (s) => s.subjectId?.toString() === updatedSubject.examSubjectId?.toString() ||
@@ -1005,7 +1022,8 @@ exports.bulkUpdateMarks = async (req, res) => {
                     grade: 'F',
                     remarks: updatedSubject.remarks || '',
                     isAbsent: updatedSubject.isAbsent || false,
-                    isEntered: updatedSubject.isEntered !== undefined ? updatedSubject.isEntered : true,
+                    isEntered: Boolean(updatedSubject.isAbsent || updatedSubject.isEnteredExplicitly || (updatedSubject.isEntered && (updatedSubject.theoryScore > 0 || updatedSubject.ceMarks > 0 || updatedSubject.ceScore > 0 || updatedSubject.isAbsent || updatedSubject.isEnteredExplicitly))),
+                    isEnteredExplicitly: Boolean(updatedSubject.isEnteredExplicitly),
                   });
                 }
               }

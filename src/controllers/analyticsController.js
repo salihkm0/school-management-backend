@@ -251,10 +251,16 @@ exports.getGradeAnalysis = async (req, res) => {
           fullAPlusWithoutMaths: [],
           fullAPlusWithoutEnglish: [],
           fullAPlusWithoutMalayalam: [],
+          fullAPlusWithoutMalayalamII: [],
           fullAPlusWithoutHindi: [],
           fullAPlusWithoutArabic: [],
           fullAPlusWithoutSocialScience: [],
           fullAPlusWithoutIT: [],
+          fullAPlusWithoutPhysics: [],
+          fullAPlusWithoutChemistry: [],
+          fullAPlusWithoutBiology: [],
+          fullAPlusWithoutFirstLanguage: [],
+          fullAPlusWithoutOther: [],
           statistics: {
             totalStudents: 0,
             fullAPlusCount: 0,
@@ -361,10 +367,16 @@ exports.getGradeAnalysis = async (req, res) => {
       fullAPlusWithoutMaths: [],
       fullAPlusWithoutEnglish: [],
       fullAPlusWithoutMalayalam: [],
+      fullAPlusWithoutMalayalamII: [],
       fullAPlusWithoutHindi: [],
       fullAPlusWithoutArabic: [],
       fullAPlusWithoutSocialScience: [],
       fullAPlusWithoutIT: [],
+      fullAPlusWithoutPhysics: [],
+      fullAPlusWithoutChemistry: [],
+      fullAPlusWithoutBiology: [],
+      fullAPlusWithoutFirstLanguage: [],
+      fullAPlusWithoutOther: [],
       statistics: {
         totalStudents: studentResults.length,
         fullAPlusCount: 0,
@@ -385,57 +397,69 @@ exports.getGradeAnalysis = async (req, res) => {
       if (aplusCount === totalSubjects && totalSubjects > 0) {
         analysis.fullAPlus.push(student);
         analysis.statistics.fullAPlusCount++;
-      } else if (aplusCount === totalSubjects - 1 || aplusCount === 9) {
+      } else if (aplusCount === 9) {
         analysis.nineAPlus.push(student);
         analysis.statistics.nineAPlusCount++;
-      } else if (aplusCount === totalSubjects - 2 || aplusCount === 8) {
+      } else if (aplusCount === 8) {
         analysis.eightAPlus.push(student);
         analysis.statistics.eightAPlusCount++;
-      } else if (aplusCount === totalSubjects - 3 || aplusCount === 7) {
+      } else if (aplusCount === 7) {
         analysis.sevenAPlus.push(student);
         analysis.statistics.sevenAPlusCount++;
-      } else if (aplusCount === totalSubjects - 4 || aplusCount === 6) {
+      } else if (aplusCount === 6) {
         analysis.sixAPlus.push(student);
         analysis.statistics.sixAPlusCount++;
-      } else if (aplusCount === totalSubjects - 5 || aplusCount === 5) {
+      } else if (aplusCount === 5) {
         analysis.fiveAPlus.push(student);
         analysis.statistics.fiveAPlusCount++;
       }
 
-      if ((aplusCount === totalSubjects - 1 || aplusCount === 9) && totalSubjects > 0) {
-        const nonAPlusSubject = student.subjectResults.find(s => 
-          s.grade !== "A+" && s.grade !== "A1" && ((s.maxMarks > 0 ? (s.obtainedMarks / s.maxMarks) : (s.percentage / 100)) < 0.90)
-        );
-        const missingSubject = nonAPlusSubject?.subjectName || "";
+      if ((aplusCount === totalSubjects - 1 || aplusCount === 9) && totalSubjects > 1) {
+        const nonAPlusSubject = student.subjectResults.find(s => {
+          if (s.isAbsent) return true;
+          if (s.grade === "A+" || s.grade === "A1") return false;
+          if (s.maxMarks > 0 && ((s.obtainedMarks || 0) / s.maxMarks) >= 0.90) return false;
+          if (s.percentage >= 90) return false;
+          return true;
+        });
+        
+        const missingSubjectName = nonAPlusSubject?.subjectName || nonAPlusSubject?.displayName || "Other";
+        const missingGrade = nonAPlusSubject?.isAbsent ? "AB" : (nonAPlusSubject?.grade || "A");
         
         const nearFullInfo = {
           ...student,
-          missingSubject,
-          missingSubjectGrade: nonAPlusSubject?.grade,
-          missingSubjectMarks: nonAPlusSubject?.obtainedMarks,
+          missingSubject: missingSubjectName,
+          missingSubjectGrade: missingGrade,
+          missingSubjectMarks: nonAPlusSubject?.obtainedMarks || 0,
         };
-        
-        const missingLower = missingSubject.toLowerCase();
+
+        const missingLower = missingSubjectName.toLowerCase();
         if (missingLower.includes("math")) {
           analysis.fullAPlusWithoutMaths.push(nearFullInfo);
-        }
-        if (missingLower.includes("english")) {
+        } else if (missingLower.includes("english")) {
           analysis.fullAPlusWithoutEnglish.push(nearFullInfo);
-        }
-        if (missingLower.includes("malayalam")) {
-          analysis.fullAPlusWithoutMalayalam.push(nearFullInfo);
-        }
-        if (missingLower.includes("hindi")) {
+        } else if (missingLower.includes("physics")) {
+          analysis.fullAPlusWithoutPhysics.push(nearFullInfo);
+        } else if (missingLower.includes("chem")) {
+          analysis.fullAPlusWithoutChemistry.push(nearFullInfo);
+        } else if (missingLower.includes("bio")) {
+          analysis.fullAPlusWithoutBiology.push(nearFullInfo);
+        } else if (missingLower.includes("hindi")) {
           analysis.fullAPlusWithoutHindi.push(nearFullInfo);
-        }
-        if (missingLower.includes("arabic")) {
+        } else if (missingLower.includes("arabic")) {
           analysis.fullAPlusWithoutArabic.push(nearFullInfo);
-        }
-        if (missingLower.includes("social")) {
+        } else if (missingLower.includes("malayalam ii") || missingLower.includes("malayalam 2") || missingLower.includes("malayalam paper 2")) {
+          analysis.fullAPlusWithoutMalayalamII.push(nearFullInfo);
+        } else if (missingLower.includes("malayalam")) {
+          analysis.fullAPlusWithoutMalayalam.push(nearFullInfo);
+        } else if (missingLower.includes("social") || missingLower.includes("ss")) {
           analysis.fullAPlusWithoutSocialScience.push(nearFullInfo);
-        }
-        if (missingLower.includes("it") || missingLower.includes("computer")) {
+        } else if (missingLower.includes("it") || missingLower.includes("computer")) {
           analysis.fullAPlusWithoutIT.push(nearFullInfo);
+        } else if (missingLower.includes("first language")) {
+          analysis.fullAPlusWithoutFirstLanguage.push(nearFullInfo);
+        } else {
+          analysis.fullAPlusWithoutOther.push(nearFullInfo);
         }
       }
     }

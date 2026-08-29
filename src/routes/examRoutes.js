@@ -42,7 +42,7 @@ router.get('/:id/classes', authorize('admin', 'principal', 'staff'), cacheRoute(
 router.get('/:id/subjects', authorize('admin', 'principal', 'staff'), cacheRoute(1800, 'exams'), getExamSubjects);
 router.get('/:id/schedule-details', authorize('admin', 'principal', 'staff'), cacheRoute(1800, 'exams'), getExamScheduleDetails);
 router.get('/:id/marks-summary', authorize('admin', 'principal'), getMarksEntrySummary); // Intentionally not cached as it changes frequently
-router.get('/:id/analytics', cacheRoute(1800, 'exams'), getExamAnalytics);
+router.get('/:id/analytics', getExamAnalytics);
 
 // Generic exam CRUD - MUST COME LAST
 router.get('/', cacheRoute(1800, 'exams'), getExams);

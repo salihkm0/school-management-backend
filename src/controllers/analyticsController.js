@@ -397,19 +397,19 @@ exports.getGradeAnalysis = async (req, res) => {
       if (aplusCount === totalSubjects && totalSubjects > 0) {
         analysis.fullAPlus.push(student);
         analysis.statistics.fullAPlusCount++;
-      } else if (aplusCount === 9) {
+      } else if (aplusCount === totalSubjects - 1 || aplusCount === 9) {
         analysis.nineAPlus.push(student);
         analysis.statistics.nineAPlusCount++;
-      } else if (aplusCount === 8) {
+      } else if (aplusCount === totalSubjects - 2 || (aplusCount === 8 && totalSubjects > 9)) {
         analysis.eightAPlus.push(student);
         analysis.statistics.eightAPlusCount++;
-      } else if (aplusCount === 7) {
+      } else if (aplusCount === totalSubjects - 3 || (aplusCount === 7 && totalSubjects > 9)) {
         analysis.sevenAPlus.push(student);
         analysis.statistics.sevenAPlusCount++;
-      } else if (aplusCount === 6) {
+      } else if (aplusCount === totalSubjects - 4 || (aplusCount === 6 && totalSubjects > 9)) {
         analysis.sixAPlus.push(student);
         analysis.statistics.sixAPlusCount++;
-      } else if (aplusCount === 5) {
+      } else if (aplusCount === totalSubjects - 5 || (aplusCount === 5 && totalSubjects > 9)) {
         analysis.fiveAPlus.push(student);
         analysis.statistics.fiveAPlusCount++;
       }

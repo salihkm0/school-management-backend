@@ -92,34 +92,30 @@ const prepareStudentReportData = async (student, examId, academicYear) => {
     
     subjects = sortedSubjects.map(subject => {
       const maxMarks = subject.maxMarks || 20;
-      let ceMax = 4;
-      let teMax = 16;
-      
-      if (maxMarks === 100) {
-        ceMax = 20;
-        teMax = 80;
-      } else if (maxMarks === 80) {
-        ceMax = 16;
-        teMax = 64;
-      } else if (maxMarks === 50) {
-        ceMax = 10;
-        teMax = 40;
-      } else if (maxMarks === 40) {
-        ceMax = 8;
-        teMax = 32;
-      } else if (maxMarks === 20) {
-        ceMax = 4;
-        teMax = 16;
-      } else {
-        ceMax = Math.round(maxMarks * 0.2);
-        teMax = maxMarks - ceMax;
+      const ce = subject.ceScore !== undefined && subject.ceScore !== null && Number(subject.ceScore) > 0 
+        ? Number(subject.ceScore) 
+        : (subject.ceMarks !== undefined && Number(subject.ceMarks) > 0 ? Number(subject.ceMarks) : 0);
+
+      let ceMax = 0;
+      let teMax = maxMarks;
+
+      if (ce > 0) {
+        if (maxMarks === 100) { ceMax = 20; teMax = 80; }
+        else if (maxMarks === 80) { ceMax = 16; teMax = 64; }
+        else if (maxMarks === 50) { ceMax = 10; teMax = 40; }
+        else if (maxMarks === 40) { ceMax = 8; teMax = 32; }
+        else if (maxMarks === 20) { ceMax = 4; teMax = 16; }
+        else { ceMax = Math.round(maxMarks * 0.2); teMax = maxMarks - ceMax; }
       }
 
-      const ce = subject.ceScore !== undefined && subject.ceScore !== null ? Number(subject.ceScore) : Number(subject.practicalScore || 0);
       let te = subject.theoryScore !== undefined && subject.theoryScore !== null ? Number(subject.theoryScore) : Number(subject.totalScore || 0);
-      
-      if (te > teMax && subject.totalScore && (subject.totalScore - ce) <= teMax) {
-        te = Math.max(0, subject.totalScore - ce);
+
+      if (te > teMax) {
+        if (subject.totalScore && (subject.totalScore - ce) <= teMax) {
+          te = Math.max(0, subject.totalScore - ce);
+        } else {
+          te = Math.min(te, teMax);
+        }
       }
 
       totalCEMax += ceMax;
@@ -127,9 +123,8 @@ const prepareStudentReportData = async (student, examId, academicYear) => {
       totalCE += ce;
       totalTE += te;
 
-      // Calculate TE Grade excluding CE
-      const tePercentage = teMax > 0 ? (te / teMax) * 100 : 0;
-      const teGrade = getGrade(tePercentage);
+      const percentage = maxMarks > 0 ? ((ce + te) / maxMarks) * 100 : 0;
+      const subjectGrade = getGrade(percentage);
 
       return {
         name: subject.subjectName,
@@ -138,17 +133,16 @@ const prepareStudentReportData = async (student, examId, academicYear) => {
         ceMarks: ce,
         teMarks: te,
         total: ce + te,
-        grade: teGrade
+        grade: subjectGrade
       };
     });
   }
   
-  // Calculate overall percentage & overall TE grade
+  // Calculate overall percentage & overall grade
   const grandTotal = totalCE + totalTE;
   const grandMax = totalCEMax + totalTEMax;
   const overallPercentage = grandMax > 0 ? Math.round((grandTotal / grandMax) * 100) : 0;
-  const overallTePercentage = totalTEMax > 0 ? Math.round((totalTE / totalTEMax) * 100) : 0;
-  const overallTeGrade = getGrade(overallTePercentage);
+  const overallGrade = getGrade(overallPercentage);
   
   return {
     student: {

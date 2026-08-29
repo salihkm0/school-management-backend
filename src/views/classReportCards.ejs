@@ -347,7 +347,7 @@ students.forEach(function(student, index) {
                         <th colspan="2">Max. Score</th>
                         <th colspan="2">Score Obtained</th>
                         <th rowspan="2">TOTAL</th>
-                        <th rowspan="2">GRADE</th>
+                        <th rowspan="2">TE GRADE</th>
                     </tr>
                     <tr>
                         <th>CE</th>
@@ -387,7 +387,7 @@ students.forEach(function(student, index) {
                     <td><strong><%= data.totalCE %></strong></td>
                     <td><strong><%= data.totalTE %></strong></td>
                     <td><strong><%= data.grandTotal %></strong></td>
-                    <td><strong><%= data.overallPercentage %>%</strong></td>
+                    <td><strong><%= data.overallGrade %></strong></td>
                 </tr>
                 </tbody>
             </table>
@@ -396,15 +396,6 @@ students.forEach(function(student, index) {
                 No marks available for this student
             </div>
             <% } %>
-            
-            <!-- Attendance -->
-            <div class="attendance-section">
-                <div class="attendance-row">
-                    <span>Working Days: <%= data.attendance.totalDays %></span>
-                    <span>Days Present: <%= data.attendance.presentDays %></span>
-                    <span>Attendance: <%= data.attendance.percentage %>%</span>
-                </div>
-            </div>
             
             <!-- Remarks Section -->
             <div style="margin-top: 15px; font-size: 10px; font-weight: bold;">

@@ -91,16 +91,46 @@ const prepareStudentReportData = async (student, examId, academicYear) => {
     });
     
     subjects = sortedSubjects.map(subject => {
-      const ceMax = subject.maxMarks ? Math.round(subject.maxMarks * 0.2) : 20;
-      const teMax = subject.maxMarks ? Math.round(subject.maxMarks * 0.8) : 80;
-      const ce = subject.theoryScore || 0;
-      const te = subject.practicalScore || subject.totalScore || 0;
+      const maxMarks = subject.maxMarks || 20;
+      let ceMax = 4;
+      let teMax = 16;
       
+      if (maxMarks === 100) {
+        ceMax = 20;
+        teMax = 80;
+      } else if (maxMarks === 80) {
+        ceMax = 16;
+        teMax = 64;
+      } else if (maxMarks === 50) {
+        ceMax = 10;
+        teMax = 40;
+      } else if (maxMarks === 40) {
+        ceMax = 8;
+        teMax = 32;
+      } else if (maxMarks === 20) {
+        ceMax = 4;
+        teMax = 16;
+      } else {
+        ceMax = Math.round(maxMarks * 0.2);
+        teMax = maxMarks - ceMax;
+      }
+
+      const ce = subject.ceScore !== undefined && subject.ceScore !== null ? Number(subject.ceScore) : Number(subject.practicalScore || 0);
+      let te = subject.theoryScore !== undefined && subject.theoryScore !== null ? Number(subject.theoryScore) : Number(subject.totalScore || 0);
+      
+      if (te > teMax && subject.totalScore && (subject.totalScore - ce) <= teMax) {
+        te = Math.max(0, subject.totalScore - ce);
+      }
+
       totalCEMax += ceMax;
       totalTEMax += teMax;
       totalCE += ce;
       totalTE += te;
-      
+
+      // Calculate TE Grade excluding CE
+      const tePercentage = teMax > 0 ? (te / teMax) * 100 : 0;
+      const teGrade = getGrade(tePercentage);
+
       return {
         name: subject.subjectName,
         ceMax: ceMax,
@@ -108,33 +138,17 @@ const prepareStudentReportData = async (student, examId, academicYear) => {
         ceMarks: ce,
         teMarks: te,
         total: ce + te,
-        grade: subject.grade || 'F'
+        grade: teGrade
       };
     });
   }
   
-  // Get attendance data
-  let attendanceRecords = [];
-  try {
-    attendanceRecords = await Attendance.find({
-      studentId: student._id,
-      academicYearId: academicYear?._id
-    });
-  } catch (err) {
-    console.error('Error fetching attendance:', err);
-    attendanceRecords = [];
-  }
-  
-  const totalDays = attendanceRecords.length > 0 ? attendanceRecords.length : 200;
-  const presentDays = attendanceRecords.filter(a => a.status === 'present').length > 0 
-    ? attendanceRecords.filter(a => a.status === 'present').length 
-    : 190;
-  const attendancePercentage = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 95;
-  
-  // Calculate overall percentage
+  // Calculate overall percentage & overall TE grade
   const grandTotal = totalCE + totalTE;
   const grandMax = totalCEMax + totalTEMax;
   const overallPercentage = grandMax > 0 ? Math.round((grandTotal / grandMax) * 100) : 0;
+  const overallTePercentage = totalTEMax > 0 ? Math.round((totalTE / totalTEMax) * 100) : 0;
+  const overallTeGrade = getGrade(overallTePercentage);
   
   return {
     student: {
@@ -153,11 +167,11 @@ const prepareStudentReportData = async (student, examId, academicYear) => {
     grandTotal,
     grandMax,
     overallPercentage,
-    overallGrade: getGrade(overallPercentage),
+    overallGrade: overallTeGrade,
     attendance: {
-      totalDays: totalDays,
-      presentDays: presentDays,
-      percentage: attendancePercentage
+      totalDays: 0,
+      presentDays: 0,
+      percentage: 0
     }
   };
 };

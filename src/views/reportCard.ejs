@@ -387,7 +387,7 @@ html, body {
                         <th colspan="2">Max. Score</th>
                         <th colspan="2">Score Obtained</th>
                         <th rowspan="2">TOTAL</th>
-                        <th rowspan="2">GRADE</th>
+                        <th rowspan="2">TE GRADE</th>
                     </tr>
                     <tr>
                         <th>CE</th>
@@ -432,7 +432,7 @@ html, body {
                     <td><strong><%= totalCE %></strong></td>
                     <td><strong><%= totalTE %></strong></td>
                     <td><strong><%= grandTotal %></strong></td>
-                    <td><strong><%= overallPercentage %>%</strong></td>
+                    <td><strong><%= overallGrade %></strong></td>
                 </tr>
                 </tbody>
             </table>
@@ -441,15 +441,6 @@ html, body {
                 No marks available for this student
             </div>
             <% } %>
-            
-            <!-- Attendance -->
-            <div class="attendance-section">
-                <div class="attendance-row">
-                    <span>No of Working Days: <%= attendance.totalDays %></span>
-                    <span>No of Days Present: <%= attendance.presentDays %></span>
-                    <span>Attendance Percentage: <%= attendance.percentage %>%</span>
-                </div>
-            </div>
             
             <!-- Remarks Section -->
             <div class="remarks-section">

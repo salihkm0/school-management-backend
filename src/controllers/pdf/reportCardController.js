@@ -161,7 +161,7 @@ const prepareStudentReportData = async (student, examId, academicYear) => {
     grandTotal,
     grandMax,
     overallPercentage,
-    overallGrade: overallTeGrade,
+    overallGrade: overallGrade,
     attendance: {
       totalDays: 0,
       presentDays: 0,

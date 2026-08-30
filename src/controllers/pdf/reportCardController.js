@@ -144,9 +144,9 @@ const prepareStudentReportData = async (student, examId, academicYear) => {
       totalCE += ce;
       totalTE += te;
 
-      // Subject Grade calculated on Total Score (CE + TE) out of Max Marks
-      const percentage = maxMarks > 0 ? (totalObtained / maxMarks) * 100 : 0;
-      const subjectGrade = getGrade(percentage);
+      // TE Grade excluding CE marks
+      const tePercentage = teMax > 0 ? (te / teMax) * 100 : 0;
+      const teGrade = getGrade(tePercentage);
 
       return {
         name: subject.subjectName,
@@ -155,16 +155,17 @@ const prepareStudentReportData = async (student, examId, academicYear) => {
         ceMarks: ce,
         teMarks: te,
         total: totalObtained,
-        grade: subjectGrade
+        grade: teGrade
       };
     });
   }
   
-  // Calculate overall percentage & overall grade
+  // Calculate overall percentage & overall TE grade
   const grandTotal = totalCE + totalTE;
   const grandMax = totalCEMax + totalTEMax;
   const overallPercentage = grandMax > 0 ? Math.round((grandTotal / grandMax) * 100) : 0;
-  const overallGrade = getGrade(overallPercentage);
+  const overallTePercentage = totalTEMax > 0 ? Math.round((totalTE / totalTEMax) * 100) : 0;
+  const overallGrade = getGrade(overallTePercentage);
   
   return {
     student: {

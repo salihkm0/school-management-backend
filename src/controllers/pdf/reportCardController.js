@@ -31,22 +31,37 @@ const prepareStudentReportData = async (student, examId, academicYear) => {
   // Get marksheet for specific exam
   let marksheet = null;
   let examName = '';
-  
-  if (examId && examId.match(/^[0-9a-fA-F]{24}$/)) {
+  let examObj = null;
+
+  const validExamId = examId && examId.match(/^[0-9a-fA-F]{24}$/) ? examId : null;
+
+  if (validExamId) {
     marksheet = await Mark.findOne({ 
       studentId: student._id, 
-      examId: examId 
+      examId: validExamId 
     });
-    const exam = await Exam.findById(examId);
-    examName = exam?.displayName || exam?.name || 'Exam';
+    examObj = await Exam.findById(validExamId);
+    examName = examObj?.displayName || examObj?.name || 'Exam';
   } else {
     // Get latest marksheet if no exam specified
     marksheet = await Mark.findOne({ studentId: student._id })
       .sort({ createdAt: -1 });
     if (marksheet) {
-      const exam = await Exam.findById(marksheet.examId);
-      examName = exam?.displayName || exam?.name || 'Latest Exam';
+      examObj = await Exam.findById(marksheet.examId);
+      examName = examObj?.displayName || examObj?.name || 'Latest Exam';
     }
+  }
+
+  // Create a map of exam subject configurations (for ceMaxMarks and theoryMarks)
+  const examSubjectConfigMap = new Map();
+  if (examObj) {
+    const examSubList = examObj.subjects || examObj.subjectSchedules || [];
+    examSubList.forEach(es => {
+      const nameKey = (es.subjectName || '').toLowerCase().trim();
+      const codeKey = (es.subjectCode || '').toLowerCase().trim();
+      if (nameKey) examSubjectConfigMap.set(nameKey, es);
+      if (codeKey) examSubjectConfigMap.set(codeKey, es);
+    });
   }
   
   let subjects = [];
@@ -59,7 +74,7 @@ const prepareStudentReportData = async (student, examId, academicYear) => {
     // Define standard subject order for Kerala syllabus
     const subjectOrder = [
       'first language', 'language i', 'language 1',
-      'second language', 'language ii', 'language 2', 'malayalam', 'arabic', 'urdu', 'sanskrit',
+      'second language', 'language ii', 'language 2', 'malayalam ii', 'malayalam 2', 'arabic', 'urdu', 'sanskrit',
       'english',
       'hindi',
       'social science', 'ss', 'social', 'history', 'geography',
@@ -91,40 +106,47 @@ const prepareStudentReportData = async (student, examId, academicYear) => {
     });
     
     subjects = sortedSubjects.map(subject => {
-      const maxMarks = subject.maxMarks || 20;
-      const ce = subject.ceScore !== undefined && subject.ceScore !== null && Number(subject.ceScore) > 0 
-        ? Number(subject.ceScore) 
-        : (subject.ceMarks !== undefined && Number(subject.ceMarks) > 0 ? Number(subject.ceMarks) : 0);
+      const nameKey = (subject.subjectName || '').toLowerCase().trim();
+      const codeKey = (subject.subjectCode || '').toLowerCase().trim();
+      const examSubConfig = examSubjectConfigMap.get(nameKey) || examSubjectConfigMap.get(codeKey);
 
-      let ceMax = 0;
-      let teMax = maxMarks;
+      const maxMarks = subject.maxMarks || examSubConfig?.maxMarks || 20;
 
-      if (ce > 0) {
+      // Determine CE Max and TE Max from Exam config or standard weightage (20% / 80%)
+      let ceMax = examSubConfig?.ceMaxMarks || subject.ceMaxMarks || subject.ceMax;
+      let teMax = examSubConfig?.theoryMarks || subject.theoryMarks || subject.teMax;
+
+      if (!ceMax || !teMax) {
         if (maxMarks === 100) { ceMax = 20; teMax = 80; }
-        else if (maxMarks === 80) { ceMax = 16; teMax = 64; }
         else if (maxMarks === 50) { ceMax = 10; teMax = 40; }
         else if (maxMarks === 40) { ceMax = 8; teMax = 32; }
         else if (maxMarks === 20) { ceMax = 4; teMax = 16; }
         else { ceMax = Math.round(maxMarks * 0.2); teMax = maxMarks - ceMax; }
       }
 
-      let te = subject.theoryScore !== undefined && subject.theoryScore !== null ? Number(subject.theoryScore) : Number(subject.totalScore || 0);
+      // Obtained scores
+      const ce = subject.ceScore !== undefined && subject.ceScore !== null 
+        ? Number(subject.ceScore) 
+        : (subject.ceMarks !== undefined && subject.ceMarks !== null ? Number(subject.ceMarks) : 0);
+
+      let te = subject.theoryScore !== undefined && subject.theoryScore !== null 
+        ? Number(subject.theoryScore) 
+        : (subject.totalScore !== undefined && subject.totalScore !== null ? Math.max(0, Number(subject.totalScore) - ce) : 0);
 
       if (te > teMax) {
-        if (subject.totalScore && (subject.totalScore - ce) <= teMax) {
-          te = Math.max(0, subject.totalScore - ce);
-        } else {
-          te = Math.min(te, teMax);
-        }
+        te = teMax;
       }
+
+      const totalObtained = ce + te;
 
       totalCEMax += ceMax;
       totalTEMax += teMax;
       totalCE += ce;
       totalTE += te;
 
-      const percentage = maxMarks > 0 ? ((ce + te) / maxMarks) * 100 : 0;
-      const subjectGrade = getGrade(percentage);
+      // TE Grade excluding CE
+      const tePercentage = teMax > 0 ? (te / teMax) * 100 : 0;
+      const teGrade = getGrade(tePercentage);
 
       return {
         name: subject.subjectName,
@@ -132,17 +154,18 @@ const prepareStudentReportData = async (student, examId, academicYear) => {
         teMax: teMax,
         ceMarks: ce,
         teMarks: te,
-        total: ce + te,
-        grade: subjectGrade
+        total: totalObtained,
+        grade: teGrade
       };
     });
   }
   
-  // Calculate overall percentage & overall grade
+  // Calculate overall percentage & overall TE grade
   const grandTotal = totalCE + totalTE;
   const grandMax = totalCEMax + totalTEMax;
   const overallPercentage = grandMax > 0 ? Math.round((grandTotal / grandMax) * 100) : 0;
-  const overallGrade = getGrade(overallPercentage);
+  const overallTePercentage = totalTEMax > 0 ? Math.round((totalTE / totalTEMax) * 100) : 0;
+  const overallGrade = getGrade(overallTePercentage);
   
   return {
     student: {

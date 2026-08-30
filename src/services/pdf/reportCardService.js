@@ -1,22 +1,22 @@
 // services/pdf/reportCardService.js
 const ejs = require('ejs');
 const path = require('path');
-const { getBrowser } = require('./browserHelper');
+const { getBrowser, closeBrowser } = require('./browserHelper');
 
 const generateReportCardPDF = async (data) => {
+  let browser;
   let page;
 
   try {
     const templatePath = path.join(__dirname, '../../views/reportCard.ejs');
-
     const html = await ejs.renderFile(templatePath, data);
 
-    const browser = await getBrowser();
+    browser = await getBrowser();
     page = await browser.newPage();
 
     await page.setContent(html, {
-      waitUntil: 'networkidle0',
-      timeout: 0
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
     });
 
     await page.emulateMediaType('screen');
@@ -31,33 +31,34 @@ const generateReportCardPDF = async (data) => {
         bottom: '0mm',
         left: '0mm'
       },
-      timeout: 0
+      timeout: 30000
     });
-
-    await page.close();
 
     return pdfBuffer;
 
   } catch (error) {
-    if (page) await page.close();
+    console.error('Error generating single report card PDF:', error);
     throw error;
+  } finally {
+    if (page) await page.close().catch(() => {});
+    if (browser) await closeBrowser(browser);
   }
 };
 
 const generateMultiReportCardPDF = async (data) => {
+  let browser;
   let page;
 
   try {
     const templatePath = path.join(__dirname, '../../views/classReportCards.ejs');
-
     const html = await ejs.renderFile(templatePath, data);
 
-    const browser = await getBrowser();
+    browser = await getBrowser();
     page = await browser.newPage();
 
     await page.setContent(html, {
-      waitUntil: 'networkidle0',
-      timeout: 0
+      waitUntil: 'domcontentloaded',
+      timeout: 60000
     });
 
     await page.emulateMediaType('screen');
@@ -72,33 +73,34 @@ const generateMultiReportCardPDF = async (data) => {
         bottom: '0mm',
         left: '0mm'
       },
-      timeout: 0
+      timeout: 60000
     });
-
-    await page.close();
 
     return pdfBuffer;
 
   } catch (error) {
-    if (page) await page.close();
+    console.error('Error generating multi report card PDF:', error);
     throw error;
+  } finally {
+    if (page) await page.close().catch(() => {});
+    if (browser) await closeBrowser(browser);
   }
 };
 
 const generateClassMarksTablePDF = async (data) => {
+  let browser;
   let page;
 
   try {
     const templatePath = path.join(__dirname, '../../views/classMarksTable.ejs');
-
     const html = await ejs.renderFile(templatePath, data);
 
-    const browser = await getBrowser();
+    browser = await getBrowser();
     page = await browser.newPage();
 
     await page.setContent(html, {
-      waitUntil: 'networkidle0',
-      timeout: 0
+      waitUntil: 'domcontentloaded',
+      timeout: 60000
     });
 
     await page.emulateMediaType('screen');
@@ -114,16 +116,17 @@ const generateClassMarksTablePDF = async (data) => {
         bottom: '0mm',
         left: '0mm'
       },
-      timeout: 0
+      timeout: 60000
     });
-
-    await page.close();
 
     return pdfBuffer;
 
   } catch (error) {
-    if (page) await page.close();
+    console.error('Error generating class marks table PDF:', error);
     throw error;
+  } finally {
+    if (page) await page.close().catch(() => {});
+    if (browser) await closeBrowser(browser);
   }
 };
 

@@ -1268,7 +1268,15 @@ exports.getExamAnalytics = async (req, res) => {
     let totalMaxOverall = 0;
     
     for (const classStatus of exam.classSubmissionStatus) {
-      const classInfo = await Class.findById(classStatus.classId).select('name section displayName');
+      const classInfo = await Class.findById(classStatus.classId)
+        .select('name section displayName subjectTeachers')
+        .populate('subjectTeachers.teacherId', 'name shortName staffCode');
+      
+      const staffAssignments = await StaffAssignment.find({
+        academicYearId: exam.academicYearId,
+        'subjectsTaught.classId': classStatus.classId
+      }).populate('staffId', 'name shortName staffCode');
+
       const students = await Student.find({ classId: classStatus.classId, status: 'active' });
       
       const classAllMarks = await Mark.find({
@@ -1304,13 +1312,43 @@ exports.getExamAnalytics = async (req, res) => {
           );
         }).length;
         
+        let teacherShortName = '';
+        let teacherFullName = '';
+
+        const stMatch = classInfo?.subjectTeachers?.find(st => 
+          (st.subjectId && st.subjectId.toString() === subjIdStr) ||
+          (st.subjectId?._id && st.subjectId._id.toString() === subjIdStr)
+        );
+        if (stMatch?.teacherId) {
+          teacherShortName = stMatch.teacherId.shortName || (stMatch.teacherId.name ? stMatch.teacherId.name.split(' ')[0] : '');
+          teacherFullName = stMatch.teacherId.name || '';
+        } else if (stMatch?.teacherName) {
+          teacherFullName = stMatch.teacherName;
+          teacherShortName = stMatch.teacherName.split(' ')[0];
+        }
+
+        if (!teacherShortName && staffAssignments?.length > 0) {
+          const saMatch = staffAssignments.find(sa => 
+            sa.subjectsTaught?.some(st => 
+              st.classId?.toString() === classStatus.classId.toString() &&
+              (st.subjectId?.toString() === subjIdStr || st.subjectId?._id?.toString() === subjIdStr)
+            )
+          );
+          if (saMatch?.staffId) {
+            teacherShortName = saMatch.staffId.shortName || (saMatch.staffId.name ? saMatch.staffId.name.split(' ')[0] : '');
+            teacherFullName = saMatch.staffId.name || '';
+          }
+        }
+
         const percentage = expectedMarks > 0 ? Math.round((currentMarks / expectedMarks) * 100) : 0;
         return {
           subjectId: subject.subjectId,
           subjectName: subject.subjectName,
           expectedMarks,
           currentMarks,
-          percentage
+          percentage,
+          teacherShortName: teacherShortName || '',
+          teacherName: teacherFullName || ''
         };
       });
       

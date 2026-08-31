@@ -20,7 +20,6 @@ html, body {
     margin: 0;
     padding: 0;
     width: 210mm;
-    height: 297mm;
     font-family: "Times New Roman", serif;
     background: #fff;
     -webkit-print-color-adjust: exact;
@@ -29,21 +28,24 @@ html, body {
 
 .page-container {
     width: 196mm;
-    min-height: 283mm;
-    margin: 7mm auto;
+    height: 275mm;
+    margin: 5mm auto;
     padding: 8mm 8mm 6mm 8mm;
     border: 1.5px solid #000;
     position: relative;
     page-break-after: always;
+    page-break-inside: avoid;
     box-sizing: border-box;
     background: #fff;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    overflow: hidden;
 }
 
-.page-container:last-child {
-    page-break-after: auto;
+.page-container:last-child,
+.page-container:last-of-type {
+    page-break-after: avoid !important;
 }
 
 /* Logo Watermark */

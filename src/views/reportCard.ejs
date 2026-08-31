@@ -476,7 +476,7 @@ html, body {
             
             <!-- Attendance Section -->
             <% if (typeof attendance !== 'undefined' && attendance && attendance.totalDays > 0) { %>
-            <div style="margin: 12px 0; padding: 6px 10px; border: 1px solid #000; background: #fff;">
+            <div style="margin: 16px 0 22px 0; padding: 6.5px 10px; border: 1px solid #000; background: #fff;">
                 <div style="display: flex; justify-content: space-around; font-size: 10px; font-weight: 700;">
                     <span>Total Working Days: <strong><%= attendance.totalDays %></strong></span>
                     <span>Days Present: <strong><%= attendance.presentDays %></strong></span>
@@ -486,7 +486,7 @@ html, body {
             <% } %>
             
             <!-- Remarks Section -->
-            <div class="remarks-section">
+            <div class="remarks-section" style="margin-top: 22px;">
                 <span class="remarks-label">Remarks :</span>
                 <span class="remarks-line"></span>
             </div>

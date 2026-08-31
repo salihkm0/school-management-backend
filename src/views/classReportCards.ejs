@@ -432,8 +432,7 @@ students.forEach(function(student, index) {
             <!-- Attendance Section -->
             <% if (typeof data.attendance !== 'undefined' && data.attendance && data.attendance.totalDays > 0) { %>
             <div style="margin: 10px 0; padding: 5px 8px; border: 1px solid #000; background: #fff;">
-                <div style="display: flex; justify-content: space-between; font-size: 10px; font-weight: 700;">
-                    <span>Attendance Period: <strong><%= data.attendance.monthsLabel || 'Term Period' %></strong></span>
+                <div style="display: flex; justify-content: space-around; font-size: 10px; font-weight: 700;">
                     <span>Total Working Days: <strong><%= data.attendance.totalDays %></strong></span>
                     <span>Days Present: <strong><%= data.attendance.presentDays %></strong></span>
                     <span>Attendance: <strong><%= data.attendance.percentage %>%</strong></span>

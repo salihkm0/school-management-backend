@@ -379,9 +379,12 @@ html, body {
             </div>
             
             <!-- Marks Table -->
-            <% if (subjects && subjects.length > 0) { %>
+            <% if (subjects && subjects.length > 0) { 
+                const hasCE = totalCEMax > 0;
+            %>
             <table class="marks-table">
                 <thead>
+                    <% if (hasCE) { %>
                     <tr>
                         <th rowspan="2">SUBJECT</th>
                         <th colspan="2">Max. Score</th>
@@ -395,42 +398,46 @@ html, body {
                         <th>CE</th>
                         <th>TE</th>
                     </tr>
+                    <% } else { %>
+                    <tr>
+                        <th>SUBJECT</th>
+                        <th>MAX. SCORE</th>
+                        <th>SCORE OBTAINED</th>
+                        <th>TE GRADE</th>
+                    </tr>
+                    <% } %>
                 </thead>
                 <tbody>
                 <% 
-                let totalCEMax = 0;
-                let totalTEMax = 0;
-                let totalCE = 0;
-                let totalTE = 0;
-                
                 subjects.forEach(function(subject) {
-                    totalCEMax += subject.ceMax;
-                    totalTEMax += subject.teMax;
-                    totalCE += subject.ceMarks;
-                    totalTE += subject.teMarks;
                 %>
                 <tr>
                     <td><%= subject.name %></td>
+                    <% if (hasCE) { %>
                     <td><%= subject.ceMax %></td>
                     <td><%= subject.teMax %></td>
                     <td><%= subject.ceMarks %></td>
                     <td><%= subject.teMarks %></td>
+                    <% } else { %>
+                    <td><%= subject.teMax %></td>
+                    <td><%= subject.teMarks %></td>
+                    <% } %>
                     <td><%= subject.total %></td>
                     <td><%= subject.grade %></td>
                 </tr>
                 <% }); %>
                 
-                <% 
-                const grandTotal = totalCE + totalTE;
-                const grandMax = totalCEMax + totalTEMax;
-                const overallPercentage = grandMax > 0 ? Math.round((grandTotal / grandMax) * 100) : 0;
-                %>
                 <tr class="total-row">
                     <td><strong>TOTAL</strong></td>
+                    <% if (hasCE) { %>
                     <td><strong><%= totalCEMax %></strong></td>
                     <td><strong><%= totalTEMax %></strong></td>
                     <td><strong><%= totalCE %></strong></td>
                     <td><strong><%= totalTE %></strong></td>
+                    <% } else { %>
+                    <td><strong><%= totalTEMax %></strong></td>
+                    <td><strong><%= totalTE %></strong></td>
+                    <% } %>
                     <td><strong><%= grandTotal %></strong></td>
                     <td><strong><%= overallGrade %></strong></td>
                 </tr>

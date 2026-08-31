@@ -112,16 +112,24 @@ const prepareStudentReportData = async (student, examId, academicYear) => {
 
       const maxMarks = subject.maxMarks || examSubConfig?.maxMarks || 20;
 
-      // Determine CE Max and TE Max from Exam config or standard weightage (20% / 80%)
-      let ceMax = examSubConfig?.ceMaxMarks || subject.ceMaxMarks || subject.ceMax;
-      let teMax = examSubConfig?.theoryMarks || subject.theoryMarks || subject.teMax;
+      // Determine CE Max and TE Max from Exam config (respecting ceEnabled)
+      let ceMax = 0;
+      let teMax = maxMarks;
 
-      if (!ceMax || !teMax) {
-        if (maxMarks === 100) { ceMax = 20; teMax = 80; }
-        else if (maxMarks === 50) { ceMax = 10; teMax = 40; }
-        else if (maxMarks === 40) { ceMax = 8; teMax = 32; }
-        else if (maxMarks === 20) { ceMax = 4; teMax = 16; }
-        else { ceMax = Math.round(maxMarks * 0.2); teMax = maxMarks - ceMax; }
+      if (examSubConfig) {
+        if (examSubConfig.ceEnabled && Number(examSubConfig.ceMaxMarks || 0) > 0) {
+          ceMax = Number(examSubConfig.ceMaxMarks);
+          teMax = examSubConfig.theoryMarks ? Number(examSubConfig.theoryMarks) : (maxMarks - ceMax);
+        } else {
+          ceMax = 0;
+          teMax = maxMarks;
+        }
+      } else if (subject.ceMaxMarks && Number(subject.ceMaxMarks) > 0) {
+        ceMax = Number(subject.ceMaxMarks);
+        teMax = subject.theoryMarks ? Number(subject.theoryMarks) : (maxMarks - ceMax);
+      } else {
+        ceMax = 0;
+        teMax = maxMarks;
       }
 
       // Obtained scores

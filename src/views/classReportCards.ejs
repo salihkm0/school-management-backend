@@ -339,9 +339,12 @@ students.forEach(function(student, index) {
             </div>
             
             <!-- Marks Table -->
-            <% if (data.subjects && data.subjects.length > 0) { %>
+            <% if (data.subjects && data.subjects.length > 0) { 
+                const hasCE = data.totalCEMax > 0;
+            %>
             <table class="marks-table">
                 <thead>
+                    <% if (hasCE) { %>
                     <tr>
                         <th rowspan="2">SUBJECT</th>
                         <th colspan="2">Max. Score</th>
@@ -355,26 +358,30 @@ students.forEach(function(student, index) {
                         <th>CE</th>
                         <th>TE</th>
                     </tr>
+                    <% } else { %>
+                    <tr>
+                        <th>SUBJECT</th>
+                        <th>MAX. SCORE</th>
+                        <th>SCORE OBTAINED</th>
+                        <th>TE GRADE</th>
+                    </tr>
+                    <% } %>
                 </thead>
                 <tbody>
                 <% 
-                let totalCEMax = 0;
-                let totalTEMax = 0;
-                let totalCE = 0;
-                let totalTE = 0;
-                
                 data.subjects.forEach(function(subject) {
-                    totalCEMax += subject.ceMax;
-                    totalTEMax += subject.teMax;
-                    totalCE += subject.ceMarks;
-                    totalTE += subject.teMarks;
                 %>
                 <tr>
                     <td><%= subject.name %></td>
+                    <% if (hasCE) { %>
                     <td><%= subject.ceMax %></td>
                     <td><%= subject.teMax %></td>
                     <td><%= subject.ceMarks %></td>
                     <td><%= subject.teMarks %></td>
+                    <% } else { %>
+                    <td><%= subject.teMax %></td>
+                    <td><%= subject.teMarks %></td>
+                    <% } %>
                     <td><%= subject.total %></td>
                     <td><%= subject.grade %></td>
                 </tr>
@@ -382,10 +389,15 @@ students.forEach(function(student, index) {
                 
                 <tr class="total-row">
                     <td><strong>TOTAL</strong></td>
+                    <% if (hasCE) { %>
                     <td><strong><%= data.totalCEMax %></strong></td>
                     <td><strong><%= data.totalTEMax %></strong></td>
                     <td><strong><%= data.totalCE %></strong></td>
                     <td><strong><%= data.totalTE %></strong></td>
+                    <% } else { %>
+                    <td><strong><%= data.totalTEMax %></strong></td>
+                    <td><strong><%= data.totalTE %></strong></td>
+                    <% } %>
                     <td><strong><%= data.grandTotal %></strong></td>
                     <td><strong><%= data.overallGrade %></strong></td>
                 </tr>

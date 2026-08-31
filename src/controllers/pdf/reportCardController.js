@@ -5,7 +5,7 @@ const Class = require('../../models/Class');
 const { Exam } = require('../../models/Exam');
 const Mark = require('../../models/Mark');
 const Staff = require('../../models/Staff');
-const { Attendance } = require('../../models/Attendance');
+const { Attendance, AttendanceTemplate } = require('../../models/Attendance');
 const { generateReportCardPDF, generateMultiReportCardPDF, generateClassMarksTablePDF, generateClassReportCardsPDF } = require('../../services/pdf/reportCardService');
 const { sortStudents } = require('../../utils/studentSorter');
 const markController = require('../markController');
@@ -139,11 +139,9 @@ const prepareStudentReportData = async (student, examId, academicYear) => {
 
       let te = subject.theoryScore !== undefined && subject.theoryScore !== null 
         ? Number(subject.theoryScore) 
-        : (subject.totalScore !== undefined && subject.totalScore !== null ? Math.max(0, Number(subject.totalScore) - ce) : 0);
-
-      if (te > teMax) {
-        te = teMax;
-      }
+        : (subject.theoryMarks !== undefined && subject.theoryMarks !== null 
+            ? Number(subject.theoryMarks) 
+            : (subject.totalScore !== undefined && subject.totalScore !== null ? Number(subject.totalScore) - ce : 0));
 
       const totalObtained = ce + te;
 
@@ -227,6 +225,122 @@ const prepareStudentReportData = async (student, examId, academicYear) => {
   const overallPercentage = grandMax > 0 ? Math.round((grandTotal / grandMax) * 100) : 0;
   const overallTePercentage = totalTEMax > 0 ? Math.round((totalTE / totalTEMax) * 100) : 0;
   const overallGrade = getGrade(overallTePercentage);
+
+  // ── Calculate Real Attendance for Exam Months ────────────────
+  let attendanceInfo = {
+    totalDays: 0,
+    presentDays: 0,
+    absentDays: 0,
+    percentage: 0,
+    monthsLabel: ''
+  };
+
+  try {
+    let monthYearList = [];
+
+    if (examObj && examObj.startDate && examObj.endDate) {
+      const start = new Date(examObj.startDate);
+      const end = new Date(examObj.endDate);
+
+      let curr = new Date(start.getFullYear(), start.getMonth(), 1);
+      const last = new Date(end.getFullYear(), end.getMonth(), 1);
+
+      while (curr <= last) {
+        monthYearList.push({
+          month: curr.getMonth() + 1,
+          year: curr.getFullYear()
+        });
+        curr.setMonth(curr.getMonth() + 1);
+      }
+    }
+
+    if (monthYearList.length === 0) {
+      const currentYearNum = new Date().getFullYear();
+      const currentMonthNum = new Date().getMonth() + 1;
+
+      if (currentMonthNum >= 6) {
+        for (let m = 6; m <= currentMonthNum; m++) {
+          monthYearList.push({ month: m, year: currentYearNum });
+        }
+      } else {
+        for (let m = 6; m <= 12; m++) {
+          monthYearList.push({ month: m, year: currentYearNum - 1 });
+        }
+        for (let m = 1; m <= currentMonthNum; m++) {
+          monthYearList.push({ month: m, year: currentYearNum });
+        }
+      }
+    }
+
+    let totalWorkingDaysOverall = 0;
+    let totalPresentDaysOverall = 0;
+
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const activeMonths = [];
+
+    const studentClassId = student.classId?._id || student.classId;
+
+    for (const item of monthYearList) {
+      const { month, year } = item;
+
+      // 1. Get working days from AttendanceTemplate for this month
+      const template = await AttendanceTemplate.findOne({
+        academicYearId: academicYear._id,
+        year: year,
+        month: month,
+        $or: [{ classId: studentClassId }, { classId: null }],
+        isActive: true
+      }).sort({ classId: -1 });
+
+      let mWorkingDays = template?.totalWorkingDays;
+
+      // Fallback: Check if any attendance record has working days for this class/month
+      if (!mWorkingDays) {
+        const sampleAtt = await Attendance.findOne({
+          classId: studentClassId,
+          year: year,
+          month: month
+        });
+        mWorkingDays = sampleAtt?.totalWorkingDays || 25;
+      }
+
+      // 2. Get student's present days for this month
+      const attRecord = await Attendance.findOne({
+        studentId: student._id,
+        year: year,
+        month: month
+      });
+
+      let mPresentDays = 0;
+      if (attRecord) {
+        mPresentDays = attRecord.presentDays ?? (mWorkingDays - (attRecord.absentDays || 0));
+      } else {
+        mPresentDays = 0;
+      }
+
+      totalWorkingDaysOverall += mWorkingDays;
+      totalPresentDaysOverall += mPresentDays;
+      activeMonths.push(`${monthNames[month - 1]} ${year}`);
+    }
+
+    const attendancePct = totalWorkingDaysOverall > 0 
+      ? Math.round((totalPresentDaysOverall / totalWorkingDaysOverall) * 1000) / 10 
+      : 0;
+
+    const monthsLabel = activeMonths.length > 1 
+      ? `${activeMonths[0]} - ${activeMonths[activeMonths.length - 1]}`
+      : activeMonths[0] || '';
+
+    attendanceInfo = {
+      totalDays: totalWorkingDaysOverall,
+      presentDays: totalPresentDaysOverall,
+      absentDays: Math.max(0, totalWorkingDaysOverall - totalPresentDaysOverall),
+      percentage: attendancePct,
+      monthsLabel: monthsLabel
+    };
+  } catch (attErr) {
+    console.error('Error calculating student exam attendance:', attErr);
+  }
   
   return {
     student: {
@@ -246,11 +360,7 @@ const prepareStudentReportData = async (student, examId, academicYear) => {
     grandMax,
     overallPercentage,
     overallGrade: overallGrade,
-    attendance: {
-      totalDays: 0,
-      presentDays: 0,
-      percentage: 0
-    }
+    attendance: attendanceInfo
   };
 };
 

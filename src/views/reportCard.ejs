@@ -474,6 +474,18 @@ html, body {
             </div>
             <% } %>
             
+            <!-- Attendance Section -->
+            <% if (typeof attendance !== 'undefined' && attendance && attendance.totalDays > 0) { %>
+            <div style="margin: 12px 0; padding: 6px 10px; border: 1px solid #000; background: #fff;">
+                <div style="display: flex; justify-content: space-between; font-size: 10px; font-weight: 700;">
+                    <span>Attendance Period: <strong><%= attendance.monthsLabel || 'Term Period' %></strong></span>
+                    <span>Total Working Days: <strong><%= attendance.totalDays %></strong></span>
+                    <span>Days Present: <strong><%= attendance.presentDays %></strong></span>
+                    <span>Attendance: <strong><%= attendance.percentage %>%</strong></span>
+                </div>
+            </div>
+            <% } %>
+            
             <!-- Remarks Section -->
             <div class="remarks-section">
                 <span class="remarks-label">Remarks :</span>

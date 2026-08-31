@@ -1315,33 +1315,62 @@ exports.getExamAnalytics = async (req, res) => {
           );
         }).length;
         
-        let teacherShortName = '';
-        let teacherFullName = '';
+        const teacherList = [];
+        const seenTeacherIds = new Set();
 
-        const stMatch = classInfo?.subjectTeachers?.find(st => 
+        const stMatches = classInfo?.subjectTeachers?.filter(st => 
           (st.subjectId && st.subjectId.toString() === subjIdStr) ||
           (st.subjectId?._id && st.subjectId._id.toString() === subjIdStr)
-        );
-        if (stMatch?.teacherId) {
-          teacherShortName = stMatch.teacherId.shortName || (stMatch.teacherId.name ? stMatch.teacherId.name.split(' ')[0] : '');
-          teacherFullName = stMatch.teacherId.name || '';
-        } else if (stMatch?.teacherName) {
-          teacherFullName = stMatch.teacherName;
-          teacherShortName = stMatch.teacherName.split(' ')[0];
+        ) || [];
+
+        for (const st of stMatches) {
+          if (st.teacherId) {
+            const tId = st.teacherId._id ? st.teacherId._id.toString() : st.teacherId.toString();
+            if (!seenTeacherIds.has(tId)) {
+              seenTeacherIds.add(tId);
+              teacherList.push({
+                shortName: st.teacherId.shortName || (st.teacherId.name ? st.teacherId.name.split(' ')[0] : ''),
+                name: st.teacherId.name || ''
+              });
+            }
+          } else if (st.teacherName) {
+            if (!seenTeacherIds.has(st.teacherName)) {
+              seenTeacherIds.add(st.teacherName);
+              teacherList.push({
+                shortName: st.teacherName.split(' ')[0],
+                name: st.teacherName
+              });
+            }
+          }
         }
 
-        if (!teacherShortName && staffAssignments?.length > 0) {
-          const saMatch = staffAssignments.find(sa => 
+        if (staffAssignments?.length > 0) {
+          const saMatches = staffAssignments.filter(sa => 
             sa.subjectsTaught?.some(st => 
               st.classId?.toString() === classStatus.classId.toString() &&
               (st.subjectId?.toString() === subjIdStr || st.subjectId?._id?.toString() === subjIdStr)
             )
           );
-          if (saMatch?.staffId) {
-            teacherShortName = saMatch.staffId.shortName || (saMatch.staffId.name ? saMatch.staffId.name.split(' ')[0] : '');
-            teacherFullName = saMatch.staffId.name || '';
+
+          for (const sa of saMatches) {
+            if (sa.staffId) {
+              const sId = sa.staffId._id ? sa.staffId._id.toString() : sa.staffId.toString();
+              if (!seenTeacherIds.has(sId)) {
+                seenTeacherIds.add(sId);
+                teacherList.push({
+                  shortName: sa.staffId.shortName || (sa.staffId.name ? sa.staffId.name.split(' ')[0] : ''),
+                  name: sa.staffId.name || ''
+                });
+              }
+            }
           }
         }
+
+        const teacherShortNames = teacherList.map(t => t.shortName).filter(Boolean);
+        const teacherFullNames = teacherList.map(t => t.name).filter(Boolean);
+
+        const teacherShortName = teacherShortNames.join(', ');
+        const teacherFullName = teacherFullNames.join(', ');
 
         const percentage = expectedMarks > 0 ? Math.round((currentMarks / expectedMarks) * 100) : 0;
         return {

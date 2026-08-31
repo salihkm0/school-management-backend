@@ -152,9 +152,10 @@ const prepareStudentReportData = async (student, examId, academicYear) => {
       totalCE += ce;
       totalTE += te;
 
-      // TE Grade excluding CE marks
+      // TE Grade excluding CE marks & Warning check (< 30%)
       const tePercentage = teMax > 0 ? (te / teMax) * 100 : 0;
       const teGrade = getGrade(tePercentage);
+      const isTeWarning = teMax > 0 && tePercentage < 30;
 
       return {
         name: subject.subjectName,
@@ -163,7 +164,8 @@ const prepareStudentReportData = async (student, examId, academicYear) => {
         ceMarks: ce,
         teMarks: te,
         total: totalObtained,
-        grade: teGrade
+        grade: teGrade,
+        isTeWarning: isTeWarning
       };
     });
   }

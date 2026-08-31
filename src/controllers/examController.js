@@ -1267,6 +1267,9 @@ exports.getExamAnalytics = async (req, res) => {
     let totalMarksOverall = 0;
     let totalMaxOverall = 0;
     
+    let grandTotalExpectedSubjects = 0;
+    let grandTotalEnteredSubjects = 0;
+    
     for (const classStatus of exam.classSubmissionStatus) {
       const classInfo = await Class.findById(classStatus.classId)
         .select('name section displayName subjectTeachers')
@@ -1371,6 +1374,9 @@ exports.getExamAnalytics = async (req, res) => {
       const totalEntered = subjectProgress.reduce((sum, sp) => sum + sp.currentMarks, 0);
       const completionPercentage = totalExpected > 0 ? Math.round((totalEntered / totalExpected) * 100) : 0;
       
+      grandTotalExpectedSubjects += totalExpected;
+      grandTotalEnteredSubjects += totalEntered;
+
       totalStudentsOverall += students.length;
       totalMarksOverall += classTotalMarks;
       totalMaxOverall += classTotalMax;
@@ -1407,22 +1413,19 @@ exports.getExamAnalytics = async (req, res) => {
       });
     }
 
-    const classesWithMarks = stats.classWise.filter(c => c.marksEntered > 0);
     const remainingClasses = stats.classWise.filter(c => c.completionPercentage < 100);
+    const overallMarkEntryPercentage = grandTotalExpectedSubjects > 0
+      ? Math.round((grandTotalEnteredSubjects / grandTotalExpectedSubjects) * 1000) / 10
+      : 0;
 
     stats.overallStats = {
       totalStudents: totalStudentsOverall,
       totalClasses: stats.classWise.length,
+      markEntryPercentage: overallMarkEntryPercentage,
+      totalExpectedSubjects: grandTotalExpectedSubjects,
+      totalEnteredSubjects: grandTotalEnteredSubjects,
       remainingClassesCount: remainingClasses.length,
-      completedClassesCount: stats.classWise.length - remainingClasses.length,
-      totalMarksEntered: totalMarksOverall,
-      totalMaxMarks: totalMaxOverall,
-      averagePercentage: classesWithMarks.length > 0 
-        ? Math.round((classesWithMarks.reduce((sum, c) => sum + c.averagePercentage, 0) / classesWithMarks.length) * 10) / 10
-        : 0,
-      passPercentage: classesWithMarks.length > 0 
-        ? Math.round((classesWithMarks.reduce((sum, c) => sum + c.passPercentage, 0) / classesWithMarks.length) * 10) / 10
-        : 0
+      completedClassesCount: stats.classWise.length - remainingClasses.length
     };
     
     res.json({ success: true, data: stats });

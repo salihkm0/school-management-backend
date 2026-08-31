@@ -27,7 +27,7 @@ const getGrade = (percentage) => {
 };
 
 // Helper function to prepare student report data for a specific exam
-const prepareStudentReportData = async (student, examId, academicYear) => {
+const prepareStudentReportData = async (student, examId, academicYear, options = {}) => {
   // Get marksheet for specific exam
   let marksheet = null;
   let examName = '';
@@ -238,7 +238,24 @@ const prepareStudentReportData = async (student, examId, academicYear) => {
   try {
     let monthYearList = [];
 
-    if (examObj && examObj.startDate && examObj.endDate) {
+    const customStart = options?.attendanceStartDate;
+    const customEnd = options?.attendanceEndDate;
+
+    if (customStart && customEnd) {
+      const start = new Date(customStart);
+      const end = new Date(customEnd);
+
+      let curr = new Date(start.getFullYear(), start.getMonth(), 1);
+      const last = new Date(end.getFullYear(), end.getMonth(), 1);
+
+      while (curr <= last) {
+        monthYearList.push({
+          month: curr.getMonth() + 1,
+          year: curr.getFullYear()
+        });
+        curr.setMonth(curr.getMonth() + 1);
+      }
+    } else if (examObj && examObj.startDate && examObj.endDate) {
       const start = new Date(examObj.startDate);
       const end = new Date(examObj.endDate);
 
@@ -399,7 +416,12 @@ exports.generateReportCardPDF = async (req, res) => {
     
     const academicYearString = academicYear?.year || academicYear?.name || new Date().getFullYear().toString();
 
-    const reportData = await prepareStudentReportData(student, examId, academicYear);
+    const options = {
+      attendanceStartDate: req.query.attendanceStartDate,
+      attendanceEndDate: req.query.attendanceEndDate
+    };
+
+    const reportData = await prepareStudentReportData(student, examId, academicYear, options);
     
     const templateData = {
       schoolLogo: SCHOOL_LOGO_URL,
@@ -462,7 +484,12 @@ exports.downloadReportCardPDF = async (req, res) => {
     
     const academicYearString = academicYear?.year || academicYear?.name || new Date().getFullYear().toString();
 
-    const reportData = await prepareStudentReportData(student, examId, academicYear);
+    const options = {
+      attendanceStartDate: req.query.attendanceStartDate,
+      attendanceEndDate: req.query.attendanceEndDate
+    };
+
+    const reportData = await prepareStudentReportData(student, examId, academicYear, options);
     
     const templateData = {
       schoolLogo: SCHOOL_LOGO_URL,
@@ -586,8 +613,13 @@ exports.generateClassReportCardsPDF = async (req, res) => {
 
     // Prepare report data for all students
     const allReportsData = [];
+    const options = {
+      attendanceStartDate: req.query.attendanceStartDate,
+      attendanceEndDate: req.query.attendanceEndDate
+    };
+
     for (const student of students) {
-      const reportData = await prepareStudentReportData(student, examId, academicYear);
+      const reportData = await prepareStudentReportData(student, examId, academicYear, options);
       allReportsData.push(reportData);
     }
 
@@ -709,8 +741,13 @@ exports.downloadClassReportCardsPDF = async (req, res) => {
 
     // Prepare report data for all students
     const allReportsData = [];
+    const options = {
+      attendanceStartDate: req.query.attendanceStartDate,
+      attendanceEndDate: req.query.attendanceEndDate
+    };
+
     for (const student of students) {
-      const reportData = await prepareStudentReportData(student, examId, academicYear);
+      const reportData = await prepareStudentReportData(student, examId, academicYear, options);
       allReportsData.push(reportData);
     }
 

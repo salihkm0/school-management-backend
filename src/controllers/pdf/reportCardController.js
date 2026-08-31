@@ -170,6 +170,57 @@ const prepareStudentReportData = async (student, examId, academicYear) => {
     });
   }
   
+  // Combine Physics, Chemistry, Biology into BASIC SCIENCE for 8th Standard
+  const studentClassName = (student.classId?.displayName || student.classId?.name || student.className || student.class || '').toString().toLowerCase();
+  const isClass8 = studentClassName.includes('8') || studentClassName.includes('viii');
+
+  if (isClass8 && subjects && subjects.length > 0) {
+    const scienceKeywords = ['physics', 'chemistry', 'biology', 'phy', 'che', 'bio'];
+    
+    // Identify physics, chemistry, biology sub-subjects
+    const scienceItems = subjects.filter(s => {
+      const sName = (s.name || '').toLowerCase().trim();
+      return scienceKeywords.some(kw => sName === kw || sName.includes('physics') || sName.includes('chemistry') || sName.includes('biology'));
+    });
+
+    if (scienceItems.length > 0) {
+      let combinedCeMax = 0;
+      let combinedTeMax = 0;
+      let combinedCe = 0;
+      let combinedTe = 0;
+      let combinedTotal = 0;
+
+      scienceItems.forEach(item => {
+        combinedCeMax += item.ceMax || 0;
+        combinedTeMax += item.teMax || 0;
+        combinedCe += item.ceMarks || 0;
+        combinedTe += item.teMarks || 0;
+        combinedTotal += item.total || 0;
+      });
+
+      const combinedTePercentage = combinedTeMax > 0 ? (combinedTe / combinedTeMax) * 100 : 0;
+      const combinedGrade = getGrade(combinedTePercentage);
+      const combinedIsTeWarning = combinedTeMax > 0 && combinedTePercentage < 30;
+
+      const basicScienceSubject = {
+        name: 'BASIC SCIENCE',
+        ceMax: combinedCeMax,
+        teMax: combinedTeMax,
+        ceMarks: combinedCe,
+        teMarks: combinedTe,
+        total: combinedTotal,
+        grade: combinedGrade,
+        isTeWarning: combinedIsTeWarning
+      };
+
+      // Replace science items with single BASIC SCIENCE subject at first occurrence
+      const firstSciIndex = subjects.findIndex(s => scienceItems.includes(s));
+      const filteredSubjects = subjects.filter(s => !scienceItems.includes(s));
+      filteredSubjects.splice(firstSciIndex >= 0 ? firstSciIndex : 0, 0, basicScienceSubject);
+      subjects = filteredSubjects;
+    }
+  }
+  
   // Calculate overall percentage & overall TE grade
   const grandTotal = totalCE + totalTE;
   const grandMax = totalCEMax + totalTEMax;

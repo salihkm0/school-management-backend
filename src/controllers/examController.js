@@ -1271,12 +1271,6 @@ exports.getExamAnalytics = async (req, res) => {
       const classInfo = await Class.findById(classStatus.classId).select('name section displayName');
       const students = await Student.find({ classId: classStatus.classId, status: 'active' });
       
-      const marks = await Mark.find({
-        examId: exam._id,
-        classId: classStatus.classId,
-        isFullyFinalized: true
-      });
-      
       const classAllMarks = await Mark.find({
         examId: exam._id,
         classId: classStatus.classId
@@ -1288,16 +1282,12 @@ exports.getExamAnalytics = async (req, res) => {
         const currentMarks = classAllMarks.filter(m => {
           if (!m.subjects || !Array.isArray(m.subjects)) return false;
           
-          // Try to find the subject in the mark document
-          // Match by subjectId, examSubjectId (if any), or subjectName as fallback
           const s = m.subjects.find(sub => 
             (sub.subjectId && sub.subjectId.toString() === subjIdStr) ||
             (sub.examSubjectId && sub.examSubjectId.toString() === subjIdStr) ||
             (sub.subjectName === subject.subjectName)
           );
           
-          // Check if it's considered "entered"
-          // A mark is entered if student is marked absent, or explicitly entered, or has non-zero score
           return Boolean(
             s && (
               s.isAbsent === true ||
@@ -1324,28 +1314,18 @@ exports.getExamAnalytics = async (req, res) => {
         };
       });
       
-      const studentMarksMap = new Map();
-      for (const mark of marks) {
-        if (!studentMarksMap.has(mark.studentId.toString())) {
-          studentMarksMap.set(mark.studentId.toString(), {
-            studentId: mark.studentId,
-            totalMarks: 0,
-            maxMarks: 0
-          });
-        }
-        const subjectConfig = exam.getSubjectConfig(mark.subjectId);
-        if (subjectConfig) {
-          const studentData = studentMarksMap.get(mark.studentId.toString());
-          studentData.totalMarks += mark.totalScore || 0;
-          studentData.maxMarks += subjectConfig.totalMaxMarks || subjectConfig.termMaxMarks || 0;
-        }
-      }
-      
-      const studentPercentages = Array.from(studentMarksMap.values()).map(s => ({
-        ...s,
-        percentage: s.maxMarks > 0 ? (s.totalMarks / s.maxMarks) * 100 : 0
+      const enteredMarksheets = classAllMarks.filter(m => 
+        (m.totalMaxMarks > 0 && m.percentage != null && !isNaN(m.percentage)) ||
+        (m.subjects && m.subjects.some(s => s.isEntered || s.isAbsent || s.theoryScore > 0 || s.ceScore > 0))
+      );
+
+      const studentPercentages = enteredMarksheets.map(m => ({
+        studentId: m.studentId,
+        totalMarks: m.totalMarks || 0,
+        maxMarks: m.totalMaxMarks || 0,
+        percentage: m.percentage != null ? m.percentage : (m.totalMaxMarks > 0 ? (m.totalMarks / m.totalMaxMarks) * 100 : 0)
       }));
-      
+
       const classTotalMarks = studentPercentages.reduce((sum, s) => sum + s.totalMarks, 0);
       const classTotalMax = studentPercentages.reduce((sum, s) => sum + s.maxMarks, 0);
       
@@ -1357,22 +1337,25 @@ exports.getExamAnalytics = async (req, res) => {
       totalMarksOverall += classTotalMarks;
       totalMaxOverall += classTotalMax;
       
+      const classAvgPct = studentPercentages.length > 0
+        ? Math.round((studentPercentages.reduce((sum, s) => sum + s.percentage, 0) / studentPercentages.length) * 10) / 10
+        : 0;
+      const classPassPct = studentPercentages.length > 0
+        ? Math.round((studentPercentages.filter(s => s.percentage >= 40).length / studentPercentages.length) * 1000) / 10
+        : 0;
+
       stats.classWise.push({
         classId: classStatus.classId,
         className: classInfo?.displayName || `${classInfo?.name}-${classInfo?.section}`,
         section: classInfo?.section,
         totalStudents: students.length,
-        marksEntered: studentMarksMap.size,
+        marksEntered: enteredMarksheets.length,
         completionPercentage,
         subjectProgress: subjectProgress,
         totalMarks: classTotalMarks,
         totalMaxMarks: classTotalMax,
-        averagePercentage: studentPercentages.length > 0 
-          ? studentPercentages.reduce((sum, s) => sum + s.percentage, 0) / studentPercentages.length 
-          : 0,
-        passPercentage: studentPercentages.length > 0
-          ? (studentPercentages.filter(s => s.percentage >= 40).length / studentPercentages.length) * 100
-          : 0,
+        averagePercentage: classAvgPct,
+        passPercentage: classPassPct,
         gradeDistribution: {
           'A+': studentPercentages.filter(s => s.percentage >= 90).length,
           'A': studentPercentages.filter(s => s.percentage >= 80 && s.percentage < 90).length,
@@ -1380,72 +1363,27 @@ exports.getExamAnalytics = async (req, res) => {
           'B': studentPercentages.filter(s => s.percentage >= 60 && s.percentage < 70).length,
           'C+': studentPercentages.filter(s => s.percentage >= 50 && s.percentage < 60).length,
           'C': studentPercentages.filter(s => s.percentage >= 40 && s.percentage < 50).length,
-          'D': studentPercentages.filter(s => s.percentage >= 33 && s.percentage < 40).length,
-          'F': studentPercentages.filter(s => s.percentage < 33).length
+          'D': studentPercentages.filter(s => s.percentage >= 30 && s.percentage < 40).length,
+          'E': studentPercentages.filter(s => s.percentage < 30).length
         }
       });
     }
-    
-    for (const subject of exam.subjects) {
-      const marks = await Mark.find({
-        examId: exam._id,
-        subjectId: subject.subjectId,
-        isFullyFinalized: true
-      });
-      
-      const scheduleInfo = exam.schedule.find(s => s.subjectId.toString() === subject.subjectId.toString());
-      
-      if (marks.length > 0) {
-        const scores = marks.map(m => m.totalScore || 0);
-        const theoryScores = marks.map(m => m.theoryScore || 0);
-        const practicalScores = marks.map(m => m.practicalScore || 0);
-        const maxMark = subject.totalMaxMarks || subject.termMaxMarks || 100;
-        const passingMark = subject.totalPassingMarks || subject.termPassingMarks || 40;
-        const theoryMax = subject.theoryMaxMarks || subject.termMaxMarks || 100;
-        const practicalMax = subject.practicalMaxMarks || 0;
-        
-        stats.subjectWise[subject.subjectName] = {
-          subjectId: subject.subjectId,
-          subjectName: subject.subjectName,
-          subjectCode: subject.subjectCode,
-          maxMarks: maxMark,
-          passingMarks: passingMark,
-          theoryMaxMarks: theoryMax,
-          practicalMaxMarks: practicalMax,
-          hasPractical: practicalMax > 0,
-          hasCE: subject.ceEnabled || exam.ceConfig?.enabled || false,
-          ceMaxMarks: subject.ceMaxMarks || exam.ceConfig?.maxMarks || 0,
-          scheduleDate: scheduleInfo?.examDate,
-          scheduleSession: scheduleInfo?.session,
-          totalStudents: marks.length,
-          highestScore: Math.max(...scores),
-          lowestScore: Math.min(...scores),
-          averageScore: scores.reduce((a, b) => a + b, 0) / scores.length,
-          averageTheory: theoryScores.reduce((a, b) => a + b, 0) / theoryScores.length,
-          averagePractical: practicalScores.reduce((a, b) => a + b, 0) / (practicalScores.length || 1),
-          passCount: scores.filter(s => s >= passingMark).length,
-          passPercentage: (scores.filter(s => s >= passingMark).length / scores.length) * 100,
-          gradeDistribution: {
-            'A+': scores.filter(s => (s / maxMark) * 100 >= 90).length,
-            'A': scores.filter(s => (s / maxMark) * 100 >= 80 && (s / maxMark) * 100 < 90).length,
-            'B+': scores.filter(s => (s / maxMark) * 100 >= 70 && (s / maxMark) * 100 < 80).length,
-            'B': scores.filter(s => (s / maxMark) * 100 >= 60 && (s / maxMark) * 100 < 70).length,
-            'C+': scores.filter(s => (s / maxMark) * 100 >= 50 && (s / maxMark) * 100 < 60).length,
-            'C': scores.filter(s => (s / maxMark) * 100 >= 40 && (s / maxMark) * 100 < 50).length,
-            'D': scores.filter(s => (s / maxMark) * 100 >= 33 && (s / maxMark) * 100 < 40).length,
-            'F': scores.filter(s => (s / maxMark) * 100 < 33).length
-          }
-        };
-      }
-    }
-    
+
+    const classesWithMarks = stats.classWise.filter(c => c.marksEntered > 0);
+    const remainingClasses = stats.classWise.filter(c => c.completionPercentage < 100);
+
     stats.overallStats = {
       totalStudents: totalStudentsOverall,
+      totalClasses: stats.classWise.length,
+      remainingClassesCount: remainingClasses.length,
+      completedClassesCount: stats.classWise.length - remainingClasses.length,
       totalMarksEntered: totalMarksOverall,
       totalMaxMarks: totalMaxOverall,
-      averagePercentage: totalMaxOverall > 0 ? (totalMarksOverall / totalMaxOverall) * 100 : 0,
-      passPercentage: stats.classWise.length > 0 
-        ? stats.classWise.reduce((sum, c) => sum + c.passPercentage, 0) / stats.classWise.length 
+      averagePercentage: classesWithMarks.length > 0 
+        ? Math.round((classesWithMarks.reduce((sum, c) => sum + c.averagePercentage, 0) / classesWithMarks.length) * 10) / 10
+        : 0,
+      passPercentage: classesWithMarks.length > 0 
+        ? Math.round((classesWithMarks.reduce((sum, c) => sum + c.passPercentage, 0) / classesWithMarks.length) * 10) / 10
         : 0
     };
     

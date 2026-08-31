@@ -37,11 +37,12 @@ async function sendStudentNotification(student, title, message, type, data) {
 
 exports.getStudents = async (req, res) => {
   try {
-    const { classId, academicYearId, status, page = 1, limit = 20, search } = req.query;
+    const { classId, academicYearId, status, page = 1, limit = 20, search, standard } = req.query;
     
     const query = { isActive: true };
     if (classId) query.classId = classId;
     if (academicYearId) query.academicYearId = academicYearId;
+    if (standard && standard !== 'all') query.className = standard;
     if (status && status !== 'all') {
       query.status = status;
     } else if (!status) {
@@ -60,6 +61,10 @@ exports.getStudents = async (req, res) => {
       .populate('academicYearId', 'year name')
       .populate('parentIds', 'fullName email phone');
 
+    const isAll = limit === 'all' || parseInt(limit) >= 10000;
+    const parsedLimit = isAll ? 100000 : parseInt(limit);
+    const parsedPage = isAll ? 1 : parseInt(page);
+
     if (classId) {
       const classObj = await Class.findById(classId);
       const sortPreference = classObj?.studentSortPreference || 'alphabetic';
@@ -67,33 +72,34 @@ exports.getStudents = async (req, res) => {
       const sortedStudents = sortStudents(allStudentsInClass, sortPreference);
       
       const total = sortedStudents.length;
-      const paginatedStudents = sortedStudents.slice((page - 1) * limit, page * limit);
+      const paginatedStudents = isAll ? sortedStudents : sortedStudents.slice((parsedPage - 1) * parsedLimit, parsedPage * parsedLimit);
 
       return res.json({
         data: paginatedStudents,
         pagination: {
           total,
-          page: parseInt(page),
-          limit: parseInt(limit),
-          pages: Math.ceil(total / limit)
+          page: parsedPage,
+          limit: isAll ? total : parsedLimit,
+          pages: isAll ? 1 : Math.ceil(total / parsedLimit)
         }
       });
     }
 
     const totalCount = await Student.countDocuments(query);
-    const students = await studentsQuery
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit))
-      .sort({ className: 1, division: 1, fullName: 1 });
+    let finalQuery = studentsQuery.sort({ className: 1, division: 1, fullName: 1 });
+    if (!isAll) {
+      finalQuery = finalQuery.skip((parsedPage - 1) * parsedLimit).limit(parsedLimit);
+    }
+    const students = await finalQuery;
 
     res.json({
       success: true,
       data: students,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page: parsedPage,
+        limit: isAll ? totalCount : parsedLimit,
         total: totalCount,
-        pages: Math.ceil(totalCount / limit)
+        pages: isAll ? 1 : Math.ceil(totalCount / parsedLimit)
       }
     });
   } catch (error) {

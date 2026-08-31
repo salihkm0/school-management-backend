@@ -20,6 +20,7 @@ html, body {
     margin: 0;
     padding: 0;
     width: 210mm;
+    height: 297mm;
     font-family: "Times New Roman", serif;
     background: #fff;
     -webkit-print-color-adjust: exact;
@@ -27,17 +28,18 @@ html, body {
 }
 
 .page-container {
-    width: 200mm;
-    min-height: 277mm;
-    margin: 0 auto;
-    padding: 10mm 8mm;
-    border: 2px solid #000;
+    width: 196mm;
+    min-height: 283mm;
+    margin: 7mm auto;
+    padding: 8mm 8mm 6mm 8mm;
+    border: 1.5px solid #000;
     position: relative;
     page-break-after: always;
     box-sizing: border-box;
     background: #fff;
     display: flex;
     flex-direction: column;
+    justify-content: space-between;
 }
 
 .page-container:last-child {
@@ -157,7 +159,7 @@ html, body {
 
 .marks-table th,
 .marks-table td {
-    border: 1.5px solid #000;
+    border: 1px solid #000;
     padding: 4px 3px;
     text-align: center;
     vertical-align: middle;

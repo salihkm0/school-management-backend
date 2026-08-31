@@ -380,7 +380,7 @@ exports.getMyChildren = async (req, res) => {
         const marksheets = await Mark.find({
           studentId: student._id,
           academicYearId: currentYear._id,
-          status: { $in: ['published', 'reviewed'] }
+          status: 'published'
         }).populate('examId', 'displayName examType term startDate');
         
         if (marksheets.length > 0) {
@@ -548,7 +548,7 @@ exports.getMyChildren = async (req, res) => {
       const allMarks = await Mark.find({
         studentId: { $in: allStudentsInClass.map(s => s._id) },
         academicYearId: currentYear._id,
-        status: { $in: ['published', 'reviewed'] }
+        status: 'published'
       });
       
       if (allMarks.length > 0) {

@@ -686,6 +686,23 @@ exports.updateStudentMarks = async (req, res) => {
       return res.status(404).json({ message: "Exam not found" });
     }
 
+    const classSubmission = exam.classSubmissionStatus.find(
+      (cs) => cs.classId && cs.classId.toString() === classId.toString()
+    );
+    const classStatus = classSubmission?.status || "draft";
+
+    const isSysAdmin = staffOrAdmin.isSystemAdmin || false;
+    const isStaffAdmin = !isSysAdmin && ["principal", "administrator", "manager", "admin"].includes(staffOrAdmin.role);
+    const isAdmin = isSysAdmin || isStaffAdmin;
+
+    if (classStatus === "published") {
+      return res.status(403).json({ message: "Exam results for this class are already published and cannot be modified." });
+    }
+
+    if ((classStatus === "submitted" || classStatus === "reviewed") && !isAdmin) {
+      return res.status(403).json({ message: "Marks have been submitted for admin review and cannot be edited by staff." });
+    }
+
     const student = await Student.findById(studentId)
       .populate("firstLanguagePaper1", "name code")
       .populate("firstLanguagePaper2", "name code")
@@ -863,6 +880,23 @@ exports.bulkUpdateMarks = async (req, res) => {
     const exam = await Exam.findById(examId);
     if (!exam) {
       return res.status(404).json({ message: "Exam not found" });
+    }
+
+    const classSubmission = exam.classSubmissionStatus.find(
+      (cs) => cs.classId && cs.classId.toString() === classId.toString()
+    );
+    const classStatus = classSubmission?.status || "draft";
+
+    const isSysAdmin = staffOrAdmin.isSystemAdmin || false;
+    const isStaffAdmin = !isSysAdmin && ["principal", "administrator", "manager", "admin"].includes(staffOrAdmin.role);
+    const isAdmin = isSysAdmin || isStaffAdmin;
+
+    if (classStatus === "published") {
+      return res.status(403).json({ message: "Exam results for this class are already published and cannot be modified." });
+    }
+
+    if ((classStatus === "submitted" || classStatus === "reviewed") && !isAdmin) {
+      return res.status(403).json({ message: "Marks have been submitted for admin review and cannot be edited by staff." });
     }
 
     // Get all students with their language subjects for mapping

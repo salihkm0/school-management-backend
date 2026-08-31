@@ -34,7 +34,11 @@ const dutyIdParam = mongoIdParam('dutyId');
 
 const paginationQuery = [
   query('page').optional().isInt({ min: 1 }).toInt(),
-  query('limit').optional().isInt({ min: 1, max: 1000 }).toInt(),
+  query('limit').optional().custom((value) => {
+    if (value === 'all' || value === '10000' || value === '100000') return true;
+    const num = Number(value);
+    return !isNaN(num) && num >= 1 && num <= 100000;
+  }),
   query('sort').optional().isString(),
   query('search').optional().isString()
 ];

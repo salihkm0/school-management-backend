@@ -26,10 +26,10 @@ const generateBankAccountDetailsPDF = async (data) => {
       printBackground: true,
       preferCSSPageSize: true,
       margin: {
-        top: '3mm',
-        right: '3mm',
-        bottom: '3mm',
-        left: '3mm'
+        top: '0mm',
+        right: '0mm',
+        bottom: '0mm',
+        left: '0mm'
       }
     });
 

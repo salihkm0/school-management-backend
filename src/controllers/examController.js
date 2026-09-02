@@ -1790,16 +1790,18 @@ exports.getStaffExams = async (req, res) => {
       return res.status(404).json({ message: 'Staff record not found' });
     }
     
+    const yearFilter = academicYearId ? { academicYearId } : {};
+
     // Get classes where this staff is class teacher or subject teacher
     const teacherClasses = await Class.find({
       $or: [
         { classTeacherId: staff._id },
         { 'subjectTeachers.teacherId': staff._id }
       ],
-      academicYearId: academicYearId,
+      ...yearFilter,
       isActive: true
     }).select('_id classTeacherId subjectTeachers');
-    
+
     let staffOrConditions = [{ createdBy: userId }];
 
     teacherClasses.forEach(cls => {
@@ -1819,7 +1821,7 @@ exports.getStaffExams = async (req, res) => {
     });
 
     if (staffOrConditions.length === 1) { // Only createdBy condition, so no classes assigned
-      const createdExamsCount = await Exam.countDocuments({ createdBy: userId, academicYearId });
+      const createdExamsCount = await Exam.countDocuments({ createdBy: userId, ...yearFilter });
       if (createdExamsCount === 0) {
         return res.json({
           success: true,
@@ -1828,11 +1830,11 @@ exports.getStaffExams = async (req, res) => {
         });
       }
     }
-    
+
     // Find exams for these classes matching specific subjects, or created by staff
     const exams = await Exam.find({
       $or: staffOrConditions,
-      academicYearId: academicYearId,
+      ...yearFilter,
       isActive: true
     })
       .populate('classIds', 'name section displayName')

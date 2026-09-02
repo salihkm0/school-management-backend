@@ -17,5 +17,6 @@ router.get('/class/download/:classId/:examId?/:academicYearId?', reportCardContr
 
 // Class marks table (landscape table view of all students)
 router.get('/class-marks/download/:classId/:examId?', reportCardController.downloadClassMarksTablePDF);
+router.get('/class-marks/excel/:classId/:examId?', reportCardController.downloadClassMarksTableExcel);
 
 module.exports = router;

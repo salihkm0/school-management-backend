@@ -925,3 +925,138 @@ exports.downloadClassMarksTablePDF = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+exports.downloadClassMarksTableExcel = async (req, res) => {
+  try {
+    let { classId, examId } = req.params;
+
+    classId = classId?.trim();
+    examId = examId?.trim();
+
+    if (!classId || !classId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: "Invalid class ID format" });
+    }
+
+    const classDetails = await Class.findById(classId);
+    if (!classDetails) {
+      return res.status(404).json({ message: "Class not found" });
+    }
+
+    const mockReq = { params: { classId, examId }, user: req.user };
+    let marksData = null;
+    let authError = null;
+
+    const mockRes = {
+      status: (code) => ({
+        json: (data) => {
+          if (code >= 400) authError = { code, ...data };
+          else marksData = data;
+        }
+      }),
+      json: (data) => { marksData = data; }
+    };
+
+    await markController.getMarksheetsByClass(mockReq, mockRes);
+
+    if (authError) {
+      return res.status(authError.code).json({ message: authError.message || "Failed to fetch marks data" });
+    }
+    if (!marksData || !marksData.success) {
+      return res.status(500).json({ message: "Failed to fetch marks data from controller" });
+    }
+
+    const { subjects, students, examName } = marksData.data;
+    const finalClassName = classDetails.displayName || `${classDetails.name} ${classDetails.section || ''}`.trim();
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Class Marks');
+
+    // Title rows
+    worksheet.mergeCells('A1', 'H1');
+    worksheet.getCell('A1').value = `CLASS MARKS OVERVIEW - ${finalClassName}`;
+    worksheet.getCell('A1').font = { bold: true, size: 14 };
+
+    worksheet.mergeCells('A2', 'H2');
+    worksheet.getCell('A2').value = `Exam: ${examName || 'Exam'}`;
+    worksheet.getCell('A2').font = { italic: true, size: 12 };
+
+    worksheet.addRow([]); // Blank row
+
+    // Table Headers
+    const headers = ['Roll No', 'Admn No', 'Student Name'];
+    (subjects || []).forEach(subj => {
+      const subjTitle = subj.displayName || subj.subjectName || 'Subject';
+      headers.push(`${subjTitle} (CE)`);
+      headers.push(`${subjTitle} (TE)`);
+      headers.push(`${subjTitle} (Total)`);
+      headers.push(`${subjTitle} (Grade)`);
+    });
+    headers.push('Total Score', 'Percentage', 'Grade', 'Rank');
+
+    const headerRow = worksheet.addRow(headers);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.eachCell((cell) => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF1E3A8A' }
+      };
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    });
+
+    // Student rows
+    let formattedStudents = (students || []).map(student => {
+      const totalObtained = student.totalMarks !== undefined ? student.totalMarks : (student.totalObtained || 0);
+      const totalMax = student.totalMaxMarks !== undefined ? student.totalMaxMarks : (student.totalMax || 0);
+      const percentage = totalMax > 0 ? (totalObtained / totalMax) * 100 : 0;
+      return { ...student, totalObtained, totalMax, percentage };
+    });
+
+    const rankedStudents = [...formattedStudents]
+      .sort((a, b) => b.percentage - a.percentage)
+      .map((s, idx) => ({ ...s, rank: idx + 1 }));
+
+    const finalSortedStudents = sortStudents(rankedStudents);
+
+    finalSortedStudents.forEach(st => {
+      const rowData = [
+        st.rollNo || '-',
+        st.admissionNo || st.studentCode || '-',
+        st.studentName || '-'
+      ];
+
+      (subjects || []).forEach(subj => {
+        const key = subj.examSubjectId?.toString() || subj._id?.toString();
+        const sm = (st.subjectMarks || []).find(m => m.examSubjectId?.toString() === key) || {};
+        if (sm.isAbsent) {
+          rowData.push(sm.ceMarks ?? '-', 'ABSENT', sm.ceMarks ?? 0, 'Absent');
+        } else if (sm.isEntered) {
+          rowData.push(sm.ceMarks ?? '-', sm.theoryScore ?? '-', sm.totalScore ?? '-', sm.grade ?? '-');
+        } else {
+          rowData.push('-', '-', '-', '-');
+        }
+      });
+
+      rowData.push(
+        `${st.totalObtained} / ${st.totalMax}`,
+        `${st.percentage.toFixed(1)}%`,
+        st.gradeInfo?.grade || '-',
+        st.rank || '-'
+      );
+
+      worksheet.addRow(rowData);
+    });
+
+    const filename = `Class_Marks_${finalClassName.replace(/\s+/g, '_')}_${(examName || 'Exam').replace(/\s+/g, '_')}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Cache-Control', 'no-cache');
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    res.send(buffer);
+  } catch (error) {
+    console.error("Class Marks Excel download error:", error);
+    res.status(500).json({ message: error.message });
+  }
+};

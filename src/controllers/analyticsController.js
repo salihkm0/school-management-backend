@@ -323,6 +323,7 @@ exports.getGradeAnalysis = async (req, res) => {
     };
     const subjectWiseAPlus = {};
     const subjectWisePerformance = {};
+    const subjectWiseGradeDistribution = {};
     let totalPassed = 0;
 
     for (const mark of marks) {
@@ -362,13 +363,29 @@ exports.getGradeAnalysis = async (req, res) => {
       if ((mark.percentage || 0) >= 40) totalPassed++;
 
       for (const subject of subjects) {
-        const subjectName = subject.subjectName;
+        const subjectName = subject.subjectName || "Unknown";
         if (!subjectWiseAPlus[subjectName]) {
           subjectWiseAPlus[subjectName] = 0;
         }
         if (!subjectWisePerformance[subjectName]) {
           subjectWisePerformance[subjectName] = { total: 0, max: 0, count: 0 };
         }
+        if (!subjectWiseGradeDistribution[subjectName]) {
+          subjectWiseGradeDistribution[subjectName] = {
+            "A+": 0, "A": 0, "B+": 0, "B": 0, "C+": 0, "C": 0, "D+": 0, "D": 0, "E": 0, "AB": 0, total: 0
+          };
+        }
+
+        let g = subject.grade;
+        if (subject.isAbsent) g = "AB";
+        if (g) {
+          if (subjectWiseGradeDistribution[subjectName][g] === undefined) {
+            subjectWiseGradeDistribution[subjectName][g] = 0;
+          }
+          subjectWiseGradeDistribution[subjectName][g]++;
+        }
+        subjectWiseGradeDistribution[subjectName].total++;
+
         if (subject.grade === "A+") {
           subjectWiseAPlus[subjectName]++;
         }
@@ -507,6 +524,7 @@ exports.getGradeAnalysis = async (req, res) => {
         gradeDistribution,
         subjectWiseAPlus,
         subjectWisePerformance,
+        subjectWiseGradeDistribution,
         totalStudents,
         summary: {
           fullAPlus: fullAPlusCount,

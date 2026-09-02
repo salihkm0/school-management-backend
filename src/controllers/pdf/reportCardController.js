@@ -972,45 +972,92 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
     }
 
     const { subjects, students, examName } = marksData.data;
+    let academicYear = await AcademicYear.findOne({ isCurrent: true });
+    const academicYearString = academicYear?.year || academicYear?.name || new Date().getFullYear().toString();
     const finalClassName = classDetails.displayName || `${classDetails.name} ${classDetails.section || ''}`.trim();
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Class Marks');
 
-    // Title rows
-    worksheet.mergeCells('A1', 'H1');
-    worksheet.getCell('A1').value = `CLASS MARKS OVERVIEW - ${finalClassName}`;
-    worksheet.getCell('A1').font = { bold: true, size: 14 };
+    // Calculate total columns
+    const totalCols = (subjects || []).length + 7;
 
-    worksheet.mergeCells('A2', 'H2');
-    worksheet.getCell('A2').value = `Exam: ${examName || 'Exam'}`;
-    worksheet.getCell('A2').font = { italic: true, size: 12 };
+    // Convert column number (1-based) to letter (A, B, C... Z, AA, AB...)
+    const getColLetter = (colIdx) => {
+      let temp, letter = '';
+      while (colIdx > 0) {
+        temp = (colIdx - 1) % 26;
+        letter = String.fromCharCode(65 + temp) + letter;
+        colIdx = Math.floor((colIdx - temp - 1) / 26);
+      }
+      return letter;
+    };
 
-    worksheet.addRow([]); // Blank row
+    const lastColLetter = getColLetter(totalCols);
+
+    // Title Row 1: School Name
+    worksheet.mergeCells(`A1:${lastColLetter}1`);
+    const r1Cell = worksheet.getCell('A1');
+    r1Cell.value = 'PPM HIGHER SECONDARY SCHOOL';
+    r1Cell.font = { name: 'Arial', size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
+    r1Cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+    r1Cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    worksheet.getRow(1).height = 30;
+
+    // Title Row 2: Address
+    worksheet.mergeCells(`A2:${lastColLetter}2`);
+    const r2Cell = worksheet.getCell('A2');
+    r2Cell.value = 'KOTTUKKARA, KONDOTTY, MALAPPURAM, KERALA 673638';
+    r2Cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    r2Cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } };
+    r2Cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    worksheet.getRow(2).height = 20;
+
+    // Title Row 3: Report Title
+    worksheet.mergeCells(`A3:${lastColLetter}3`);
+    const r3Cell = worksheet.getCell('A3');
+    r3Cell.value = 'CLASS MARKS OVERVIEW';
+    r3Cell.font = { name: 'Arial', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+    r3Cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+    r3Cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    worksheet.getRow(3).height = 24;
+
+    // Title Row 4: Meta Information
+    worksheet.mergeCells(`A4:${lastColLetter}4`);
+    const r4Cell = worksheet.getCell('A4');
+    r4Cell.value = `Class: ${finalClassName}   |   Exam: ${examName || 'Exam'}   |   Academic Year: ${academicYearString}   |   Total Students: ${(students || []).length}`;
+    r4Cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF1E3A8A' } };
+    r4Cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
+    r4Cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    worksheet.getRow(4).height = 22;
+
+    // Spacer
+    worksheet.addRow([]);
+    worksheet.getRow(5).height = 8;
 
     // Table Headers
     const headers = ['Roll No', 'Admn No', 'Student Name'];
     (subjects || []).forEach(subj => {
       const subjTitle = subj.displayName || subj.subjectName || 'Subject';
-      headers.push(`${subjTitle} (CE)`);
-      headers.push(`${subjTitle} (TE)`);
-      headers.push(`${subjTitle} (Total)`);
-      headers.push(`${subjTitle} (Grade)`);
+      headers.push(subjTitle);
     });
     headers.push('Total Score', 'Percentage', 'Grade', 'Rank');
 
     const headerRow = worksheet.addRow(headers);
-    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    worksheet.getRow(6).height = 26;
+    headerRow.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
     headerRow.eachCell((cell) => {
-      cell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FF1E3A8A' }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF0F172A' } },
+        bottom: { style: 'medium', color: { argb: 'FF0F172A' } },
+        left: { style: 'thin', color: { argb: 'FF0F172A' } },
+        right: { style: 'thin', color: { argb: 'FF0F172A' } }
       };
-      cell.alignment = { vertical: 'middle', horizontal: 'center' };
     });
 
-    // Student rows
+    // Format & rank students
     let formattedStudents = (students || []).map(student => {
       const totalObtained = student.totalMarks !== undefined ? student.totalMarks : (student.totalObtained || 0);
       const totalMax = student.totalMaxMarks !== undefined ? student.totalMaxMarks : (student.totalMax || 0);
@@ -1024,33 +1071,85 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
 
     const finalSortedStudents = sortStudents(rankedStudents);
 
-    finalSortedStudents.forEach(st => {
+    finalSortedStudents.forEach((st, idx) => {
       const rowData = [
-        st.rollNo || '-',
+        st.rollNo || st.rollNumber || (idx + 1),
         st.admissionNo || st.studentCode || '-',
-        st.studentName || '-'
+        st.studentName || st.name || '-'
       ];
 
       (subjects || []).forEach(subj => {
-        const key = subj.examSubjectId?.toString() || subj._id?.toString();
-        const sm = (st.subjectMarks || []).find(m => m.examSubjectId?.toString() === key) || {};
+        const key = subj.examSubjectId?.toString() || subj._id?.toString() || subj.subjectId?.toString();
+        const sm = (st.subjectMarks || st.subjects || []).find(m => 
+          (m.examSubjectId && m.examSubjectId.toString() === key) ||
+          (m.subjectId && m.subjectId.toString() === key)
+        ) || {};
+
         if (sm.isAbsent) {
-          rowData.push(sm.ceMarks ?? '-', 'ABSENT', sm.ceMarks ?? 0, 'Absent');
-        } else if (sm.isEntered) {
-          rowData.push(sm.ceMarks ?? '-', sm.theoryScore ?? '-', sm.totalScore ?? '-', sm.grade ?? '-');
+          rowData.push('AB');
+        } else if (sm.isEntered || sm.totalScore !== undefined || sm.total !== undefined) {
+          rowData.push(sm.totalScore !== undefined ? sm.totalScore : sm.total);
         } else {
-          rowData.push('-', '-', '-', '-');
+          rowData.push('—');
         }
       });
 
       rowData.push(
         `${st.totalObtained} / ${st.totalMax}`,
         `${st.percentage.toFixed(1)}%`,
-        st.gradeInfo?.grade || '-',
+        st.gradeInfo?.grade || st.grade || '-',
         st.rank || '-'
       );
 
-      worksheet.addRow(rowData);
+      const row = worksheet.addRow(rowData);
+      row.height = 20;
+
+      const isEven = idx % 2 === 0;
+      const bgArgb = isEven ? 'FFFFFFFF' : 'FFF8FAFC';
+
+      row.eachCell((cell, colNum) => {
+        cell.font = { name: 'Arial', size: 9.5 };
+        cell.alignment = { vertical: 'middle', horizontal: colNum === 3 ? 'left' : 'center' };
+        
+        // Background
+        if (colNum > (subjects || []).length + 3) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
+          cell.font = { name: 'Arial', size: 9.5, bold: true };
+        } else {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgArgb } };
+        }
+
+        // Absent styling
+        if (cell.value === 'AB') {
+          cell.font = { name: 'Arial', size: 9.5, bold: true, color: { argb: 'FFDC2626' } };
+        }
+
+        // Cell border
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+        };
+      });
+    });
+
+    // Auto-fit column widths
+    worksheet.columns.forEach((col, i) => {
+      let maxLen = 0;
+      col.eachCell({ includeEmpty: true }, (cell, rowNum) => {
+        if (rowNum >= 6) { // Only measure table header and data
+          const len = cell.value ? cell.value.toString().length : 0;
+          if (len > maxLen) maxLen = len;
+        }
+      });
+      if (i === 2) {
+        col.width = Math.max(maxLen + 4, 24); // Student Name
+      } else if (i === 1) {
+        col.width = Math.max(maxLen + 2, 12); // Admission No
+      } else {
+        col.width = Math.max(maxLen + 3, 11);
+      }
     });
 
     const filename = `Class_Marks_${finalClassName.replace(/\s+/g, '_')}_${(examName || 'Exam').replace(/\s+/g, '_')}.xlsx`;

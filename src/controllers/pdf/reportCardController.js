@@ -9,6 +9,7 @@ const { Attendance, AttendanceTemplate } = require('../../models/Attendance');
 const { generateReportCardPDF, generateMultiReportCardPDF, generateClassMarksTablePDF, generateClassReportCardsPDF } = require('../../services/pdf/reportCardService');
 const { sortStudents } = require('../../utils/studentSorter');
 const markController = require('../markController');
+const ExcelJS = require('exceljs');
 
 // School logo URL
 const SCHOOL_LOGO_URL = 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
@@ -800,8 +801,9 @@ exports.downloadClassMarksTablePDF = async (req, res) => {
     // Reuse markController logic to get marks data
     // We mock req and res to capture the JSON response
     const mockReq = { 
-      params: { classId, examId }, 
-      user: req.user 
+      params: { examId, classId }, 
+      user: req.user,
+      query: req.query || {}
     };
     
     let marksData = null;
@@ -942,7 +944,11 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
       return res.status(404).json({ message: "Class not found" });
     }
 
-    const mockReq = { params: { classId, examId }, user: req.user };
+    const mockReq = { 
+      params: { examId, classId }, 
+      user: req.user,
+      query: req.query || {}
+    };
     let marksData = null;
     let authError = null;
 

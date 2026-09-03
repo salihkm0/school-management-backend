@@ -201,7 +201,11 @@ class ActivityService {
   }) {
     const query = { isArchived };
     
-    if (activityType) query.activityType = activityType;
+    if (activityType) {
+      query.activityType = activityType;
+    } else {
+      query.activityType = { $ne: 'user_logout' };
+    }
     if (entityType) query.entityType = entityType;
     if (severity) query.severity = severity;
     if (performedBy) query.performedBy = performedBy;

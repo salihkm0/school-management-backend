@@ -310,23 +310,6 @@ exports.logout = async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
     if (user) {
-      await createRecentActivity({
-        title: `User Logout: ${user.name}`,
-        description: `User ${user.name} (${user.phone}) logged out`,
-        activityType: ACTIVITY_TYPES.USER_LOGOUT,
-        entityType: ENTITY_TYPES.USER,
-        entityId: user._id,
-        entityModel: 'User',
-        performedBy: user._id,
-        performedByName: user.name,
-        performedByRole: user.role,
-        details: {
-          phone: user.phone,
-          role: user.role
-        },
-        severity: SEVERITY.INFO
-      });
-      
       user.refreshToken = null;
       user.refreshTokenExpire = null;
       await user.save();

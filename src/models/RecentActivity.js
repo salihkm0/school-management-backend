@@ -311,7 +311,7 @@ RecentActivitySchema.methods.getCssClass = function() {
 
 // Static method to get recent activities for dashboard
 RecentActivitySchema.statics.getDashboardActivities = async function(limit = 10, userRole = null) {
-  const query = { isArchived: false };
+  const query = { isArchived: false, activityType: { $ne: 'user_logout' } };
   
   // Filter by user role if needed
   if (userRole === 'parent') {

@@ -149,7 +149,7 @@ exports.getDashboardAnalytics = async (req, res) => {
         { $sort: { _id: 1 } }
       ]),
       Mark.find().sort({ createdAt: -1 }).limit(100),
-      RecentActivity.find().sort({ createdAt: -1 }).limit(10).populate('performedBy', 'name role'),
+      RecentActivity.find({ activityType: { $ne: 'user_logout' } }).sort({ createdAt: -1 }).limit(10).populate('performedBy', 'name role'),
       Exam.countDocuments({ overallStatus: { $in: ['draft', 'submitted'] }, isActive: true }),
       StaffDuty?.countDocuments({ status: 'assigned' }).catch(() => 0) || Promise.resolve(0),
       Attendance.countDocuments({ status: { $ne: 'present' }, createdAt: { $gte: today } }),
@@ -1313,7 +1313,11 @@ exports.getRecentActivities = async (req, res) => {
     const { limit = 20, activityType, entityType, severity } = req.query;
     
     const query = {};
-    if (activityType) query.activityType = activityType;
+    if (activityType) {
+      query.activityType = activityType;
+    } else {
+      query.activityType = { $ne: 'user_logout' };
+    }
     if (entityType) query.entityType = entityType;
     if (severity) query.severity = severity;
     

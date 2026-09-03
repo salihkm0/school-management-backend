@@ -129,7 +129,7 @@ exports.getParentsByClass = async (req, res) => {
     const students = await Student.find({ classId })
       .populate('parentIds', '_id name email phone role');
     
-    // Collect unique parents
+    // Collect unique connected parents
     const parentsMap = new Map();
     students.forEach(student => {
       if (student.parentIds && student.parentIds.length > 0) {
@@ -152,18 +152,6 @@ exports.getParentsByClass = async (req, res) => {
               }
             }
           }
-        });
-      } else if (student.parentName || student.fatherFullName || student.guardian) {
-        const fallbackName = student.parentName || student.fatherFullName || student.guardian;
-        const fallbackKey = `unlinked_${student._id}`;
-        parentsMap.set(fallbackKey, {
-          _id: null,
-          name: fallbackName,
-          email: student.parentEmail || '',
-          phone: student.parentPhone || student.phoneNumber || '',
-          role: 'parent',
-          studentNames: [student.fullName],
-          isUnlinked: true,
         });
       }
     });

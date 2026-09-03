@@ -50,8 +50,12 @@ exports.getAppVersion = async (req, res) => {
     
     const config = configMap[platform] || configMap.android;
 
-    const needsForceUpdate = compareSemver(currentVersion, config.minVersion) < 0;
-    const needsSoftUpdate  = compareSemver(currentVersion, config.latestVersion) < 0;
+    const isConfigForce = config.forceUpdate === true;
+    const isBelowMin = compareSemver(currentVersion, config.minVersion) < 0;
+    const isBelowLatest = compareSemver(currentVersion, config.latestVersion) < 0;
+
+    const needsForceUpdate = isBelowLatest && (isConfigForce || isBelowMin);
+    const needsSoftUpdate = isBelowLatest && !needsForceUpdate;
 
     res.json({
       success: true,
@@ -61,8 +65,8 @@ exports.getAppVersion = async (req, res) => {
         minVersion: config.minVersion,
         latestVersion: config.latestVersion,
         forceUpdate: needsForceUpdate,
-        softUpdate: needsSoftUpdate && !needsForceUpdate,
-        updateType: config.forceUpdate ? 'force' : 'soft',
+        softUpdate: needsSoftUpdate,
+        updateType: isConfigForce || needsForceUpdate ? 'force' : 'soft',
         upToDate: !needsForceUpdate && !needsSoftUpdate,
         updateMessage: config.updateMessage,
         storeUrl: platform === 'ios' ? config.appStoreUrl : config.playStoreUrl,
@@ -94,7 +98,7 @@ exports.updateAppVersion = async (req, res) => {
 
     // Based on updateType, we adjust forceUpdate and minVersion
     const forceUpdate = updateType === 'force';
-    let minVersion = reqMinVersion || (forceUpdate ? latestVersion : configMap[platform].minVersion); // if soft, minVersion doesn't move up automatically
+    let minVersion = forceUpdate ? latestVersion : (reqMinVersion || configMap[platform].minVersion); // if soft, minVersion doesn't move up automatically
     
     // Ensure minVersion is never greater than latestVersion (e.g. if downgraded)
     if (compareSemver(minVersion, latestVersion) > 0) {

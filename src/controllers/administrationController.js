@@ -15,11 +15,19 @@ const admin = require('firebase-admin');
 
 exports.getSystemHealth = async (req, res) => {
   try {
+    let isMaintenance = cache.get('maintenance_mode');
+    if (isMaintenance === undefined || isMaintenance === null) {
+      const config = await AppConfig.findOne({ key: 'maintenance_mode' });
+      isMaintenance = config ? config.value === true : false;
+      cache.set('maintenance_mode', isMaintenance, 60);
+    }
+
     const health = {
       uptime: process.uptime(),
       memoryUsage: process.memoryUsage(),
       cpuLoad: os.loadavg(),
       dbStatus: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+      maintenanceMode: isMaintenance,
       timestamp: Date.now()
     };
     
@@ -530,5 +538,15 @@ exports.toggleMaintenanceMode = async (req, res) => {
   } catch (error) {
     console.error('Maintenance Mode Error:', error);
     res.status(500).json({ message: 'Error toggling maintenance mode' });
+  }
+};
+
+exports.getMaintenanceMode = async (req, res) => {
+  try {
+    const config = await AppConfig.findOne({ key: 'maintenance_mode' });
+    res.json({ success: true, enabled: config ? config.value === true : false });
+  } catch (error) {
+    console.error('Get Maintenance Mode Error:', error);
+    res.status(500).json({ message: 'Error fetching maintenance mode status' });
   }
 };

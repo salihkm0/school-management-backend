@@ -12,6 +12,7 @@ const {
   getDbStats,
   getAuditLogs,
   toggleMaintenanceMode,
+  getMaintenanceMode,
   createUser,
   updateUser,
   getSystemMetrics,
@@ -35,6 +36,7 @@ router.delete('/users/:id', protect, authorize('administration'), deleteUser);
 // Advanced features
 router.get('/system/active-users', protect, authorize('administration'), getActiveUsers);
 router.post('/system/clear-cache', protect, authorize('administration'), clearCache);
+router.get('/system/maintenance', protect, authorize('administration'), getMaintenanceMode);
 router.post('/system/maintenance', protect, authorize('administration'), toggleMaintenanceMode);
 router.get('/system/db-stats', protect, authorize('administration'), getDbStats);
 router.get('/system/metrics', protect, authorize('administration'), getSystemMetrics);

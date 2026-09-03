@@ -161,3 +161,79 @@ exports.getAppUpdateHistory = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+const DEFAULT_SCHOOL_CONTACTS = {
+  headmasterName: '',
+  headmasterPhone: '',
+  sitcName: '',
+  sitcPhone: '',
+  ptaPresidentName: '',
+  ptaPresidentPhone: ''
+};
+
+/**
+ * GET /api/app-config/school-contacts
+ * Returns key contacts (Headmaster, SITC, PTA President)
+ */
+exports.getSchoolContacts = async (req, res) => {
+  try {
+    let configDoc = await AppConfig.findOne({ key: 'SCHOOL_CONTACTS' });
+    const contacts = configDoc ? configDoc.value : DEFAULT_SCHOOL_CONTACTS;
+
+    res.json({
+      success: true,
+      data: contacts
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * PUT /api/app-config/school-contacts (Admin only)
+ * Body: { headmasterName, headmasterPhone, sitcName, sitcPhone, ptaPresidentName, ptaPresidentPhone }
+ */
+exports.updateSchoolContacts = async (req, res) => {
+  try {
+    const {
+      headmasterName = '',
+      headmasterPhone = '',
+      sitcName = '',
+      sitcPhone = '',
+      ptaPresidentName = '',
+      ptaPresidentPhone = ''
+    } = req.body;
+
+    const contactsData = {
+      headmasterName,
+      headmasterPhone,
+      sitcName,
+      sitcPhone,
+      ptaPresidentName,
+      ptaPresidentPhone
+    };
+
+    let configDoc = await AppConfig.findOne({ key: 'SCHOOL_CONTACTS' });
+    if (configDoc) {
+      configDoc.value = contactsData;
+      configDoc.updatedBy = req.user ? req.user._id : null;
+      configDoc.markModified('value');
+      await configDoc.save();
+    } else {
+      await AppConfig.create({
+        key: 'SCHOOL_CONTACTS',
+        value: contactsData,
+        description: 'School Key Contacts (Headmaster, SITC, PTA President)',
+        updatedBy: req.user ? req.user._id : null
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'School contacts updated successfully.',
+      data: contactsData
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

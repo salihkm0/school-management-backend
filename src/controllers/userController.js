@@ -114,13 +114,9 @@ exports.getParentsByClass = async (req, res) => {
     const { classId } = req.params;
     const { search = '' } = req.query;
     
-    // Check authorization: Admin or class teacher of this class
-    if (req.user.role !== 'admin') {
-      // Check if user is class teacher for this class
-      const staff = await Staff.findOne({ userId: req.user.id });
-      if (!staff || staff.classTeacherOf?.toString() !== classId) {
-        return res.status(403).json({ message: 'Access denied. Only class teacher can view parents of this class.' });
-      }
+    // Check authorization: Admin or staff
+    if (req.user.role !== 'admin' && req.user.role !== 'staff') {
+      return res.status(403).json({ message: 'Access denied.' });
     }
     
     // Get class with students
@@ -131,16 +127,43 @@ exports.getParentsByClass = async (req, res) => {
     
     // Get all students in this class
     const students = await Student.find({ classId })
-      .populate('parentIds', '_id name email phone');
+      .populate('parentIds', '_id name email phone role');
     
     // Collect unique parents
     const parentsMap = new Map();
     students.forEach(student => {
       if (student.parentIds && student.parentIds.length > 0) {
         student.parentIds.forEach(parent => {
-          if (parent && !parentsMap.has(parent._id.toString())) {
-            parentsMap.set(parent._id.toString(), parent);
+          if (parent) {
+            const pId = parent._id.toString();
+            if (!parentsMap.has(pId)) {
+              parentsMap.set(pId, {
+                _id: parent._id,
+                name: parent.name,
+                email: parent.email,
+                phone: parent.phone,
+                role: parent.role,
+                studentNames: [student.fullName],
+              });
+            } else {
+              const existing = parentsMap.get(pId);
+              if (!existing.studentNames.includes(student.fullName)) {
+                existing.studentNames.push(student.fullName);
+              }
+            }
           }
+        });
+      } else if (student.parentName || student.fatherFullName || student.guardian) {
+        const fallbackName = student.parentName || student.fatherFullName || student.guardian;
+        const fallbackKey = `unlinked_${student._id}`;
+        parentsMap.set(fallbackKey, {
+          _id: null,
+          name: fallbackName,
+          email: student.parentEmail || '',
+          phone: student.parentPhone || student.phoneNumber || '',
+          role: 'parent',
+          studentNames: [student.fullName],
+          isUnlinked: true,
         });
       }
     });
@@ -149,31 +172,24 @@ exports.getParentsByClass = async (req, res) => {
     
     // Apply search filter
     if (search) {
+      const q = search.toLowerCase();
       parents = parents.filter(parent => 
-        parent.name?.toLowerCase().includes(search.toLowerCase()) ||
-        parent.email?.toLowerCase().includes(search.toLowerCase())
+        parent.name?.toLowerCase().includes(q) ||
+        parent.email?.toLowerCase().includes(q) ||
+        parent.studentNames.some(s => s.toLowerCase().includes(q))
       );
     }
     
-    // Format response
-    const formattedParents = parents.map(parent => ({
-      _id: parent._id,
-      name: parent.name,
-      email: parent.email,
-      phone: parent.phone,
-      role: parent.role
-    }));
-    
     res.json({
       success: true,
-      data: formattedParents,
+      data: parents,
       classInfo: {
         _id: classData._id,
         name: classData.name,
         section: classData.section,
         displayName: classData.displayName || `${classData.name}${classData.section ? `-${classData.section}` : ''}`
       },
-      total: formattedParents.length
+      total: parents.length
     });
   } catch (error) {
     console.error('Error in getParentsByClass:', error);

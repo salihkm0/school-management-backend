@@ -1964,7 +1964,10 @@ exports.getTeacherClassTeacherClasses = async (req, res) => {
     const classes = await Class.find({
       classTeacherId: teacherId,
       academicYearId: yearId
-    }).populate('subjects', 'name code');
+    })
+      .populate('subjects', 'name code')
+      .populate('subjectTeachers.subjectId', 'name code')
+      .populate('subjectTeachers.teacherId', 'name staffCode');
     
     console.log(`Found ${classes.length} classes where teacher ${teacherId} is class teacher`);
     
@@ -2014,13 +2017,19 @@ exports.getTeacherClasses = async (req, res) => {
     const classTeacherClasses = await Class.find({
       classTeacherId: teacherId,
       academicYearId: yearId
-    }).populate('subjects', 'name code');
+    })
+      .populate('subjects', 'name code')
+      .populate('subjectTeachers.subjectId', 'name code')
+      .populate('subjectTeachers.teacherId', 'name staffCode');
     
     // Find classes where this teacher teaches subjects
     const subjectTeacherClasses = await Class.find({
       'subjectTeachers.teacherId': teacherId,
       academicYearId: yearId
-    }).populate('subjects', 'name code');
+    })
+      .populate('subjects', 'name code')
+      .populate('subjectTeachers.subjectId', 'name code')
+      .populate('subjectTeachers.teacherId', 'name staffCode');
     
     // Combine and deduplicate
     const allClasses = [...classTeacherClasses, ...subjectTeacherClasses];

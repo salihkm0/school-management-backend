@@ -56,6 +56,7 @@ exports.getAppVersion = async (req, res) => {
 
     const needsForceUpdate = isBelowLatest && (isConfigForce || isBelowMin);
     const needsSoftUpdate = isBelowLatest && !needsForceUpdate;
+    const isUpToDate = !isBelowLatest;
 
     res.json({
       success: true,
@@ -66,8 +67,8 @@ exports.getAppVersion = async (req, res) => {
         latestVersion: config.latestVersion,
         forceUpdate: needsForceUpdate,
         softUpdate: needsSoftUpdate,
-        updateType: isConfigForce || needsForceUpdate ? 'force' : 'soft',
-        upToDate: !needsForceUpdate && !needsSoftUpdate,
+        updateType: isConfigForce ? 'force' : 'soft',
+        upToDate: isUpToDate,
         updateMessage: config.updateMessage,
         storeUrl: platform === 'ios' ? config.appStoreUrl : config.playStoreUrl,
         releaseNotes: config.releaseNotes || [],

@@ -1215,7 +1215,32 @@ exports.submitMarksForReview = async (req, res) => {
       : null;
 
     let modifiedCount = 0;
-    const marksheets = await Mark.find({ examId, classId });
+    const marksheets = await Mark.find({ examId, classId }).populate("studentId", "name rollNumber");
+
+    // Check if any non-absent student has TE mark equal to 0 or missing
+    for (const marksheet of marksheets) {
+      for (const s of marksheet.subjects) {
+        const sId = s.subjectId?.toString() || s._id?.toString();
+        const matchesTarget = !targetSubjectIds || targetSubjectIds.some((id) => id.toString() === sId);
+        if (matchesTarget && (s.status === "draft" || !s.status)) {
+          const isAbsent = s.isAbsent === true;
+          const score = s.theoryScore;
+          const tNum = score === "" || score === null || score === undefined ? 0 : Number(score);
+          if (!isAbsent && (tNum === 0 || isNaN(tNum))) {
+            const sName = marksheet.studentId?.name || "Student";
+            const rollNo = marksheet.studentId?.rollNumber || "-";
+            const examSubj = (exam.subjects || []).find((sub) => {
+              const subId = sub.subjectId?._id?.toString() || sub.subjectId?.toString() || sub._id?.toString();
+              return subId === sId;
+            });
+            const subjName = examSubj?.subjectName || "Subject";
+            return res.status(400).json({
+              message: `Cannot submit marks for review: ${sName} (Roll ${rollNo}) has 0 TE marks for ${subjName}. If student was absent, please mark them as Absent.`,
+            });
+          }
+        }
+      }
+    }
 
     for (const marksheet of marksheets) {
       let markUpdated = false;

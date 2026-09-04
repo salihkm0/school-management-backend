@@ -3,16 +3,16 @@ const AppConfig = require('../models/AppConfig');
 
 const DEFAULT_CONFIG = {
   android: {
-    minVersion: '1.0.0',
-    latestVersion: '1.0.0',
+    minVersion: '1.0.1',
+    latestVersion: '1.0.1',
     forceUpdate: false,
     updateMessage: 'A new version of PPMHSS app is available. Please update to continue.',
     playStoreUrl: 'https://play.google.com/store/apps/details?id=com.ppmhss.app',
     releaseNotes: ['Bug fixes and performance improvements'],
   },
   ios: {
-    minVersion: '1.0.0',
-    latestVersion: '1.0.0',
+    minVersion: '1.0.1',
+    latestVersion: '1.0.1',
     forceUpdate: false,
     updateMessage: 'A new version of PPMHSS app is available. Please update to continue.',
     appStoreUrl: 'https://apps.apple.com/app/ppmhss/id000000000',

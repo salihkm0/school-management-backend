@@ -1,6 +1,6 @@
 {
   "name": "school-management-backend",
-  "version": "1.0.0",
+  "version": "2.0.1",
   "description": "School Management System Backend with Socket.IO",
   "main": "server.js",
   "puppeteer": {

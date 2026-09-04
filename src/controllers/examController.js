@@ -339,12 +339,20 @@ exports.getExam = async (req, res) => {
       const classMarksheets = marksheetsByClassMap.get(cId) || [];
 
       const subjectSubmissions = (exam.subjects || []).map((subj) => {
-        const subjIdStr = (subj.subjectId?._id || subj.subjectId)?.toString();
-        const sampleSubj = classMarksheets.flatMap((m) => m.subjects || []).find(
-          (s) => s.subjectId?.toString() === subjIdStr
-        );
+        const examSubjIdStr = subj._id?.toString();
+        const actualSubjIdStr = (subj.subjectId?._id || subj.subjectId)?.toString();
+
+        const sampleSubj = classMarksheets.flatMap((m) => m.subjects || []).find((s) => {
+          const sSubjId = s.subjectId?.toString();
+          const sExamSubjId = s.examSubjectId?.toString();
+          return (
+            (sSubjId && (sSubjId === actualSubjIdStr || sSubjId === examSubjIdStr)) ||
+            (sExamSubjId && (sExamSubjId === examSubjIdStr || sExamSubjId === actualSubjIdStr))
+          );
+        });
+
         return {
-          subjectId: subjIdStr,
+          subjectId: examSubjIdStr || actualSubjIdStr,
           subjectName: subj.subjectName,
           subjectCode: subj.subjectCode,
           status: sampleSubj?.status || "draft",

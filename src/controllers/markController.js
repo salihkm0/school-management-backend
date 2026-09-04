@@ -1561,6 +1561,10 @@ exports.getTeacherPermissions = async (req, res) => {
       "name",
     );
 
+    const classSubmission = (exam.classSubmissionStatus || []).find(
+      (cs) => cs.classId && cs.classId.toString() === classId.toString(),
+    );
+
     if (isSystemAdmin) {
       const allowedSubjects = exam.subjects.map((s) => ({
         subjectId: s.subjectId?._id || s.subjectId,
@@ -1573,10 +1577,6 @@ exports.getTeacherPermissions = async (req, res) => {
         canEdit: true,
         isAdmin: true,
       }));
-
-      const classSubmission = exam.classSubmissionStatus.find(
-        (cs) => cs.classId && cs.classId.toString() === classId.toString(),
-      );
 
       return res.json({
         success: true,

@@ -525,6 +525,9 @@ exports.getMarksheetsByClass = async (req, res) => {
             studentSubj.isAbsent = existingSubj.isAbsent || false;
             studentSubj.isEntered = isActuallyEntered;
             studentSubj.isEnteredExplicitly = existingSubj.isEnteredExplicitly || false;
+            studentSubj.status = existingSubj.status || "draft";
+            studentSubj.submittedByName = existingSubj.submittedByName || null;
+            studentSubj.submittedAt = existingSubj.submittedAt || null;
           }
         });
         
@@ -616,13 +619,33 @@ exports.getMarksheetsByClass = async (req, res) => {
         }
       });
       
+      // Find sample subject status from marksheets
+      let subjectStatus = 'draft';
+      let submittedByName = null;
+      let submittedAt = null;
+
+      for (const m of marksheets) {
+        const found = (m.subjects || []).find(
+          s => s.subjectId?.toString() === subjectIdStr || s._id?.toString() === subjectIdStr
+        );
+        if (found && found.status && found.status !== 'draft') {
+          subjectStatus = found.status;
+          submittedByName = found.submittedByName || null;
+          submittedAt = found.submittedAt || null;
+          break;
+        }
+      }
+
       return {
         subjectId: subject.examSubjectId,
         subjectName: subject.displayName || subject.subjectName,
         subjectCode: subject.subjectCode,
         totalStudents: totalStudentsTaking,
         enteredCount: enteredCount,
-        percentage: totalStudentsTaking > 0 ? Math.round((enteredCount / totalStudentsTaking) * 100) : 0
+        percentage: totalStudentsTaking > 0 ? Math.round((enteredCount / totalStudentsTaking) * 100) : 0,
+        status: subjectStatus,
+        submittedByName,
+        submittedAt
       };
     });
 
@@ -895,10 +918,6 @@ exports.bulkUpdateMarks = async (req, res) => {
       return res.status(403).json({ message: "Exam results for this class are already published and cannot be modified." });
     }
 
-    if ((classStatus === "submitted" || classStatus === "reviewed") && !isAdmin) {
-      return res.status(403).json({ message: "Marks have been submitted for admin review and cannot be edited by staff." });
-    }
-
     // Get all students with their language subjects for mapping
     const students = await Student.find({ 
       _id: { $in: studentsData.map(s => s.studentId) },
@@ -1011,6 +1030,11 @@ exports.bulkUpdateMarks = async (req, res) => {
                        s.subjectId.toString() === updatedSubject.examSubjectId?.toString()
               );
               if (subjectIndex !== -1) {
+                const existingSubj = marksheet.subjects[subjectIndex];
+                if (existingSubj.status && existingSubj.status !== "draft" && !isAdmin) {
+                  // Subject is submitted/reviewed/published and user is not admin: skip update
+                  return;
+                }
                 marksheet.subjects[subjectIndex].theoryScore = updatedSubject.theoryScore || 0;
                 marksheet.subjects[subjectIndex].practicalScore = updatedSubject.practicalScore || 0;
                 marksheet.subjects[subjectIndex].ceScore = updatedSubject.ceMarks || 0;
@@ -1115,10 +1139,10 @@ exports.bulkUpdateMarks = async (req, res) => {
 };
 
 
-// Submit marks for review (class teacher)
+// Submit marks for review (subject level or class level)
 exports.submitMarksForReview = async (req, res) => {
   try {
-    const { examId, classId } = req.body;
+    const { examId, classId, subjectId, subjectIds } = req.body;
     const userId = req.user.id;
 
     const staffOrAdmin = await getStaffOrAdmin(userId);
@@ -1179,49 +1203,91 @@ exports.submitMarksForReview = async (req, res) => {
       return res.status(404).json({ message: "Class not found in exam" });
     }
 
-    if (classSubmission.status !== "draft") {
-      return res
-        .status(400)
-        .json({ message: `Marks already ${classSubmission.status}` });
-    }
-
     const submittedById = staffOrAdmin._id
       ? staffOrAdmin._id.toString()
       : userId.toString();
+    const submittedByName = staffOrAdmin.name || "Teacher";
 
-    const marksToUpdate = await Mark.updateMany(
-      { examId, classId, status: "draft" },
-      {
-        status: "submitted",
-        isFinalized: true,
-        finalizedAt: new Date(),
-        finalizedBy: submittedById,
-        submittedBy: submittedById,
-        submittedAt: new Date(),
-        lastUpdatedBy: submittedById,
-        lastUpdatedAt: new Date(),
-      },
-    );
+    const targetSubjectIds = Array.isArray(subjectIds)
+      ? subjectIds
+      : subjectId
+      ? [subjectId]
+      : null;
 
-    classSubmission.status = "submitted";
-    classSubmission.submittedBy = submittedById;
-    classSubmission.submittedAt = new Date();
+    let modifiedCount = 0;
+    const marksheets = await Mark.find({ examId, classId });
+
+    for (const marksheet of marksheets) {
+      let markUpdated = false;
+
+      marksheet.subjects.forEach((s) => {
+        const sId = s.subjectId?.toString() || s._id?.toString();
+        const matchesTarget = !targetSubjectIds || targetSubjectIds.some((id) => id.toString() === sId);
+
+        if (matchesTarget && (s.status === "draft" || !s.status)) {
+          s.status = "submitted";
+          s.submittedBy = submittedById;
+          s.submittedByName = submittedByName;
+          s.submittedAt = new Date();
+          markUpdated = true;
+        }
+      });
+
+      const allStudentSubjectsSubmitted = marksheet.subjects.every(
+        (s) => s.status === "submitted" || s.status === "reviewed" || s.status === "published"
+      );
+      if (allStudentSubjectsSubmitted) {
+        marksheet.status = "submitted";
+        marksheet.isFinalized = true;
+        marksheet.finalizedAt = new Date();
+        marksheet.finalizedBy = submittedById;
+      }
+
+      if (markUpdated) {
+        marksheet.lastUpdatedBy = submittedById;
+        marksheet.lastUpdatedAt = new Date();
+        await marksheet.save();
+        modifiedCount++;
+      }
+    }
+
+    const refreshedMarksheets = await Mark.find({ examId, classId });
+    const allClassSubjectsSubmitted =
+      refreshedMarksheets.length > 0 &&
+      refreshedMarksheets.every((m) =>
+        m.subjects.every(
+          (s) => s.status === "submitted" || s.status === "reviewed" || s.status === "published"
+        )
+      );
+
+    if (allClassSubjectsSubmitted) {
+      classSubmission.status = "submitted";
+      classSubmission.submittedBy = submittedById;
+      classSubmission.submittedByName = submittedByName;
+      classSubmission.submittedAt = new Date();
+    } else {
+      classSubmission.status = "draft";
+    }
+
     await exam.save();
-    await exam.updateClassSubmissionStats(classId);
+    if (typeof exam.updateClassSubmissionStats === "function") {
+      await exam.updateClassSubmissionStats(classId);
+    }
 
     broadcastToRole("admin", "marks:submitted", {
       examId: exam._id,
       examName: exam.displayName,
       classId,
       submittedBy: staffOrAdmin.name,
-      marksCount: marksToUpdate.modifiedCount,
+      marksCount: modifiedCount,
       timestamp: new Date(),
     });
 
     res.json({
       success: true,
-      message: `Submitted ${marksToUpdate.modifiedCount} marksheets for review`,
+      message: `Submitted subject marks for review successfully`,
       examStatus: exam.overallStatus,
+      classStatus: classSubmission.status,
     });
   } catch (error) {
     console.error("Error in submitMarksForReview:", error);
@@ -1305,10 +1371,10 @@ exports.reviewMarks = async (req, res) => {
   }
 };
 
-// Revert marks status to draft (admin) - Allows teachers to edit marks again if submitted by accident
+// Revert marks status to draft (admin) - Accepts optional subjectId or subjectIds
 exports.revertMarksToDraft = async (req, res) => {
   try {
-    const { examId, classId } = req.body;
+    const { examId, classId, subjectId, subjectIds } = req.body;
     const userId = req.user.id;
 
     const staffOrAdmin = await getStaffOrAdmin(userId);
@@ -1341,19 +1407,47 @@ exports.revertMarksToDraft = async (req, res) => {
       return res.status(404).json({ message: "Class not found in exam" });
     }
 
-    // Revert marks status to draft
-    const updatedMarks = await Mark.updateMany(
-      { examId, classId },
-      {
-        status: "draft",
-        isFinalized: false,
-        lastUpdatedBy: userId.toString(),
-        lastUpdatedAt: new Date(),
-      },
-    );
+    const targetSubjectIds = Array.isArray(subjectIds)
+      ? subjectIds
+      : subjectId
+      ? [subjectId]
+      : null;
+
+    const marksheets = await Mark.find({ examId, classId });
+    let updatedCount = 0;
+
+    for (const marksheet of marksheets) {
+      let markUpdated = false;
+
+      marksheet.subjects.forEach((s) => {
+        const sId = s.subjectId?.toString() || s._id?.toString();
+        const matchesTarget = !targetSubjectIds || targetSubjectIds.some((id) => id.toString() === sId);
+
+        if (matchesTarget) {
+          s.status = "draft";
+          s.submittedBy = null;
+          s.submittedByName = null;
+          s.submittedAt = null;
+          s.reviewedBy = null;
+          s.reviewedAt = null;
+          markUpdated = true;
+        }
+      });
+
+      marksheet.status = "draft";
+      marksheet.isFinalized = false;
+
+      if (markUpdated) {
+        marksheet.lastUpdatedBy = userId.toString();
+        marksheet.lastUpdatedAt = new Date();
+        await marksheet.save();
+        updatedCount++;
+      }
+    }
 
     classSubmission.status = "draft";
     classSubmission.submittedBy = null;
+    classSubmission.submittedByName = null;
     classSubmission.submittedAt = null;
     classSubmission.reviewedBy = null;
     classSubmission.reviewedAt = null;
@@ -1369,13 +1463,15 @@ exports.revertMarksToDraft = async (req, res) => {
       examName: exam.displayName,
       classId,
       revertedBy: staffOrAdmin.name,
-      updatedCount: updatedMarks.modifiedCount,
+      updatedCount,
       timestamp: new Date(),
     });
 
     res.json({
       success: true,
-      message: `Marks status reverted to Draft. Teachers can now edit marks again.`,
+      message: targetSubjectIds
+        ? `Subject marks status reverted to Draft. Teachers can edit marks again.`
+        : `All class marks status reverted to Draft. Teachers can edit marks again.`,
       examStatus: exam.overallStatus,
     });
   } catch (error) {
@@ -1623,13 +1719,24 @@ exports.getTeacherPermissions = async (req, res) => {
       }
     }
 
-    const classSubmission = exam.classSubmissionStatus.find(
-      (cs) => cs.classId && cs.classId.toString() === classId.toString(),
-    );
+    const marksheets = await Mark.find({ examId, classId });
+    allowedSubjects = allowedSubjects.map((s) => {
+      const sIdStr = s.subjectId?.toString();
+      const sampleSubj = marksheets.flatMap((m) => m.subjects || []).find(
+        (sub) => sub.subjectId?.toString() === sIdStr
+      );
+      const subjectStatus = sampleSubj?.status || "draft";
+      return {
+        ...s,
+        status: subjectStatus,
+        canEdit: isAdmin || subjectStatus === "draft",
+      };
+    });
 
     const hasEditPermission =
       allowedSubjects.length > 0 || isClassTeacher || isAdmin;
-    const canSubmit = hasEditPermission && classSubmission?.status === "draft";
+    const hasAnyDraftSubject = allowedSubjects.some((s) => s.canEdit);
+    const canSubmit = hasEditPermission && (isAdmin || hasAnyDraftSubject);
 
     res.json({
       success: true,

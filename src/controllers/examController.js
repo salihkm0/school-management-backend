@@ -324,6 +324,41 @@ exports.getExam = async (req, res) => {
       await exam.updateClassSubmissionStats(classStatus.classId);
     }
     
+    // Fetch all marksheets for this exam to build subject submission status map
+    const allExamMarksheets = await Mark.find({ examId: exam._id });
+    const marksheetsByClassMap = new Map();
+    allExamMarksheets.forEach((m) => {
+      const cId = m.classId?.toString();
+      if (!marksheetsByClassMap.has(cId)) marksheetsByClassMap.set(cId, []);
+      marksheetsByClassMap.get(cId).push(m);
+    });
+
+    const enhancedClassSubmissionStatus = (exam.classSubmissionStatus || []).map((cs) => {
+      const csObj = cs.toObject ? cs.toObject() : cs;
+      const cId = (cs.classId?._id || cs.classId || "").toString();
+      const classMarksheets = marksheetsByClassMap.get(cId) || [];
+
+      const subjectSubmissions = (exam.subjects || []).map((subj) => {
+        const subjIdStr = (subj.subjectId?._id || subj.subjectId)?.toString();
+        const sampleSubj = classMarksheets.flatMap((m) => m.subjects || []).find(
+          (s) => s.subjectId?.toString() === subjIdStr
+        );
+        return {
+          subjectId: subjIdStr,
+          subjectName: subj.subjectName,
+          subjectCode: subj.subjectCode,
+          status: sampleSubj?.status || "draft",
+          submittedByName: sampleSubj?.submittedByName || null,
+          submittedAt: sampleSubj?.submittedAt || null,
+        };
+      });
+
+      return {
+        ...csObj,
+        subjectSubmissions,
+      };
+    });
+
     // Get class details with student counts
     const classDetails = await Promise.all(exam.classIds.map(async (classItem) => {
       const studentCount = await Student.countDocuments({ 
@@ -331,7 +366,7 @@ exports.getExam = async (req, res) => {
         status: 'active' 
       });
       
-      const submissionStatus = exam.classSubmissionStatus.find(
+      const submissionStatus = enhancedClassSubmissionStatus.find(
         cs => cs.classId && cs.classId.toString() === classItem._id.toString()
       );
       
@@ -350,6 +385,7 @@ exports.getExam = async (req, res) => {
         studentCount,
         status: submissionStatus?.status || 'draft',
         submissionStatus: submissionStatus,
+        subjectSubmissions: submissionStatus?.subjectSubmissions || [],
         marksEntryStats: {
           totalStudents: studentCount,
           marksEntered,
@@ -409,6 +445,7 @@ exports.getExam = async (req, res) => {
       success: true,
       data: {
         ...formattedExam,
+        classSubmissionStatus: enhancedClassSubmissionStatus,
         classDetails,
         enhancedSchedule,
         enhancedSubjects,

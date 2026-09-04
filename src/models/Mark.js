@@ -64,6 +64,16 @@ const SubjectMarkSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  status: {
+    type: String,
+    enum: ["draft", "submitted", "reviewed", "published"],
+    default: "draft",
+  },
+  submittedBy: String,
+  submittedByName: String,
+  submittedAt: Date,
+  reviewedBy: String,
+  reviewedAt: Date,
 });
 
 const MarkSchema = new mongoose.Schema(

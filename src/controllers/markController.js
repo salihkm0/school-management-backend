@@ -1133,14 +1133,37 @@ exports.submitMarksForReview = async (req, res) => {
         staffOrAdmin.role,
       );
     const isAdmin = isSysAdmin || isStaffAdmin;
-    const isClassTeacher = isAdmin
-      ? true
-      : await hasClassTeacherPermission(userId, staffOrAdmin._id, classId);
 
-    if (!isClassTeacher) {
+    let hasPermission = isAdmin;
+    if (!hasPermission) {
+      const isCT = await hasClassTeacherPermission(userId, staffOrAdmin._id, classId);
+      if (isCT) {
+        hasPermission = true;
+      } else {
+        const classObj = await Class.findById(classId);
+        const teachesInClass = classObj?.subjectTeachers?.some(
+          (st) => st.teacherId && st.teacherId.toString() === staffOrAdmin._id.toString()
+        );
+        if (teachesInClass) {
+          hasPermission = true;
+        } else {
+          const staffAssignment = await StaffAssignment.findOne({
+            staffId: staffOrAdmin._id,
+          });
+          const teachesInStaffAssignment = staffAssignment?.subjectsTaught?.some(
+            (s) => s.classId && s.classId.toString() === classId.toString()
+          );
+          if (teachesInStaffAssignment) {
+            hasPermission = true;
+          }
+        }
+      }
+    }
+
+    if (!hasPermission) {
       return res
         .status(403)
-        .json({ message: "Only class teacher can submit marks for review" });
+        .json({ message: "Not authorized to submit marks for review for this class" });
     }
 
     const exam = await Exam.findById(examId);
@@ -1604,8 +1627,9 @@ exports.getTeacherPermissions = async (req, res) => {
       (cs) => cs.classId && cs.classId.toString() === classId.toString(),
     );
 
-    const canSubmit =
-      (isClassTeacher || isAdmin) && classSubmission?.status === "draft";
+    const hasEditPermission =
+      allowedSubjects.length > 0 || isClassTeacher || isAdmin;
+    const canSubmit = hasEditPermission && classSubmission?.status === "draft";
 
     res.json({
       success: true,
@@ -1623,8 +1647,7 @@ exports.getTeacherPermissions = async (req, res) => {
         canSubmit: canSubmit,
         canReview: isAdmin,
         canPublish: isAdmin && classSubmission?.status === "reviewed",
-        hasEditPermission:
-          allowedSubjects.length > 0 || isClassTeacher || isAdmin,
+        hasEditPermission: hasEditPermission,
       },
     });
   } catch (error) {

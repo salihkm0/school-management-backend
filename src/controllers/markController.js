@@ -1282,6 +1282,86 @@ exports.reviewMarks = async (req, res) => {
   }
 };
 
+// Revert marks status to draft (admin) - Allows teachers to edit marks again if submitted by accident
+exports.revertMarksToDraft = async (req, res) => {
+  try {
+    const { examId, classId } = req.body;
+    const userId = req.user.id;
+
+    const staffOrAdmin = await getStaffOrAdmin(userId);
+    if (!staffOrAdmin) {
+      return res.status(403).json({ message: "Staff record not found" });
+    }
+
+    const isSysAdmin = staffOrAdmin.isSystemAdmin || false;
+    const isStaffAdmin =
+      !isSysAdmin &&
+      ["principal", "administrator", "manager", "admin"].includes(
+        staffOrAdmin.role,
+      );
+    const isAdmin = isSysAdmin || isStaffAdmin;
+
+    if (!isAdmin) {
+      return res.status(403).json({ message: "Only admin can set status to draft" });
+    }
+
+    const exam = await Exam.findById(examId);
+    if (!exam) {
+      return res.status(404).json({ message: "Exam not found" });
+    }
+
+    const classSubmission = exam.classSubmissionStatus.find(
+      (cs) => cs.classId && cs.classId.toString() === classId.toString(),
+    );
+
+    if (!classSubmission) {
+      return res.status(404).json({ message: "Class not found in exam" });
+    }
+
+    // Revert marks status to draft
+    const updatedMarks = await Mark.updateMany(
+      { examId, classId },
+      {
+        status: "draft",
+        isFinalized: false,
+        lastUpdatedBy: userId.toString(),
+        lastUpdatedAt: new Date(),
+      },
+    );
+
+    classSubmission.status = "draft";
+    classSubmission.submittedBy = null;
+    classSubmission.submittedAt = null;
+    classSubmission.reviewedBy = null;
+    classSubmission.reviewedAt = null;
+
+    await exam.save();
+
+    if (typeof exam.updateClassSubmissionStats === 'function') {
+      await exam.updateClassSubmissionStats(classId);
+    }
+
+    broadcastToRole("admin", "marks:reverted_to_draft", {
+      examId: exam._id,
+      examName: exam.displayName,
+      classId,
+      revertedBy: staffOrAdmin.name,
+      updatedCount: updatedMarks.modifiedCount,
+      timestamp: new Date(),
+    });
+
+    res.json({
+      success: true,
+      message: `Marks status reverted to Draft. Teachers can now edit marks again.`,
+      examStatus: exam.overallStatus,
+    });
+  } catch (error) {
+    console.error("Error in revertMarksToDraft:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
 // Get student marksheet (for viewing results)
 exports.getStudentMarksheet = async (req, res) => {
   try {

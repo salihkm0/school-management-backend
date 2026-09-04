@@ -9,6 +9,7 @@ const {
   bulkUpdateMarks,
   submitMarksForReview,
   reviewMarks,
+  revertMarksToDraft,
   getStudentMarksheet,
   getClassRankings,
   getClassResults,
@@ -48,6 +49,9 @@ router.post('/submit', authorize('staff',"admin"), invalidateCache('exams'), sub
 
 // Review marks (admin)
 router.post('/review', authorize('admin', 'principal'), invalidateCache('exams'), reviewMarks);
+
+// Revert to draft (admin)
+router.post('/revert-draft', authorize('admin', 'principal'), invalidateCache('exams'), revertMarksToDraft);
 
 // Publish results (admin)
 router.post('/publish', authorize('admin'), invalidateCache('exams'), publishResults);

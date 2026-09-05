@@ -258,7 +258,7 @@ html, body {
 <body>
 
 <%
-const studentsPerPage = 45;
+const studentsPerPage = 30;
 
 const girls = students.filter(s => s.gender === 'F').sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 const boys = students.filter(s => s.gender === 'M').sort((a, b) => (a.name || '').localeCompare(b.name || ''));

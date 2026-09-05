@@ -32,7 +32,7 @@ router.get('/upcoming', cacheRoute(1800, 'exams'), getUpcomingExams);
 router.get('/schedule/:classId', cacheRoute(1800, 'exams'), getExamSchedule);
 
 // Get exams for staff (class teacher only)
-router.get('/staff/exams', protect, authorize('staff'), cacheRoute(1800, 'exams'), getStaffExams);
+router.get('/staff/exams', protect, authorize('staff'), getStaffExams);
 
 // Create exam as staff (class teacher)
 router.post('/staff/exams', protect, authorize('staff'), invalidateCache('exams'), createStaffExam);

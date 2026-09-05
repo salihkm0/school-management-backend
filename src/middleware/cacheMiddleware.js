@@ -17,9 +17,9 @@ const cacheRoute = (duration = 3600, prefix = '') => {
     const baseRoute = req.baseUrl.split('/').pop();
     const cachePrefix = prefix || baseRoute;
     
-    // Construct cache key: prefix:full_url
-    // e.g., classes:/api/classes?limit=10
-    const cacheKey = `${cachePrefix}:${req.originalUrl}`;
+    // Construct cache key: prefix:full_url (including user id when authenticated)
+    const userSuffix = req.user ? `:user:${req.user._id || req.user.id}` : '';
+    const cacheKey = `${cachePrefix}:${req.originalUrl}${userSuffix}`;
 
     try {
       const cachedData = await getCache(cacheKey);

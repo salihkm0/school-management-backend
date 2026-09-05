@@ -55,6 +55,7 @@ const staffListRoutes = require('./src/routes/pdf/staffListRoutes');
 const classTeacherListRoutes = require('./src/routes/pdf/classTeacherListRoutes');
 const feeCollectionRoutes = require('./src/routes/pdf/feeCollectionRoutes');
 const promotionListRoutes = require('./src/routes/pdf/promotionListRoutes');
+const sportsPdfRoutes = require('./src/routes/pdf/sportsPdfRoutes');
 const userRoutes = require('./src/routes/userRoutes');
 const dashboardRoutes = require('./src/routes/dashboardRoutes');
 const searchRoutes = require('./src/routes/searchRoutes');
@@ -291,6 +292,7 @@ app.use('/api/pdf/class-teacher-list', classTeacherListRoutes);
 app.use('/api/pdf/fee-collection', feeCollectionRoutes);
 app.use('/api/pdf/promotion-list', promotionListRoutes);
 app.use('/api/pdf/report-card', reportCardRoutes);
+app.use('/api/pdf/sports', sportsPdfRoutes);
 
 // Historical mark import (standalone — does not affect main system)
 app.use('/api/historical-imports', historicalImportRoutes);

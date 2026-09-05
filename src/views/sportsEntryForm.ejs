@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Sports Meet Entry Form - <%= className %> <%= academicYear %></title>
+
+<style>
+@page {
+    size: A4 landscape;
+    margin: 3mm;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 297mm;
+    font-family: "Times New Roman", serif;
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.page-container {
+    width: 291mm;
+    min-height: 200mm;
+    margin: 0 auto 3mm auto;
+    padding: 5mm 4mm;
+    border: 2px solid #000;
+    position: relative;
+    page-break-after: always;
+    box-sizing: border-box;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+}
+
+.page-container:last-child {
+    page-break-after: auto;
+    margin-bottom: 0;
+}
+
+/* Logo Watermark - Centered */
+.logo-watermark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.logo-watermark img {
+    width: 130mm;
+    height: 130mm;
+    object-fit: contain;
+    opacity: 0.05;
+}
+
+.content-layer {
+    position: relative;
+    z-index: 2;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header Section */
+.header-section {
+    text-align: center;
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1.5px solid #000;
+}
+
+.school-logo {
+    width: 18mm;
+    height: 18mm;
+    margin: 0 auto 2px;
+}
+
+.school-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.school-name {
+    font-size: 14px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+}
+
+.arabic-text {
+    font-size: 10px;
+    font-weight: bold;
+    margin-bottom: 2px;
+    color: #333;
+}
+
+.main-title {
+    font-size: 13px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 1px;
+}
+
+.sub-title {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    text-decoration: underline;
+    margin: 2px 0 4px 0;
+}
+
+/* Info Bar */
+.info-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 9px;
+    font-weight: bold;
+    padding: 3px 6px;
+    background-color: #f8f9fa;
+    border: 1px solid #000;
+    border-radius: 2px;
+    margin-top: 3px;
+}
+
+.info-item {
+    display: inline-block;
+}
+
+/* Main Table */
+.table-wrapper {
+    flex: 1;
+    margin-top: 5px;
+}
+
+.main-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8px;
+    table-layout: fixed;
+}
+
+.main-table th,
+.main-table td {
+    border: 1px solid #000;
+    padding: 3px 2px;
+    vertical-align: middle;
+}
+
+.main-table th {
+    background: #f0f0f0;
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: 7.5px;
+    text-align: center;
+    line-height: 1.2;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.text-left {
+    text-align: left;
+    padding-left: 5px !important;
+}
+
+.student-name {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tick-box {
+    text-align: center;
+    font-size: 9px;
+    color: #999;
+}
+
+/* Zebra striping */
+tbody tr:nth-child(even) td {
+    background-color: #fafafa00;
+}
+
+/* Column Widths */
+.col-sl { width: 3.5%; }
+.col-adm { width: 7%; }
+.col-chest { width: 6.5%; }
+.col-remarks { width: 8%; }
+.table-junior .col-name { width: 23%; }
+.table-junior .col-event { width: 7%; }
+.table-senior .col-name { width: 19%; }
+.table-senior .col-event { width: 5.6%; }
+
+/* Signatures & Footer */
+.footer-section {
+    margin-top: auto;
+    padding-top: 8px;
+}
+
+.signatures-container {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 15px;
+    padding: 0 10px;
+}
+
+.signature-box {
+    text-align: center;
+    width: 22%;
+}
+
+.signature-line {
+    border-top: 1px solid #000;
+    margin-bottom: 4px;
+    width: 100%;
+}
+
+.signature-label {
+    font-size: 8.5px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.page-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 7.5px;
+    color: #555;
+    margin-top: 6px;
+    padding-top: 3px;
+    border-top: 0.5px solid #ccc;
+}
+
+@media print {
+    html, body {
+        width: 297mm;
+        height: 210mm;
+    }
+    .page-container {
+        border: 2px solid #000;
+        page-break-after: always;
+    }
+    .page-container:last-child {
+        page-break-after: auto;
+    }
+    th {
+        background-color: #f0f0f0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+</style>
+</head>
+<body>
+
+<%
+// Events definition based on category
+const juniorEvents = [
+    '100 M',
+    '200 M',
+    '400 M',
+    '800 M',
+    'Long Jump',
+    'High Jump',
+    'Shot Put',
+    'Discus Throw'
+];
+
+const seniorEvents = [
+    '100 M',
+    '200 M',
+    '400 M',
+    '800 M',
+    '1500 M',
+    '3000 M',
+    'Long Jump',
+    'High Jump',
+    'Shot Put',
+    'Discus Throw'
+];
+
+const studentsPerPage = 20;
+const blankRowsCount = 3;
+
+// Loop over sections (e.g. Boys, Girls)
+sections.forEach(function(section) {
+    const activeEvents = section.category === 'senior' ? seniorEvents : juniorEvents;
+    const sectionStudents = section.students || [];
+    const totalPages = Math.max(1, Math.ceil(sectionStudents.length / studentsPerPage));
+
+    for (let page = 0; page < totalPages; page++) {
+        const startIndex = page * studentsPerPage;
+        const endIndex = Math.min(startIndex + studentsPerPage, sectionStudents.length);
+        const pageStudents = sectionStudents.slice(startIndex, endIndex);
+        const isFirstPage = page === 0;
+        const isLastPage = page === totalPages - 1;
+%>
+
+<div class="page-container">
+
+    <!-- Logo Watermark - Centered -->
+    <div class="logo-watermark">
+        <% if (schoolLogo) { %>
+            <img src="<%= schoolLogo %>" alt="Watermark">
+        <% } %>
+    </div>
+
+    <div class="content-layer">
+        <div class="main-content">
+
+            <!-- Header Section -->
+            <div class="header-section">
+                <% if (schoolLogo) { %>
+                <div class="school-logo">
+                    <img src="<%= schoolLogo %>" alt="School Logo">
+                </div>
+                <% } %>
+                <div class="school-name"><%= schoolName || 'P.P.M.H.S.S. KOTTUKKARA' %></div>
+                <% if (arabicText) { %>
+                <div class="arabic-text"><%= arabicText %></div>
+                <% } %>
+                <div class="main-title">ANNUAL SPORTS MEET - <%= academicYear %></div>
+                <div class="sub-title">ENTRY FORM &mdash; <%= section.categoryTitle.toUpperCase() %> (<%= section.genderTitle.toUpperCase() %>)</div>
+
+                <!-- Info Bar -->
+                <div class="info-bar">
+                    <span class="info-item"><strong>Class:</strong> <%= className %></span>
+                    <span class="info-item"><strong>Category:</strong> <%= section.categoryTitle %></span>
+                    <span class="info-item"><strong>Group:</strong> <%= section.genderTitle %></span>
+                    <span class="info-item"><strong>House:</strong> <%= houseName || '____________________' %></span>
+                    <span class="info-item"><strong>Total In Group:</strong> <%= sectionStudents.length %></span>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="table-wrapper">
+                <table class="main-table <%= section.category === 'senior' ? 'table-senior' : 'table-junior' %>" cellspacing="0" cellpadding="0">
+                    <thead>
+                        <tr>
+                            <th class="col-sl">Sl No</th>
+                            <th class="col-adm">Adm No</th>
+                            <th class="col-name">Name of Student</th>
+                            <th class="col-chest">Chest No</th>
+                            <% activeEvents.forEach(function(event) { %>
+                            <th class="col-event"><%= event %></th>
+                            <% }); %>
+                            <th class="col-remarks">Remarks</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% 
+                        pageStudents.forEach(function(student, index) { 
+                            const slNo = startIndex + index + 1;
+                        %>
+                        <tr>
+                            <td class="text-center"><%= slNo %></td>
+                            <td class="text-center"><%= student.admissionNo || '-' %></td>
+                            <td class="text-left student-name"><%= student.name %></td>
+                            <td class="text-center">&nbsp;</td>
+                            <% activeEvents.forEach(function() { %>
+                            <td class="text-center tick-box">&nbsp;</td>
+                            <% }); %>
+                            <td class="text-center">&nbsp;</td>
+                        </tr>
+                        <% }); %>
+
+                        <% 
+                        // Add blank rows on the last page of the group
+                        if (isLastPage) { 
+                            for (let b = 0; b < blankRowsCount; b++) {
+                                const blankSlNo = sectionStudents.length + b + 1;
+                        %>
+                        <tr>
+                            <td class="text-center"><%= blankSlNo %></td>
+                            <td class="text-center">&nbsp;</td>
+                            <td class="text-left student-name" style="color: #bbb;">&nbsp;</td>
+                            <td class="text-center">&nbsp;</td>
+                            <% activeEvents.forEach(function() { %>
+                            <td class="text-center tick-box">&nbsp;</td>
+                            <% }); %>
+                            <td class="text-center">&nbsp;</td>
+                        </tr>
+                        <% 
+                            }
+                        } 
+                        %>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Signatures & Footer Section -->
+            <div class="footer-section">
+                <div class="signatures-container">
+                    <div class="signature-box">
+                        <div class="signature-line"></div>
+                        <div class="signature-label">Class Teacher</div>
+                    </div>
+                    <div class="signature-box">
+                        <div class="signature-line"></div>
+                        <div class="signature-label">House Master / Captain</div>
+                    </div>
+                    <div class="signature-box">
+                        <div class="signature-line"></div>
+                        <div class="signature-label">Physical Education Teacher</div>
+                    </div>
+                    <div class="signature-box">
+                        <div class="signature-line"></div>
+                        <div class="signature-label">Headmaster / Principal</div>
+                    </div>
+                </div>
+
+                <div class="page-meta">
+                    <span>Generated on: <%= generatedDate || new Date().toLocaleDateString('en-IN') %></span>
+                    <span><%= section.categoryTitle %> - <%= section.genderTitle %></span>
+                    <span>Page <%= page + 1 %> of <%= totalPages %></span>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<% 
+    } // end for pages
+}); // end for sections
+%>
+
+</body>
+</html>

@@ -260,7 +260,11 @@ exports.getOrCreateMarksheet = async (req, res) => {
       return res.status(404).json({ message: "Student not found" });
     }
 
-    let marksheet = await Mark.findOne({ studentId, examId, classId });
+    let marksheet = await Mark.findOne({ studentId, examId });
+    if (marksheet && marksheet.classId?.toString() !== classId.toString()) {
+      marksheet.classId = classId;
+      marksheet.className = student.className || marksheet.className;
+    }
 
     if (!marksheet) {
       const subjects = exam.subjects.map((subject) => ({
@@ -382,8 +386,15 @@ exports.getMarksheetsByClass = async (req, res) => {
     const sortPreference = classObj?.studentSortPreference || 'alphabetic';
     const students = sortStudents(rawStudents, sortPreference);
 
-    // Get existing marksheets
-    const marksheets = await Mark.find({ examId, classId });
+    // Get existing marksheets for students in this class (including students recently transferred)
+    const studentIds = students.map((s) => s._id);
+    const marksheets = await Mark.find({
+      examId,
+      $or: [
+        { classId },
+        { studentId: { $in: studentIds } }
+      ]
+    });
     const marksheetMap = new Map();
     marksheets.forEach((m) => marksheetMap.set(m.studentId.toString(), m));
 
@@ -732,7 +743,11 @@ exports.updateStudentMarks = async (req, res) => {
       .populate("thirdLanguage", "name code")
       .populate("additionalLanguage", "name code");
 
-    let marksheet = await Mark.findOne({ studentId, examId, classId });
+    let marksheet = await Mark.findOne({ studentId, examId });
+    if (marksheet && marksheet.classId?.toString() !== classId.toString()) {
+      marksheet.classId = classId;
+      marksheet.className = student.className || marksheet.className;
+    }
 
     if (!marksheet) {
       const subjectsForMark = [];
@@ -948,8 +963,12 @@ exports.bulkUpdateMarks = async (req, res) => {
         let marksheet = await Mark.findOne({
           studentId: studentData.studentId,
           examId,
-          classId,
         });
+
+        if (marksheet && marksheet.classId?.toString() !== classId.toString()) {
+          marksheet.classId = classId;
+          marksheet.className = student.className || marksheet.className;
+        }
 
         if (!marksheet) {
           // Initialize ALL exam subjects so other teachers can update their own subjects later

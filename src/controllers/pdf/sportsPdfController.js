@@ -9,8 +9,9 @@ const { sortStudents } = require('../../utils/studentSorter');
 const SCHOOL_LOGO_URL = 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
 
 const determineCategory = (classObj, userCategory) => {
-  if (userCategory && ['junior', 'senior'].includes(userCategory.toLowerCase())) {
-    return userCategory.toLowerCase();
+  const cleanCategory = (userCategory || '').toLowerCase().replace(/[- ]/g, '_');
+  if (['sub_junior', 'junior', 'senior'].includes(cleanCategory)) {
+    return cleanCategory;
   }
 
   if (!classObj) return 'senior';
@@ -20,9 +21,28 @@ const determineCategory = (classObj, userCategory) => {
   const text = `${className} ${displayName}`;
 
   if (/\b8\b|VIII/i.test(text)) {
+    return 'sub_junior';
+  }
+  if (/\b9\b|IX/i.test(text)) {
     return 'junior';
   }
+  if (/\b10\b|X/i.test(text)) {
+    return 'senior';
+  }
   return 'senior';
+};
+
+const getCategoryTitle = (categoryType) => {
+  switch (categoryType) {
+    case 'sub_junior':
+      return 'Sub Junior (Class 8)';
+    case 'junior':
+      return 'Junior (Class 9)';
+    case 'senior':
+      return 'Senior (Class 10)';
+    default:
+      return 'Senior (Class 10)';
+  }
 };
 
 const buildSportsData = async (req) => {
@@ -65,7 +85,7 @@ const buildSportsData = async (req) => {
   const sortedStudents = sortStudents(rawStudents);
 
   const categoryType = determineCategory(classDetails, queryCategory);
-  const categoryTitle = categoryType === 'junior' ? 'Junior (Class 8)' : 'Senior (Class 9 & 10)';
+  const categoryTitle = getCategoryTitle(categoryType);
 
   const boys = sortedStudents
     .filter(s => s.gender === 'M')

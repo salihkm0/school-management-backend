@@ -138,36 +138,39 @@ html, body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 9px;
+    font-size: 11px;
     font-weight: bold;
-    padding: 3px 6px;
+    padding: 6px 12px;
+    min-height: 32px;
     background-color: #f8f9fa;
-    border: 1px solid #000;
-    border-radius: 2px;
-    margin-top: 3px;
+    border: 1.5px solid #000;
+    border-radius: 3px;
+    margin-top: 4px;
+    margin-bottom: 4px;
 }
 
 .info-item {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
 }
 
 /* Main Table */
 .table-wrapper {
     flex: 1;
-    margin-top: 5px;
+    margin-top: 4px;
 }
 
 .main-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 8px;
     table-layout: fixed;
 }
 
 .main-table th,
 .main-table td {
     border: 1px solid #000;
-    padding: 3px 2px;
+    padding: 5px 3px;
     vertical-align: middle;
 }
 
@@ -175,9 +178,15 @@ html, body {
     background: #f0f0f0;
     font-weight: 900;
     text-transform: uppercase;
-    font-size: 7.5px;
+    font-size: 8px;
     text-align: center;
     line-height: 1.2;
+    height: 30px;
+}
+
+.main-table td {
+    height: 25px;
+    font-size: 8.5px;
 }
 
 .text-center {
@@ -186,7 +195,7 @@ html, body {
 
 .text-left {
     text-align: left;
-    padding-left: 5px !important;
+    padding-left: 6px !important;
 }
 
 .student-name {
@@ -194,6 +203,7 @@ html, body {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-size: 9px;
 }
 
 .tick-box {
@@ -204,18 +214,23 @@ html, body {
 
 /* Zebra striping */
 tbody tr:nth-child(even) td {
-    background-color: #fafafa00;
+    background-color: #fafafa;
 }
 
 /* Column Widths */
-.col-sl { width: 3.5%; }
-.col-adm { width: 7%; }
-.col-chest { width: 6.5%; }
-.col-remarks { width: 8%; }
-.table-junior .col-name { width: 23%; }
-.table-junior .col-event { width: 7%; }
-.table-senior .col-name { width: 19%; }
-.table-senior .col-event { width: 5.6%; }
+.table-sub-junior .col-sl { width: 4%; }
+.table-sub-junior .col-adm { width: 7.5%; }
+.table-sub-junior .col-name { width: 24.5%; }
+.table-sub-junior .col-chest { width: 7%; }
+.table-sub-junior .col-event { width: 7%; }
+.table-sub-junior .col-remarks { width: 8%; }
+
+.table-junior-senior .col-sl { width: 3.5%; }
+.table-junior-senior .col-adm { width: 7%; }
+.table-junior-senior .col-name { width: 19%; }
+.table-junior-senior .col-chest { width: 6.5%; }
+.table-junior-senior .col-event { width: 5.6%; }
+.table-junior-senior .col-remarks { width: 8%; }
 
 /* Signatures & Footer */
 .footer-section {
@@ -281,18 +296,19 @@ tbody tr:nth-child(even) td {
 
 <%
 // Events definition based on category
-const juniorEvents = [
+// Sub Junior (Class 8): 7 events (800 M removed as requested)
+const subJuniorEvents = [
     '100 M',
     '200 M',
     '400 M',
-    '800 M',
     'Long Jump',
     'High Jump',
     'Shot Put',
     'Discus Throw'
 ];
 
-const seniorEvents = [
+// Junior (Class 9) & Senior (Class 10): 10 events
+const juniorSeniorEvents = [
     '100 M',
     '200 M',
     '400 M',
@@ -305,12 +321,13 @@ const seniorEvents = [
     'Discus Throw'
 ];
 
-const studentsPerPage = 20;
+const studentsPerPage = 15;
 const blankRowsCount = 3;
 
 // Loop over sections (e.g. Boys, Girls)
 sections.forEach(function(section) {
-    const activeEvents = section.category === 'senior' ? seniorEvents : juniorEvents;
+    const isSubJunior = section.category === 'sub_junior';
+    const activeEvents = isSubJunior ? subJuniorEvents : juniorSeniorEvents;
     const sectionStudents = section.students || [];
     const totalPages = Math.max(1, Math.ceil(sectionStudents.length / studentsPerPage));
 
@@ -342,9 +359,9 @@ sections.forEach(function(section) {
                 </div>
                 <% } %>
                 <div class="school-name"><%= schoolName || 'P.P.M.H.S.S. KOTTUKKARA' %></div>
-                <!-- <% if (arabicText) { %>
+                <% if (typeof arabicText !== 'undefined' && arabicText) { %>
                 <div class="arabic-text"><%= arabicText %></div>
-                <% } %> -->
+                <% } %>
                 <div class="main-title">ANNUAL SPORTS MEET - <%= academicYear %></div>
                 <div class="sub-title">ENTRY FORM &mdash; <%= section.categoryTitle.toUpperCase() %> (<%= section.genderTitle.toUpperCase() %>)</div>
 
@@ -360,7 +377,7 @@ sections.forEach(function(section) {
 
             <!-- Table -->
             <div class="table-wrapper">
-                <table class="main-table <%= section.category === 'senior' ? 'table-senior' : 'table-junior' %>" cellspacing="0" cellpadding="0">
+                <table class="main-table <%= isSubJunior ? 'table-sub-junior' : 'table-junior-senior' %>" cellspacing="0" cellpadding="0">
                     <thead>
                         <tr>
                             <th class="col-sl">Sl No</th>
@@ -393,7 +410,10 @@ sections.forEach(function(section) {
                         <% 
                         // Add blank rows on the last page of the group
                         if (isLastPage) { 
-                            for (let b = 0; b < blankRowsCount; b++) {
+                            const slotsRemaining = studentsPerPage - pageStudents.length;
+                            const blanksToAdd = Math.max(blankRowsCount, slotsRemaining);
+                            const actualBlanks = Math.min(blanksToAdd, Math.max(1, 16 - pageStudents.length));
+                            for (let b = 0; b < actualBlanks; b++) {
                                 const blankSlNo = sectionStudents.length + b + 1;
                         %>
                         <tr>

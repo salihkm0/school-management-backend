@@ -164,8 +164,8 @@ th, td {
 }
 
 th.col-header {
-    background-color: #000000;
-    color: #FFFFFF;
+    background-color: #ECECEC;
+    color: #000000;
     font-weight: bold;
     font-size: 9px;
     padding: 6px 2px;
@@ -173,7 +173,7 @@ th.col-header {
 }
 
 th.col-header div {
-    color: #FFFFFF;
+    color: #000000;
 }
 
 td.text-left {
@@ -293,11 +293,11 @@ td.text-left {
                         <th class="col-header">
                             <div><%= subj.displayName || subj.subjectName %></div>
                             <% if (viewMode === 'te') { %>
-                                <div style="font-weight: normal; font-size: 7.5px; opacity: 0.9; margin-top: 2px;">TE Max: <%= subj.teMax %></div>
+                                <div style="font-weight: 600; font-size: 7.5px; color: #444444; margin-top: 2px;">TE Max: <%= subj.teMax %></div>
                             <% } else if (viewMode === 'both') { %>
-                                <div style="font-weight: normal; font-size: 7px; opacity: 0.9; margin-top: 2px;">TE:<%= subj.teMax %> | Tot:<%= subj.totalMax %></div>
+                                <div style="font-weight: 600; font-size: 7px; color: #444444; margin-top: 2px;">TE:<%= subj.teMax %> | Tot:<%= subj.totalMax %></div>
                             <% } else { %>
-                                <div style="font-weight: normal; font-size: 7.5px; opacity: 0.9; margin-top: 2px;">Max: <%= subj.totalMax || subj.maxMarks || 100 %></div>
+                                <div style="font-weight: 600; font-size: 7.5px; color: #444444; margin-top: 2px;">Max: <%= subj.totalMax || subj.maxMarks || 100 %></div>
                             <% } %>
                         </th>
                     <% }); %>

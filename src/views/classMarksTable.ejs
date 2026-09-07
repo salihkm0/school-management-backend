@@ -195,17 +195,11 @@ td.text-left {
     display: inline-block;
     font-size: 7.5px;
     font-weight: bold;
-    padding: 1px 4px;
-    border-radius: 2px;
-    background: #F0F0F0;
-    color: #000000;
-    border: 0.5px solid #777777;
     margin-top: 1px;
+    color: #000000;
 }
 .grade-te {
-    background: #F0F0F0;
     color: #000000;
-    border: 0.5px solid #777777;
 }
 .cell-both {
     display: flex;
@@ -240,7 +234,7 @@ td.text-left {
             <thead>
                 <!-- School Header (spans all columns) -->
                 <tr>
-                    <th class="school-header-cell" colspan="<%= subjects.length + 6 %>">
+                    <th class="school-header-cell" colspan="<%= subjects.length + 4 %>">
                         <div class="header-content">
                             <% if (schoolLogo) { %>
                                 <div class="school-logo">
@@ -305,8 +299,6 @@ td.text-left {
                         <%= viewMode === 'te' ? 'TE Total' : (viewMode === 'both' ? 'Total (TE/Tot)' : 'Total') %>
                     </th>
                     <th class="col-header" style="width: 5%"><%= viewMode === 'te' ? 'TE %' : '%' %></th>
-                    <th class="col-header" style="width: 5%"><%= viewMode === 'te' ? 'TE Grade' : 'Grade' %></th>
-                    <th class="col-header" style="width: 4%">Rank</th>
                 </tr>
             </thead>
             <tbody>
@@ -391,12 +383,6 @@ td.text-left {
                             <td class="bold" style="background-color: #F2F2F2;">
                                 <%= (student.tePercentage !== undefined ? student.tePercentage : (student.percentage || 0)).toFixed(1) %>%
                             </td>
-                            <td class="bold" style="background-color: #F2F2F2;">
-                                <%= student.teGrade || student.gradeInfo?.grade || '-' %>
-                            </td>
-                            <td class="bold" style="background-color: #F2F2F2;">
-                                <%= student.rank || '-' %>
-                            </td>
                         <% } else if (viewMode === 'both') { %>
                             <td class="bold" style="background-color: #F2F2F2; font-size: 8px;">
                                 <div>TE: <%= student.teTotalObtained %>/<%= student.teTotalMax %></div>
@@ -406,13 +392,6 @@ td.text-left {
                                 <div><%= (student.percentage || 0).toFixed(1) %>%</div>
                                 <div style="font-size: 7px; color: #444444;">TE: <%= (student.tePercentage || 0).toFixed(1) %>%</div>
                             </td>
-                            <td class="bold" style="background-color: #F2F2F2; font-size: 8px;">
-                                <div><%= student.grade || '-' %></div>
-                                <div style="font-size: 7px; color: #444444;">TE: <%= student.teGrade || '-' %></div>
-                            </td>
-                            <td class="bold" style="background-color: #F2F2F2;">
-                                <%= student.rank || '-' %>
-                            </td>
                         <% } else { %>
                             <td class="bold" style="background-color: #F2F2F2;">
                                 <%= student.totalObtained !== undefined ? student.totalObtained : student.totalMarks %> / <%= student.totalMax !== undefined ? student.totalMax : student.totalMaxMarks %>
@@ -420,19 +399,13 @@ td.text-left {
                             <td class="bold" style="background-color: #F2F2F2;">
                                 <%= (student.percentage !== undefined ? student.percentage : 0).toFixed(1) %>%
                             </td>
-                            <td class="bold" style="background-color: #F2F2F2;">
-                                <%= student.grade || (student.gradeInfo ? student.gradeInfo.grade : '-') %>
-                            </td>
-                            <td class="bold" style="background-color: #F2F2F2;">
-                                <%= student.rank || '-' %>
-                            </td>
                         <% } %>
                     </tr>
                 <% }); %>
             </tbody>
             <tfoot>
                 <tr>
-                    <td class="footer-cell" colspan="<%= subjects.length + 6 %>">
+                    <td class="footer-cell" colspan="<%= subjects.length + 4 %>">
                         Generated on <%= new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) %> | PPM Higher Secondary School
                     </td>
                 </tr>

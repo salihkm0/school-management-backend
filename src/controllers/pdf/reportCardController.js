@@ -854,6 +854,8 @@ exports.downloadClassMarksTablePDF = async (req, res) => {
     let academicYear = await AcademicYear.findOne({ isCurrent: true });
     const academicYearString = academicYear?.year || academicYear?.name || new Date().getFullYear().toString();
 
+    const mode = (req.query.mode || req.query.view || 'total').toLowerCase();
+
     let finalSubjects = subjects || [];
     if (finalSubjects.length > 0) {
       // Define standard subject order for Kerala syllabus
@@ -878,8 +880,6 @@ exports.downloadClassMarksTablePDF = async (req, res) => {
         // Find ALL subjects that match this keyword and haven't been added yet
         const matchingSubjects = finalSubjects.filter(s => {
           const name = (s.displayName || s.subjectName || '').toLowerCase();
-          // exact match or starts with or ends with to prevent 'social' matching 'social science' twice, 
-          // but includes() is okay if we only add if not already in sortedSubjects.
           return name.includes(orderName) && !sortedSubjects.includes(s);
         });
         
@@ -898,22 +898,110 @@ exports.downloadClassMarksTablePDF = async (req, res) => {
       finalSubjects = sortedSubjects;
     }
 
+    finalSubjects = finalSubjects.map(s => {
+      let teMax = s.termMaxMarks || s.theoryMaxMarks;
+      if (!teMax || teMax <= 0) {
+        if (s.ceMaxMarks && s.maxMarks && s.maxMarks > s.ceMaxMarks) {
+          teMax = s.maxMarks - s.ceMaxMarks;
+        } else {
+          teMax = s.maxMarks || 100;
+        }
+      }
+      const ceMax = s.ceMaxMarks || 0;
+      const totalMax = s.maxMarks || (teMax + ceMax);
+      return {
+        ...s,
+        teMax,
+        ceMax,
+        totalMax
+      };
+    });
+
     const finalClassName = classDetails.displayName || `${classDetails.name} ${classDetails.section || ''}`.trim();
     
     let formattedStudents = (students || []).map(student => {
-      const totalObtained = student.totalMarks !== undefined ? student.totalMarks : (student.totalObtained || 0);
-      const totalMax = student.totalMaxMarks !== undefined ? student.totalMaxMarks : (student.totalMax || 0);
-      const percentage = totalMax > 0 ? (totalObtained / totalMax) * 100 : 0;
+      let teTotalObtained = 0;
+      let teTotalMax = 0;
+      let grandTotal = 0;
+      let grandTotalMax = 0;
+
+      const studentSubjects = (student.subjects || student.subjectMarks || []).map(sm => {
+        const subjConfig = finalSubjects.find(s => 
+          (sm.examSubjectId && s.examSubjectId && sm.examSubjectId.toString() === s.examSubjectId.toString()) ||
+          (sm.subjectId && s.subjectId && sm.subjectId.toString() === s.subjectId.toString())
+        );
+
+        const teMax = sm.termMaxMarks || sm.theoryMaxMarks || subjConfig?.teMax || 80;
+        const totalMax = sm.maxMarks || subjConfig?.totalMax || 100;
+        const teMarks = sm.isAbsent ? 0 : (sm.theoryScore !== undefined ? sm.theoryScore : 0);
+        const ceMarks = sm.isAbsent ? 0 : (sm.ceMarks !== undefined ? sm.ceMarks : (sm.ceScore || 0));
+        const totalMarks = sm.isAbsent ? 0 : (sm.totalScore !== undefined ? sm.totalScore : (teMarks + ceMarks));
+
+        const tePercentage = teMax > 0 ? (teMarks / teMax) * 100 : 0;
+        const totalPercentage = totalMax > 0 ? (totalMarks / totalMax) * 100 : 0;
+
+        const teGrade = getGrade(tePercentage);
+        const totalGrade = getGrade(totalPercentage);
+
+        const isEntered = Boolean(
+          sm.isAbsent ||
+          sm.isEnteredExplicitly ||
+          (sm.isEntered && (
+            (sm.theoryScore != null && Number(sm.theoryScore) > 0) ||
+            (sm.ceScore != null && Number(sm.ceScore) > 0) ||
+            sm.isAbsent ||
+            sm.isEnteredExplicitly
+          )) ||
+          (sm.theoryScore != null && Number(sm.theoryScore) > 0) ||
+          (sm.ceScore != null && Number(sm.ceScore) > 0)
+        );
+
+        if (!sm.isAbsent && isEntered) {
+          teTotalObtained += teMarks;
+          teTotalMax += teMax;
+          grandTotal += totalMarks;
+          grandTotalMax += totalMax;
+        }
+
+        return {
+          ...sm,
+          teMarks,
+          teMax,
+          ceMarks,
+          totalMarks,
+          totalMax,
+          teGrade,
+          totalGrade,
+          isEntered
+        };
+      });
+
+      const percentage = grandTotalMax > 0 ? (grandTotal / grandTotalMax) * 100 : (student.percentage || 0);
+      const tePercentage = teTotalMax > 0 ? (teTotalObtained / teTotalMax) * 100 : 0;
+      const overallGrade = getGrade(percentage);
+      const teGrade = getGrade(tePercentage);
+
       return {
         ...student,
-        totalObtained,
-        totalMax,
-        percentage
+        subjects: studentSubjects,
+        totalObtained: grandTotal,
+        totalMax: grandTotalMax,
+        percentage,
+        grade: overallGrade,
+        teTotalObtained,
+        teTotalMax,
+        tePercentage,
+        teGrade
       };
     });
 
     const rankedStudents = [...formattedStudents]
-      .sort((a, b) => b.percentage - a.percentage)
+      .sort((a, b) => {
+        if (mode === 'te') {
+          return b.tePercentage - a.tePercentage;
+        }
+        return b.percentage - a.percentage;
+      })
       .map((s, idx) => ({ ...s, rank: idx + 1 }));
 
     const finalSortedStudents = sortStudents(rankedStudents);
@@ -923,6 +1011,7 @@ exports.downloadClassMarksTablePDF = async (req, res) => {
       academicYear: academicYearString,
       className: finalClassName,
       examName: examName || 'Exam',
+      mode: mode,
       subjects: finalSubjects,
       students: finalSortedStudents,
       totalStudents: finalSortedStudents.length
@@ -930,7 +1019,8 @@ exports.downloadClassMarksTablePDF = async (req, res) => {
     
     const pdfBuffer = await generateClassMarksTablePDF(templateData);
     
-    const filename = `Class_Marks_${finalClassName.replace(/\s+/g, '_')}_${(examName || 'Exam').replace(/\s+/g, '_')}_${academicYearString}.pdf`;
+    const modePrefix = mode === 'te' ? 'TE_' : (mode === 'both' ? 'Both_' : 'Total_');
+    const filename = `Class_Marks_${modePrefix}${finalClassName.replace(/\s+/g, '_')}_${(examName || 'Exam').replace(/\s+/g, '_')}_${academicYearString}.pdf`;
     
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Length", pdfBuffer.length);
@@ -988,6 +1078,7 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
       return res.status(500).json({ message: "Failed to fetch marks data from controller" });
     }
 
+    const mode = (req.query.mode || req.query.view || 'total').toLowerCase();
     const { subjects, students, examName } = marksData.data;
     let academicYear = await AcademicYear.findOne({ isCurrent: true });
     const academicYearString = academicYear?.year || academicYear?.name || new Date().getFullYear().toString();
@@ -1033,7 +1124,8 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
     // Title Row 3: Report Title
     worksheet.mergeCells(`A3:${lastColLetter}3`);
     const r3Cell = worksheet.getCell('A3');
-    r3Cell.value = 'CLASS MARKS OVERVIEW';
+    const titleSuffix = mode === 'te' ? ' (TE MARKS & GRADE)' : (mode === 'both' ? ' (TE & TE+CE MARKS & GRADE)' : ' (TE+CE TOTAL MARKS & GRADE)');
+    r3Cell.value = `CLASS MARKS OVERVIEW${titleSuffix}`;
     r3Cell.font = { name: 'Arial', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
     r3Cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
     r3Cell.alignment = { vertical: 'middle', horizontal: 'center' };
@@ -1042,7 +1134,7 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
     // Title Row 4: Meta Information
     worksheet.mergeCells(`A4:${lastColLetter}4`);
     const r4Cell = worksheet.getCell('A4');
-    r4Cell.value = `Class: ${finalClassName}   |   Exam: ${examName || 'Exam'}   |   Academic Year: ${academicYearString}   |   Total Students: ${(students || []).length}`;
+    r4Cell.value = `Class: ${finalClassName}   |   Exam: ${examName || 'Exam'}   |   Academic Year: ${academicYearString}   |   Total Students: ${(students || []).length}   |   Mode: ${mode.toUpperCase()}`;
     r4Cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF1E3A8A' } };
     r4Cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
     r4Cell.alignment = { vertical: 'middle', horizontal: 'center' };
@@ -1056,9 +1148,22 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
     const headers = ['Roll No', 'Admn No', 'Student Name'];
     (subjects || []).forEach(subj => {
       const subjTitle = subj.displayName || subj.subjectName || 'Subject';
-      headers.push(subjTitle);
+      const teMax = subj.termMaxMarks || subj.theoryMaxMarks || (subj.ceMaxMarks && subj.maxMarks ? subj.maxMarks - subj.ceMaxMarks : (subj.maxMarks || 100));
+      const totalMax = subj.maxMarks || (teMax + (subj.ceMaxMarks || 0));
+      if (mode === 'te') {
+        headers.push(`${subjTitle} (TE /${teMax})`);
+      } else if (mode === 'both') {
+        headers.push(`${subjTitle} (TE:${teMax}/Tot:${totalMax})`);
+      } else {
+        headers.push(`${subjTitle} (/${totalMax})`);
+      }
     });
-    headers.push('Total Score', 'Percentage', 'Grade', 'Rank');
+    headers.push(
+      mode === 'te' ? 'TE Total' : (mode === 'both' ? 'Total (TE/Tot)' : 'Total Score'),
+      mode === 'te' ? 'TE %' : 'Percentage',
+      mode === 'te' ? 'TE Grade' : 'Grade',
+      'Rank'
+    );
 
     const headerRow = worksheet.addRow(headers);
     worksheet.getRow(6).height = 26;
@@ -1076,14 +1181,68 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
 
     // Format & rank students
     let formattedStudents = (students || []).map(student => {
-      const totalObtained = student.totalMarks !== undefined ? student.totalMarks : (student.totalObtained || 0);
-      const totalMax = student.totalMaxMarks !== undefined ? student.totalMaxMarks : (student.totalMax || 0);
-      const percentage = totalMax > 0 ? (totalObtained / totalMax) * 100 : 0;
-      return { ...student, totalObtained, totalMax, percentage };
+      let teTotalObtained = 0;
+      let teTotalMax = 0;
+      let grandTotal = 0;
+      let grandTotalMax = 0;
+
+      (subjects || []).forEach(subj => {
+        const key = subj.examSubjectId?.toString() || subj._id?.toString() || subj.subjectId?.toString();
+        const sm = (student.subjectMarks || student.subjects || []).find(m => 
+          (m.examSubjectId && m.examSubjectId.toString() === key) ||
+          (m.subjectId && m.subjectId.toString() === key)
+        ) || {};
+
+        const teMax = sm.termMaxMarks || sm.theoryMaxMarks || subj.termMaxMarks || subj.theoryMaxMarks || 80;
+        const totalMax = sm.maxMarks || subj.maxMarks || 100;
+        const teMarks = sm.isAbsent ? 0 : (sm.theoryScore !== undefined ? sm.theoryScore : 0);
+        const ceMarks = sm.isAbsent ? 0 : (sm.ceMarks !== undefined ? sm.ceMarks : (sm.ceScore || 0));
+        const totalMarks = sm.isAbsent ? 0 : (sm.totalScore !== undefined ? sm.totalScore : (teMarks + ceMarks));
+
+        const isEntered = Boolean(
+          sm.isAbsent ||
+          sm.isEnteredExplicitly ||
+          (sm.isEntered && (
+            (sm.theoryScore != null && Number(sm.theoryScore) > 0) ||
+            (sm.ceScore != null && Number(sm.ceScore) > 0) ||
+            sm.isAbsent ||
+            sm.isEnteredExplicitly
+          )) ||
+          (sm.theoryScore != null && Number(sm.theoryScore) > 0) ||
+          (sm.ceScore != null && Number(sm.ceScore) > 0)
+        );
+
+        if (!sm.isAbsent && isEntered) {
+          teTotalObtained += teMarks;
+          teTotalMax += teMax;
+          grandTotal += totalMarks;
+          grandTotalMax += totalMax;
+        }
+      });
+
+      const percentage = grandTotalMax > 0 ? (grandTotal / grandTotalMax) * 100 : (student.percentage || 0);
+      const tePercentage = teTotalMax > 0 ? (teTotalObtained / teTotalMax) * 100 : 0;
+      const overallGrade = getGrade(percentage);
+      const teGrade = getGrade(tePercentage);
+
+      return {
+        ...student,
+        totalObtained: grandTotal,
+        totalMax: grandTotalMax,
+        percentage,
+        grade: overallGrade,
+        teTotalObtained,
+        teTotalMax,
+        tePercentage,
+        teGrade
+      };
     });
 
     const rankedStudents = [...formattedStudents]
-      .sort((a, b) => b.percentage - a.percentage)
+      .sort((a, b) => {
+        if (mode === 'te') return b.tePercentage - a.tePercentage;
+        return b.percentage - a.percentage;
+      })
       .map((s, idx) => ({ ...s, rank: idx + 1 }));
 
     const finalSortedStudents = sortStudents(rankedStudents);
@@ -1102,21 +1261,51 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
           (m.subjectId && m.subjectId.toString() === key)
         ) || {};
 
+        const teMax = sm.termMaxMarks || sm.theoryMaxMarks || subj.termMaxMarks || subj.theoryMaxMarks || 80;
+        const totalMax = sm.maxMarks || subj.maxMarks || 100;
+        const teMarks = sm.isAbsent ? 0 : (sm.theoryScore !== undefined ? sm.theoryScore : 0);
+        const ceMarks = sm.isAbsent ? 0 : (sm.ceMarks !== undefined ? sm.ceMarks : (sm.ceScore || 0));
+        const totalMarks = sm.isAbsent ? 0 : (sm.totalScore !== undefined ? sm.totalScore : (teMarks + ceMarks));
+        const teGrade = getGrade(teMax > 0 ? (teMarks / teMax) * 100 : 0);
+        const totalGrade = getGrade(totalMax > 0 ? (totalMarks / totalMax) * 100 : 0);
+
         if (sm.isAbsent) {
           rowData.push('AB');
         } else if (sm.isEntered || sm.totalScore !== undefined || sm.total !== undefined) {
-          rowData.push(sm.totalScore !== undefined ? sm.totalScore : sm.total);
+          if (mode === 'te') {
+            rowData.push(`${teMarks} (${teGrade})`);
+          } else if (mode === 'both') {
+            rowData.push(`TE: ${teMarks} (${teGrade}) | Tot: ${totalMarks} (${totalGrade})`);
+          } else {
+            rowData.push(`${totalMarks} (${totalGrade})`);
+          }
         } else {
           rowData.push('—');
         }
       });
 
-      rowData.push(
-        `${st.totalObtained} / ${st.totalMax}`,
-        `${st.percentage.toFixed(1)}%`,
-        st.gradeInfo?.grade || st.grade || '-',
-        st.rank || '-'
-      );
+      if (mode === 'te') {
+        rowData.push(
+          `${st.teTotalObtained} / ${st.teTotalMax}`,
+          `${st.tePercentage.toFixed(1)}%`,
+          st.teGrade || '-',
+          st.rank || '-'
+        );
+      } else if (mode === 'both') {
+        rowData.push(
+          `TE: ${st.teTotalObtained}/${st.teTotalMax} | Tot: ${st.totalObtained}/${st.totalMax}`,
+          `${st.percentage.toFixed(1)}% (TE: ${st.tePercentage.toFixed(1)}%)`,
+          `TE: ${st.teGrade} | Tot: ${st.grade}`,
+          st.rank || '-'
+        );
+      } else {
+        rowData.push(
+          `${st.totalObtained} / ${st.totalMax}`,
+          `${st.percentage.toFixed(1)}%`,
+          st.grade || '-',
+          st.rank || '-'
+        );
+      }
 
       const row = worksheet.addRow(rowData);
       row.height = 20;
@@ -1155,21 +1344,22 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
     worksheet.columns.forEach((col, i) => {
       let maxLen = 0;
       col.eachCell({ includeEmpty: true }, (cell, rowNum) => {
-        if (rowNum >= 6) { // Only measure table header and data
+        if (rowNum >= 6) {
           const len = cell.value ? cell.value.toString().length : 0;
           if (len > maxLen) maxLen = len;
         }
       });
       if (i === 2) {
-        col.width = Math.max(maxLen + 4, 24); // Student Name
+        col.width = Math.max(maxLen + 4, 24);
       } else if (i === 1) {
-        col.width = Math.max(maxLen + 2, 12); // Admission No
+        col.width = Math.max(maxLen + 2, 12);
       } else {
         col.width = Math.max(maxLen + 3, 11);
       }
     });
 
-    const filename = `Class_Marks_${finalClassName.replace(/\s+/g, '_')}_${(examName || 'Exam').replace(/\s+/g, '_')}.xlsx`;
+    const modePrefix = mode === 'te' ? 'TE_' : (mode === 'both' ? 'Both_' : 'Total_');
+    const filename = `Class_Marks_${modePrefix}${finalClassName.replace(/\s+/g, '_')}_${(examName || 'Exam').replace(/\s+/g, '_')}.xlsx`;
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

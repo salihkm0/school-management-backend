@@ -187,6 +187,27 @@ td.text-left {
 .bold {
     font-weight: bold;
 }
+.grade-pill {
+    display: inline-block;
+    font-size: 7.5px;
+    font-weight: bold;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: #EFF6FF;
+    color: #1E3A8A;
+    margin-top: 1px;
+}
+.grade-te {
+    background: #F0FDF4;
+    color: #15803D;
+}
+.cell-both {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    font-size: 7.5px;
+    line-height: 1.2;
+}
 
 /* Footer */
 .footer-cell {
@@ -200,6 +221,7 @@ td.text-left {
 </style>
 </head>
 <body>
+    <% const viewMode = typeof mode !== 'undefined' ? mode : 'total'; %>
     <!-- Watermark -->
     <div class="logo-watermark">
         <% if (schoolLogo) { %>
@@ -221,7 +243,15 @@ td.text-left {
                             <% } %>
                             <div class="school-name">PPM HIGHER SECONDARY SCHOOL</div>
                             <div class="school-address">KOTTUKKARA, KONDOTTY, MALAPPURAM, KERALA 673638</div>
-                            <div class="report-title">CLASS MARKS OVERVIEW</div>
+                            <div class="report-title">
+                                <% if (viewMode === 'te') { %>
+                                    CLASS MARKS OVERVIEW (TE MARKS & GRADE)
+                                <% } else if (viewMode === 'both') { %>
+                                    CLASS MARKS OVERVIEW (TE & TE+CE MARKS & GRADE)
+                                <% } else { %>
+                                    CLASS MARKS OVERVIEW (TE+CE TOTAL MARKS & GRADE)
+                                <% } %>
+                            </div>
                         </div>
 
                         <div class="info-grid">
@@ -241,6 +271,10 @@ td.text-left {
                                 <span class="info-label">TOTAL STUDENTS:</span>
                                 <span><%= totalStudents %></span>
                             </div>
+                            <div class="info-item">
+                                <span class="info-label">VIEW MODE:</span>
+                                <span><%= viewMode === 'te' ? 'TE Marks & Grade' : (viewMode === 'both' ? 'Both (TE & TE+CE)' : 'TE+CE Total Marks & Grade') %></span>
+                            </div>
                         </div>
                     </th>
                 </tr>
@@ -248,16 +282,24 @@ td.text-left {
                 <!-- Table Column Headers -->
                 <tr>
                     <th class="col-header" style="width: 4%">Roll No</th>
-                    <th class="col-header" style="width: 16%">Student</th>
+                    <th class="col-header" style="width: 15%">Student</th>
                     <% subjects.forEach(function(subj) { %>
                         <th class="col-header">
                             <div><%= subj.displayName || subj.subjectName %></div>
-                            <div style="font-weight: normal; font-size: 7.5px; opacity: 0.9; margin-top: 2px;">Max: <%= subj.maxMarks || 100 %></div>
+                            <% if (viewMode === 'te') { %>
+                                <div style="font-weight: normal; font-size: 7.5px; opacity: 0.9; margin-top: 2px;">TE Max: <%= subj.teMax %></div>
+                            <% } else if (viewMode === 'both') { %>
+                                <div style="font-weight: normal; font-size: 7px; opacity: 0.9; margin-top: 2px;">TE:<%= subj.teMax %> | Tot:<%= subj.totalMax %></div>
+                            <% } else { %>
+                                <div style="font-weight: normal; font-size: 7.5px; opacity: 0.9; margin-top: 2px;">Max: <%= subj.totalMax || subj.maxMarks || 100 %></div>
+                            <% } %>
                         </th>
                     <% }); %>
-                    <th class="col-header" style="width: 6%">Total</th>
-                    <th class="col-header" style="width: 5%">%</th>
-                    <th class="col-header" style="width: 4%">Grade</th>
+                    <th class="col-header" style="width: 7%">
+                        <%= viewMode === 'te' ? 'TE Total' : (viewMode === 'both' ? 'Total (TE/Tot)' : 'Total') %>
+                    </th>
+                    <th class="col-header" style="width: 5%"><%= viewMode === 'te' ? 'TE %' : '%' %></th>
+                    <th class="col-header" style="width: 5%"><%= viewMode === 'te' ? 'TE Grade' : 'Grade' %></th>
                     <th class="col-header" style="width: 4%">Rank</th>
                 </tr>
             </thead>
@@ -289,20 +331,71 @@ td.text-left {
                                 <% if(sm) { %>
                                     <% if(sm.isAbsent) { %>
                                         <span class="ab">AB</span>
-                                    <% } else if(!sm.isEntered) { %>
+                                    <% } else if(!sm.isEntered && sm.total === undefined && sm.totalScore === undefined) { %>
                                         <span class="not-entered">—</span>
                                     <% } else { %>
-                                        <span class="bold"><%= sm.totalScore !== undefined ? sm.totalScore : sm.total %></span>
+                                        <% if (viewMode === 'te') { %>
+                                            <div class="bold"><%= sm.teMarks !== undefined ? sm.teMarks : (sm.theoryScore !== undefined ? sm.theoryScore : 0) %></div>
+                                            <div class="grade-pill grade-te"><%= sm.teGrade || '-' %></div>
+                                        <% } else if (viewMode === 'both') { %>
+                                            <div class="cell-both">
+                                                <div><strong>TE:</strong> <%= sm.teMarks !== undefined ? sm.teMarks : (sm.theoryScore !== undefined ? sm.theoryScore : 0) %> (<%= sm.teGrade || '-' %>)</div>
+                                                <div style="border-top: 0.5px solid #CBD5E1; padding-top: 1px;"><strong>Tot:</strong> <%= sm.totalMarks !== undefined ? sm.totalMarks : (sm.totalScore !== undefined ? sm.totalScore : sm.total) %> (<%= sm.totalGrade || sm.grade || '-' %>)</div>
+                                            </div>
+                                        <% } else { %>
+                                            <div class="bold"><%= sm.totalMarks !== undefined ? sm.totalMarks : (sm.totalScore !== undefined ? sm.totalScore : sm.total) %></div>
+                                            <div class="grade-pill"><%= sm.totalGrade || sm.grade || '-' %></div>
+                                        <% } %>
                                     <% } %>
                                 <% } else { %>
                                     <span class="not-entered">—</span>
                                 <% } %>
                             </td>
                         <% }); %>
-                        <td class="bold" style="background-color: #EFF6FF;"><%= student.totalObtained !== undefined ? student.totalObtained : student.totalMarks %> / <%= student.totalMax !== undefined ? student.totalMax : student.totalMaxMarks %></td>
-                        <td class="bold" style="background-color: #EFF6FF;"><%= (student.percentage !== undefined ? student.percentage : 0).toFixed(1) %>%</td>
-                        <td class="bold" style="background-color: #EFF6FF;"><%= student.gradeInfo ? student.gradeInfo.grade : (student.grade || '-') %></td>
-                        <td class="bold" style="background-color: #EFF6FF;"><%= student.rank || '-' %></td>
+
+                        <% if (viewMode === 'te') { %>
+                            <td class="bold" style="background-color: #EFF6FF;">
+                                <%= student.teTotalObtained !== undefined ? student.teTotalObtained : student.totalObtained %> / <%= student.teTotalMax !== undefined ? student.teTotalMax : student.totalMax %>
+                            </td>
+                            <td class="bold" style="background-color: #EFF6FF;">
+                                <%= (student.tePercentage !== undefined ? student.tePercentage : (student.percentage || 0)).toFixed(1) %>%
+                            </td>
+                            <td class="bold" style="background-color: #EFF6FF;">
+                                <%= student.teGrade || student.gradeInfo?.grade || '-' %>
+                            </td>
+                            <td class="bold" style="background-color: #EFF6FF;">
+                                <%= student.rank || '-' %>
+                            </td>
+                        <% } else if (viewMode === 'both') { %>
+                            <td class="bold" style="background-color: #EFF6FF; font-size: 8px;">
+                                <div>TE: <%= student.teTotalObtained %>/<%= student.teTotalMax %></div>
+                                <div>Tot: <%= student.totalObtained %>/<%= student.totalMax %></div>
+                            </td>
+                            <td class="bold" style="background-color: #EFF6FF; font-size: 8px;">
+                                <div><%= (student.percentage || 0).toFixed(1) %>%</div>
+                                <div style="font-size: 7px; color: #64748B;">TE: <%= (student.tePercentage || 0).toFixed(1) %>%</div>
+                            </td>
+                            <td class="bold" style="background-color: #EFF6FF; font-size: 8px;">
+                                <div><%= student.grade || '-' %></div>
+                                <div style="font-size: 7px; color: #64748B;">TE: <%= student.teGrade || '-' %></div>
+                            </td>
+                            <td class="bold" style="background-color: #EFF6FF;">
+                                <%= student.rank || '-' %>
+                            </td>
+                        <% } else { %>
+                            <td class="bold" style="background-color: #EFF6FF;">
+                                <%= student.totalObtained !== undefined ? student.totalObtained : student.totalMarks %> / <%= student.totalMax !== undefined ? student.totalMax : student.totalMaxMarks %>
+                            </td>
+                            <td class="bold" style="background-color: #EFF6FF;">
+                                <%= (student.percentage !== undefined ? student.percentage : 0).toFixed(1) %>%
+                            </td>
+                            <td class="bold" style="background-color: #EFF6FF;">
+                                <%= student.grade || (student.gradeInfo ? student.gradeInfo.grade : '-') %>
+                            </td>
+                            <td class="bold" style="background-color: #EFF6FF;">
+                                <%= student.rank || '-' %>
+                            </td>
+                        <% } %>
                     </tr>
                 <% }); %>
             </tbody>

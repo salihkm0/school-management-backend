@@ -56,6 +56,7 @@ html, body {
     width: 100%;
     height: 100%;
     object-fit: contain;
+    filter: grayscale(100%);
 }
 
 .content-layer {
@@ -88,6 +89,7 @@ html, body {
     width: 100%;
     height: 100%;
     object-fit: contain;
+    filter: grayscale(100%);
 }
 
 .school-name {
@@ -395,13 +397,13 @@ html, body {
                     <thead>
                         <tr>
                             <th rowspan="2" style="width: 31%;">Subject</th>
-                            <th colspan="3" style="width: 34%; background: #EFF6FF;">Terminal Evaluation (TE)</th>
+                            <th colspan="3" style="width: 34%; background: #F2F2F2;">Terminal Evaluation (TE)</th>
                             <th colspan="3" style="width: 35%;">Total (TE + CE)</th>
                         </tr>
                         <tr>
-                            <th style="background: #EFF6FF; font-size: 9.5px;">Marks</th>
-                            <th style="background: #EFF6FF; font-size: 9.5px;">Max</th>
-                            <th style="background: #EFF6FF; font-size: 9.5px;">Grade</th>
+                            <th style="background: #F2F2F2; font-size: 9.5px;">Marks</th>
+                            <th style="background: #F2F2F2; font-size: 9.5px;">Max</th>
+                            <th style="background: #F2F2F2; font-size: 9.5px;">Grade</th>
                             <th style="font-size: 9.5px;">Marks</th>
                             <th style="font-size: 9.5px;">Max</th>
                             <th style="font-size: 9.5px;">Grade</th>
@@ -426,9 +428,9 @@ html, body {
                         %>
                         <tr>
                             <td><%= subject.name %></td>
-                            <td style="background: #F8FAFC;"><%= subject.isAbsent ? 'AB' : (subject.teObtained !== undefined ? subject.teObtained : subject.obtained) %></td>
-                            <td style="background: #F8FAFC;"><%= subject.teMax !== undefined ? subject.teMax : subject.max %></td>
-                            <td style="background: #F8FAFC; font-weight: bold;"><%= subject.teGrade || subject.grade %></td>
+                            <td style="background: #FAFAFA;"><%= subject.isAbsent ? 'AB' : (subject.teObtained !== undefined ? subject.teObtained : subject.obtained) %></td>
+                            <td style="background: #FAFAFA;"><%= subject.teMax !== undefined ? subject.teMax : subject.max %></td>
+                            <td style="background: #FAFAFA; font-weight: bold;"><%= subject.teGrade || subject.grade %></td>
                             <td><%= subject.isAbsent ? 'AB' : subject.obtained %></td>
                             <td><%= subject.max %></td>
                             <td style="font-weight: bold;"><%= subject.grade %></td>
@@ -449,9 +451,9 @@ html, body {
                         
                         <tr class="total-row">
                             <td><strong>Total</strong></td>
-                            <td style="background: #EFF6FF;"><strong><%= finalTeObt %></strong></td>
-                            <td style="background: #EFF6FF;"><strong><%= finalTeMax %></strong></td>
-                            <td style="background: #EFF6FF;"><strong><%= finalTeGrd ? finalTeGrd + ' (' + finalTePct + '%)' : finalTePct + '%' %></strong></td>
+                            <td style="background: #F2F2F2;"><strong><%= finalTeObt %></strong></td>
+                            <td style="background: #F2F2F2;"><strong><%= finalTeMax %></strong></td>
+                            <td style="background: #F2F2F2;"><strong><%= finalTeGrd ? finalTeGrd + ' (' + finalTePct + '%)' : finalTePct + '%' %></strong></td>
                             <td><strong><%= finalTotObt %></strong></td>
                             <td><strong><%= finalTotMax %></strong></td>
                             <td><strong><%= finalTotGrd ? finalTotGrd + ' (' + finalTotPct + '%)' : finalTotPct + '%' %></strong></td>

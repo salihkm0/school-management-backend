@@ -18,7 +18,7 @@
 body {
     font-family: "Times New Roman", serif;
     background: #fff;
-    color: #0F172A;
+    color: #000000;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
     font-size: 10px;
@@ -32,7 +32,7 @@ body {
     transform: translate(-50%, -50%);
     width: 160mm;
     height: 160mm;
-    opacity: 0.08;
+    opacity: 0.04;
     z-index: -1;
     pointer-events: none;
 }
@@ -41,6 +41,7 @@ body {
     width: 100%;
     height: 100%;
     object-fit: contain;
+    filter: grayscale(100%);
 }
 
 /* Page Frame Container */
@@ -60,7 +61,7 @@ body {
 .header-content {
     text-align: center;
     margin-bottom: 8px;
-    border-bottom: 2px double #1E3A8A;
+    border-bottom: 2px double #000000;
     padding-bottom: 8px;
 }
 
@@ -74,12 +75,13 @@ body {
     width: 100%;
     height: 100%;
     object-fit: contain;
+    filter: grayscale(100%);
 }
 
 .school-name {
     font-size: 18px;
     font-weight: 900;
-    color: #1E3A8A;
+    color: #000000;
     text-transform: uppercase;
     letter-spacing: 1px;
     margin-bottom: 2px;
@@ -88,21 +90,21 @@ body {
 .school-address {
     font-size: 9.5px;
     font-weight: bold;
-    color: #475569;
+    color: #222222;
     margin-bottom: 6px;
 }
 
 .report-title {
     font-size: 13px;
-    font-weight: 800;
-    color: #1E3A8A;
+    font-weight: 900;
+    color: #000000;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    background: #EFF6FF;
+    background: #f5f5f5;
     padding: 4px 16px;
     display: inline-block;
-    border-radius: 4px;
-    border: 1px solid #BFDBFE;
+    border-radius: 3px;
+    border: 1.5px solid #000000;
 }
 
 .info-grid {
@@ -111,10 +113,11 @@ body {
     margin-top: 8px;
     margin-bottom: 6px;
     font-size: 10px;
-    border: 1px solid #CBD5E1;
+    border: 1px solid #000000;
     padding: 6px 12px;
-    background: #F8FAFC;
-    border-radius: 4px;
+    background: #FAFAFA;
+    border-radius: 3px;
+    color: #000000;
 }
 
 .info-item {
@@ -124,7 +127,7 @@ body {
 
 .info-label {
     font-weight: bold;
-    color: #1E3A8A;
+    color: #000000;
 }
 
 /* Table */
@@ -141,7 +144,7 @@ tr {
 }
 
 tr:nth-child(even) td {
-    background-color: #F8FAFC;
+    background-color: #F8F8F8;
 }
 
 thead {
@@ -153,19 +156,20 @@ tfoot {
 }
 
 th, td {
-    border: 1px solid #94A3B8;
+    border: 1px solid #000000;
     padding: 4px 3px;
     text-align: center;
     vertical-align: middle;
+    color: #000000;
 }
 
 th.col-header {
-    background-color: #1E3A8A;
+    background-color: #000000;
     color: #FFFFFF;
     font-weight: bold;
     font-size: 9px;
     padding: 6px 2px;
-    border: 1px solid #0F172A;
+    border: 1px solid #000000;
 }
 
 th.col-header div {
@@ -178,11 +182,11 @@ td.text-left {
 }
 
 .ab {
-    color: #DC2626;
-    font-weight: bold;
+    color: #000000;
+    font-weight: 900;
 }
 .not-entered {
-    color: #94A3B8;
+    color: #555555;
 }
 .bold {
     font-weight: bold;
@@ -192,14 +196,16 @@ td.text-left {
     font-size: 7.5px;
     font-weight: bold;
     padding: 1px 4px;
-    border-radius: 3px;
-    background: #EFF6FF;
-    color: #1E3A8A;
+    border-radius: 2px;
+    background: #F0F0F0;
+    color: #000000;
+    border: 0.5px solid #777777;
     margin-top: 1px;
 }
 .grade-te {
-    background: #F0FDF4;
-    color: #15803D;
+    background: #F0F0F0;
+    color: #000000;
+    border: 0.5px solid #777777;
 }
 .cell-both {
     display: flex;
@@ -215,7 +221,7 @@ td.text-left {
     text-align: right;
     padding-top: 8px !important;
     font-size: 8px;
-    color: #64748B;
+    color: #333333;
     background: transparent !important;
 }
 </style>
@@ -340,7 +346,7 @@ td.text-left {
                                         <% } else if (viewMode === 'both') { %>
                                             <div class="cell-both">
                                                 <div><strong>TE:</strong> <%= sm.teMarks !== undefined ? sm.teMarks : (sm.theoryScore !== undefined ? sm.theoryScore : 0) %> (<%= sm.teGrade || '-' %>)</div>
-                                                <div style="border-top: 0.5px solid #CBD5E1; padding-top: 1px;"><strong>Tot:</strong> <%= sm.totalMarks !== undefined ? sm.totalMarks : (sm.totalScore !== undefined ? sm.totalScore : sm.total) %> (<%= sm.totalGrade || sm.grade || '-' %>)</div>
+                                                <div style="border-top: 0.5px solid #777777; padding-top: 1px;"><strong>Tot:</strong> <%= sm.totalMarks !== undefined ? sm.totalMarks : (sm.totalScore !== undefined ? sm.totalScore : sm.total) %> (<%= sm.totalGrade || sm.grade || '-' %>)</div>
                                             </div>
                                         <% } else { %>
                                             <div class="bold"><%= sm.totalMarks !== undefined ? sm.totalMarks : (sm.totalScore !== undefined ? sm.totalScore : sm.total) %></div>
@@ -354,45 +360,45 @@ td.text-left {
                         <% }); %>
 
                         <% if (viewMode === 'te') { %>
-                            <td class="bold" style="background-color: #EFF6FF;">
+                            <td class="bold" style="background-color: #F2F2F2;">
                                 <%= student.teTotalObtained !== undefined ? student.teTotalObtained : student.totalObtained %> / <%= student.teTotalMax !== undefined ? student.teTotalMax : student.totalMax %>
                             </td>
-                            <td class="bold" style="background-color: #EFF6FF;">
+                            <td class="bold" style="background-color: #F2F2F2;">
                                 <%= (student.tePercentage !== undefined ? student.tePercentage : (student.percentage || 0)).toFixed(1) %>%
                             </td>
-                            <td class="bold" style="background-color: #EFF6FF;">
+                            <td class="bold" style="background-color: #F2F2F2;">
                                 <%= student.teGrade || student.gradeInfo?.grade || '-' %>
                             </td>
-                            <td class="bold" style="background-color: #EFF6FF;">
+                            <td class="bold" style="background-color: #F2F2F2;">
                                 <%= student.rank || '-' %>
                             </td>
                         <% } else if (viewMode === 'both') { %>
-                            <td class="bold" style="background-color: #EFF6FF; font-size: 8px;">
+                            <td class="bold" style="background-color: #F2F2F2; font-size: 8px;">
                                 <div>TE: <%= student.teTotalObtained %>/<%= student.teTotalMax %></div>
                                 <div>Tot: <%= student.totalObtained %>/<%= student.totalMax %></div>
                             </td>
-                            <td class="bold" style="background-color: #EFF6FF; font-size: 8px;">
+                            <td class="bold" style="background-color: #F2F2F2; font-size: 8px;">
                                 <div><%= (student.percentage || 0).toFixed(1) %>%</div>
-                                <div style="font-size: 7px; color: #64748B;">TE: <%= (student.tePercentage || 0).toFixed(1) %>%</div>
+                                <div style="font-size: 7px; color: #444444;">TE: <%= (student.tePercentage || 0).toFixed(1) %>%</div>
                             </td>
-                            <td class="bold" style="background-color: #EFF6FF; font-size: 8px;">
+                            <td class="bold" style="background-color: #F2F2F2; font-size: 8px;">
                                 <div><%= student.grade || '-' %></div>
-                                <div style="font-size: 7px; color: #64748B;">TE: <%= student.teGrade || '-' %></div>
+                                <div style="font-size: 7px; color: #444444;">TE: <%= student.teGrade || '-' %></div>
                             </td>
-                            <td class="bold" style="background-color: #EFF6FF;">
+                            <td class="bold" style="background-color: #F2F2F2;">
                                 <%= student.rank || '-' %>
                             </td>
                         <% } else { %>
-                            <td class="bold" style="background-color: #EFF6FF;">
+                            <td class="bold" style="background-color: #F2F2F2;">
                                 <%= student.totalObtained !== undefined ? student.totalObtained : student.totalMarks %> / <%= student.totalMax !== undefined ? student.totalMax : student.totalMaxMarks %>
                             </td>
-                            <td class="bold" style="background-color: #EFF6FF;">
+                            <td class="bold" style="background-color: #F2F2F2;">
                                 <%= (student.percentage !== undefined ? student.percentage : 0).toFixed(1) %>%
                             </td>
-                            <td class="bold" style="background-color: #EFF6FF;">
+                            <td class="bold" style="background-color: #F2F2F2;">
                                 <%= student.grade || (student.gradeInfo ? student.gradeInfo.grade : '-') %>
                             </td>
-                            <td class="bold" style="background-color: #EFF6FF;">
+                            <td class="bold" style="background-color: #F2F2F2;">
                                 <%= student.rank || '-' %>
                             </td>
                         <% } %>

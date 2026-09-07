@@ -258,42 +258,17 @@ tbody tr:nth-child(even) td {
     padding-left: 4px !important;
 }
 
-/* Signatures & Footer */
+/* Footer */
 .footer-section {
     margin-top: 2px;
     padding-top: 2px;
 }
 
-.signatures-container {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 3px;
-    padding: 0 10px;
-}
-
-.signature-box {
-    text-align: center;
-    width: 22%;
-}
-
-.signature-line {
-    border-top: 1px solid #000;
-    margin-bottom: 2px;
-    width: 100%;
-}
-
-.signature-label {
-    font-size: 7.5px;
-    font-weight: bold;
-    text-transform: uppercase;
-}
-
 .page-meta {
     display: flex;
     justify-content: space-between;
-    font-size: 7px;
+    font-size: 7.5px;
     color: #555;
-    margin-top: 2px;
     padding-top: 2px;
     border-top: 0.5px solid #ccc;
 }
@@ -455,27 +430,8 @@ sections.forEach(function(section) {
                 </table>
             </div>
 
-            <!-- Signatures & Footer Section -->
+            <!-- Footer Section -->
             <div class="footer-section">
-                <div class="signatures-container">
-                    <div class="signature-box">
-                        <div class="signature-line"></div>
-                        <div class="signature-label">Class Teacher</div>
-                    </div>
-                    <div class="signature-box">
-                        <div class="signature-line"></div>
-                        <div class="signature-label">House Master / Captain</div>
-                    </div>
-                    <div class="signature-box">
-                        <div class="signature-line"></div>
-                        <div class="signature-label">Physical Education Teacher</div>
-                    </div>
-                    <div class="signature-box">
-                        <div class="signature-line"></div>
-                        <div class="signature-label">Headmaster / Principal</div>
-                    </div>
-                </div>
-
                 <div class="page-meta">
                     <span>Generated on: <%= generatedDate || new Date().toLocaleDateString('en-IN') %></span>
                     <span><%= section.categoryTitle %> - <%= section.genderTitle %></span>

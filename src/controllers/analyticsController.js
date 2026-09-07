@@ -907,7 +907,9 @@ exports.getAttendanceAnalytics = async (req, res) => {
             topAttendance: [],
             allStudents: []
           }
-        }
+        },
+        monthlyAttendance: [],
+        overallAttendance: 0
       });
     }
 
@@ -1191,7 +1193,16 @@ exports.getAttendanceAnalytics = async (req, res) => {
           topAttendance,
           allStudents
         }
-      }
+      },
+      // Backward compatibility for legacy dashboard charts
+      monthlyAttendance: monthlyTrends.map(t => ({
+        month: t.monthName,
+        attendancePercentage: t.averagePercentage,
+        totalWorkingDays: t.totalWorkingDays,
+        presentDays: t.totalPresent,
+        absentDays: t.totalAbsent
+      })),
+      overallAttendance: summary.averagePercentage
     });
   } catch (error) {
     console.error("Error in getAttendanceAnalytics:", error);

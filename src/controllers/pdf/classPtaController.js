@@ -73,7 +73,10 @@ exports.generateClassPtaPDF = async (req, res) => {
       students = DUMMY_STUDENTS;
     }
 
-    const studentList = students.map(student => ({
+    const studentList = students.map((student, idx) => ({
+      rollNumber: student.rollNumber || student.rollNo || student.slNo || (idx + 1),
+      rollNo: student.rollNumber || student.rollNo || student.slNo || (idx + 1),
+      slNo: student.rollNumber || student.rollNo || student.slNo || (idx + 1),
       admissionNo: student.admissionNo || '-',
       name: student.fullName || student.name || '-',
       gender: student.gender || '-',
@@ -155,9 +158,13 @@ exports.downloadClassPtaPDF = async (req, res) => {
       students = DUMMY_STUDENTS;
     }
 
-    const studentList = students.map(student => ({
+    const studentList = students.map((student, idx) => ({
+      rollNumber: student.rollNumber || student.rollNo || student.slNo || (idx + 1),
+      rollNo: student.rollNumber || student.rollNo || student.slNo || (idx + 1),
+      slNo: student.rollNumber || student.rollNo || student.slNo || (idx + 1),
       admissionNo: student.admissionNo || '-',
       name: student.fullName || student.name || '-',
+      gender: student.gender || '-',
       parentName: student.fatherFullName || student.guardian || ''
     }));
 

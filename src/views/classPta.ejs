@@ -28,12 +28,14 @@ html, body {
 
 .page-container {
     width: 200mm;
-    min-height: 277mm;
+    height: 285mm;
+    max-height: 285mm;
     margin: 0 auto 5mm auto;
-    padding: 8mm 5mm;
+    padding: 7mm 5mm 6mm 5mm;
     border: 2px solid #000;
     position: relative;
     page-break-after: always;
+    page-break-inside: avoid;
     box-sizing: border-box;
     background: #fff;
     display: flex;
@@ -83,15 +85,15 @@ html, body {
 /* Header Section */
 .header-section {
     text-align: center;
-    margin-bottom: 10px;
-    padding-bottom: 5px;
+    margin-bottom: 6px;
+    padding-bottom: 4px;
     border-bottom: 2px solid #000;
 }
 
 .school-logo {
-    width: 20mm;
-    height: 20mm;
-    margin: 0 auto 5px;
+    width: 16mm;
+    height: 16mm;
+    margin: 0 auto 3px;
 }
 
 .school-logo img {
@@ -101,38 +103,38 @@ html, body {
 }
 
 .school-name {
-    font-size: 14px;
+    font-size: 13.5px;
     font-weight: 900;
     text-transform: uppercase;
     letter-spacing: 1px;
-    margin-bottom: 2px;
+    margin-bottom: 1px;
 }
 
 .arabic-text {
-    font-size: 10px;
+    font-size: 9.5px;
     font-weight: bold;
-    margin-bottom: 3px;
+    margin-bottom: 2px;
     color: #333;
 }
 
 .main-title {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 900;
     text-transform: uppercase;
     text-decoration: underline;
-    margin: 5px 0;
+    margin: 3px 0;
 }
 
 .class-info {
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 700;
-    margin-top: 3px;
+    margin-top: 2px;
 }
 
 .page-number {
     text-align: center;
-    font-size: 9px;
-    margin: 5px 0;
+    font-size: 8.5px;
+    margin-top: 4px;
     font-weight: bold;
 }
 
@@ -141,15 +143,18 @@ html, body {
     width: 100%;
     border-collapse: collapse;
     font-size: 10px;
-    margin-top: 5px;
+    margin-top: 3px;
+    table-layout: fixed;
 }
 
 .main-table th,
 .main-table td {
     border: 1.5px solid #000;
-    padding: 3.5px 3px;
+    padding: 0 4px;
     text-align: center;
     vertical-align: middle;
+    height: 6.7mm;
+    box-sizing: border-box;
 }
 
 .main-table th {
@@ -157,24 +162,26 @@ html, body {
     font-weight: 900;
     text-transform: uppercase;
     font-size: 9px;
-    padding: 4px 3px;
+    height: 6.2mm;
+    letter-spacing: 0.3px;
 }
 
 .main-table td {
     background: transparent;
+    font-size: 10px;
 }
 
 /* Column widths */
-.main-table .sl-col { width: 7%; }
-.main-table .adm-col { width: 10%; }
-.main-table .name-col { width: 28%; text-align: left; padding-left: 5px; }
-.main-table .parent-col { width: 28%; text-align: left; padding-left: 5px; }
-.main-table .sign-col { width: 27%; }
+.main-table .sl-col { width: 8%; }
+.main-table .adm-col { width: 11%; }
+.main-table .name-col { width: 28%; text-align: left; padding-left: 6px; }
+.main-table .parent-col { width: 27%; text-align: left; padding-left: 6px; }
+.main-table .sign-col { width: 26%; }
 
 /* Bottom Section */
 .bottom-section {
     margin-top: auto;
-    padding-top: 15px;
+    padding-top: 4px;
 }
 
 /* Signature Section */
@@ -182,33 +189,34 @@ html, body {
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    margin-top: 15px;
+    margin-top: 6px;
+    margin-bottom: 4px;
 }
 
 .signature-item {
     text-align: center;
-    width: 150px;
+    width: 140px;
 }
 
 .signature-line {
-    margin-top: 25px;
+    margin-top: 18px;
     border-top: 1.5px solid #000;
     width: 100%;
 }
 
 .signature-label {
-    font-size: 10px;
+    font-size: 9.5px;
     font-weight: bold;
-    margin-top: 5px;
+    margin-top: 3px;
 }
 
 /* Footer */
 .footer {
-    margin-top: 10px;
-    padding-top: 5px;
+    margin-top: 4px;
+    padding-top: 3px;
     border-top: 1px solid #000;
     overflow: hidden;
-    font-size: 9px;
+    font-size: 8.5px;
 }
 
 .total-students {
@@ -245,6 +253,7 @@ html, body {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
         page-break-after: always;
+        page-break-inside: avoid;
     }
     
     .logo-watermark img {
@@ -258,37 +267,60 @@ html, body {
 <body>
 
 <%
-const studentsPerPage = 30;
+const studentsPerPage = 25;
 
-const girls = students.filter(s => s.gender === 'F').sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-const boys = students.filter(s => s.gender === 'M').sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-const others = students.filter(s => s.gender !== 'F' && s.gender !== 'M').sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+// Sort roll number wise numerically
+const sortedStudents = [...students].sort((a, b) => {
+    const getRoll = (s) => {
+        if (!s) return null;
+        const raw = s.rollNumber ?? s.rollNo ?? s.slNo;
+        if (raw === null || raw === undefined || raw === '') return null;
+        const parsed = parseInt(String(raw).trim(), 10);
+        return isNaN(parsed) ? String(raw).trim() : parsed;
+    };
 
-const pagesData = [];
-let globalIndex = 0;
+    const rollA = getRoll(a);
+    const rollB = getRoll(b);
 
-const addPagesForGroup = (groupStudents) => {
-    if (groupStudents.length === 0) return;
-    const groupPages = Math.ceil(groupStudents.length / studentsPerPage);
-    for (let p = 0; p < groupPages; p++) {
-        const start = p * studentsPerPage;
-        const pageStudents = groupStudents.slice(start, start + studentsPerPage).map(s => {
-            globalIndex++;
-            return { ...s, slNo: globalIndex };
-        });
-        pagesData.push(pageStudents);
+    const hasRollA = rollA !== null && rollA !== '';
+    const hasRollB = rollB !== null && rollB !== '';
+
+    if (hasRollA && hasRollB) {
+        if (typeof rollA === 'number' && typeof rollB === 'number') {
+            if (rollA !== rollB) return rollA - rollB;
+        } else {
+            const comp = String(rollA).localeCompare(String(rollB), undefined, { numeric: true, sensitivity: 'base' });
+            if (comp !== 0) return comp;
+        }
+    } else if (hasRollA && !hasRollB) {
+        return -1;
+    } else if (!hasRollA && hasRollB) {
+        return 1;
     }
-};
 
-addPagesForGroup(girls);
-addPagesForGroup(boys);
-addPagesForGroup(others);
+    const nameA = a.name || a.fullName || '';
+    const nameB = b.name || b.fullName || '';
+    return nameA.localeCompare(nameB);
+});
 
-if (pagesData.length === 0) {
-    pagesData.push([]);
+// Single continuous list of pages - do not separate boys and girls
+const pagesData = [];
+const totalStudentsCount = sortedStudents.length;
+const totalPages = Math.max(1, Math.ceil(totalStudentsCount / studentsPerPage));
+
+for (let p = 0; p < totalPages; p++) {
+    const start = p * studentsPerPage;
+    const pageStudents = sortedStudents.slice(start, start + studentsPerPage).map((s, idx) => {
+        const autoRoll = start + idx + 1;
+        const displayRoll = s.rollNumber || s.rollNo || s.slNo || autoRoll;
+        return {
+            ...s,
+            displayRollNo: displayRoll
+        };
+    });
+    pagesData.push(pageStudents);
 }
 
-const totalPages = pagesData.length;
 const displayAcademicYear = typeof academicYear !== 'undefined' ? academicYear : '2025-2026';
 const displayClassName = typeof className !== 'undefined' ? className : '10 A';
 const schoolLogo = typeof schoolLogoUrl !== 'undefined' ? schoolLogoUrl : 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
@@ -315,7 +347,6 @@ for (let page = 0; page < totalPages; page++) {
                     <img src="<%= schoolLogo %>" alt="School Logo">
                 </div>
                 <div class="school-name">P.P.M.H.S.S. KOTTUKKARA</div>
-                <!-- <div class="arabic-text">العلم نور &nbsp;&nbsp; العلم نور</div> -->
                 <div class="main-title">Class PTA</div>
                 <div class="class-info">(Standard and Division - <%= displayClassName %> <%= displayAcademicYear %>)</div>
             </div>
@@ -324,7 +355,7 @@ for (let page = 0; page < totalPages; page++) {
             <table class="main-table">
                 <thead>
                     <tr>
-                        <th class="sl-col">Sl No</th>
+                        <th class="sl-col">Roll No</th>
                         <th class="adm-col">Adm No</th>
                         <th class="name-col">Name of Student</th>
                         <th class="parent-col">Name of Parent/Guardian</th>
@@ -332,29 +363,15 @@ for (let page = 0; page < totalPages; page++) {
                     </tr>
                 </thead>
                 <tbody>
-                    <% pageStudents.forEach(function(student, index) { 
-                    %>
+                    <% pageStudents.forEach(function(student) { %>
                     <tr>
-                        <td><%= student.slNo || '' %></td>
-                        <td><%= student.admissionNo %></td>
-                        <td style="text-align: left; padding-left: 5px;"><%= student.name %></td>
-                        <td style="text-align: left; padding-left: 5px;"><%= student.parentName || '' %></td>
-                        <td></td>
+                        <td><%= student.displayRollNo %></td>
+                        <td><%= student.admissionNo || '' %></td>
+                        <td class="name-col"><%= student.name || '' %></td>
+                        <td class="parent-col"><%= student.parentName || '' %></td>
+                        <td class="sign-col"></td>
                     </tr>
                     <% }); %>
-                    
-                    <% 
-                    const remainingRows = studentsPerPage - pageStudents.length;
-                    for (let i = 0; i < remainingRows; i++) {
-                    %>
-                    <!-- <tr>
-                        <td>-</td>
-                        <td>-</td>
-                        <td style="text-align: left;">-</td>
-                        <td style="text-align: left;"></td>
-                        <td></td>
-                    </tr> -->
-                    <% } %>
                 </tbody>
             </table>
             
@@ -383,7 +400,7 @@ for (let page = 0; page < totalPages; page++) {
             
             <!-- Footer -->
             <div class="footer">
-                <span class="total-students">Total Students: <%= students.length %></span>
+                <span class="total-students">Total Students: <%= totalStudentsCount %></span>
                 <span class="generated-info">Generated on: <%= new Date().toLocaleDateString('en-IN') %></span>
             </div>
             

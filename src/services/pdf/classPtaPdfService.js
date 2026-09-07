@@ -5,13 +5,14 @@ const { getBrowser } = require('./browserHelper');
 
 const generateClassPtaPDF = async (data) => {
   let page;
+  let browser;
 
   try {
     const templatePath = path.join(__dirname, '../../views/classPta.ejs');
 
     const html = await ejs.renderFile(templatePath, data);
 
-    const browser = await getBrowser();
+    browser = await getBrowser();
     page = await browser.newPage();
 
     await page.setContent(html, {
@@ -34,11 +35,13 @@ const generateClassPtaPDF = async (data) => {
     });
 
     await page.close();
+    if (browser) await browser.close();
 
     return pdfBuffer;
 
   } catch (error) {
-    if (page) await page.close();
+    if (page) await page.close().catch(() => {});
+    if (browser) await browser.close().catch(() => {});
     throw error;
   }
 };

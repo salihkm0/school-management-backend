@@ -93,26 +93,41 @@ html, body {
 }
 
 .school-name {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 900;
     text-transform: uppercase;
     letter-spacing: 1px;
-    margin-bottom: 3px;
+    margin-bottom: 2px;
 }
 
-.arabic-text {
-    font-size: 12px;
+.school-address {
+    font-size: 9.5px;
     font-weight: bold;
-    margin-bottom: 5px;
-    color: #333;
+    color: #333333;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
 }
 
 .marklist-title {
-    font-size: 16px;
+    font-size: 13.5px;
     font-weight: 900;
     text-transform: uppercase;
     text-decoration: underline;
-    margin-bottom: 15px;
+    margin-bottom: 6px;
+    line-height: 1.4;
+}
+
+.marklist-subtitle {
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: inline-block;
+    padding: 2px 10px;
+    border: 1px solid #000000;
+    background: #f5f5f5;
+    border-radius: 2px;
+    margin-bottom: 12px;
 }
 
 /* Student Info */
@@ -323,13 +338,27 @@ html, body {
             
             <!-- Header -->
             <div class="header-section">
+                <% if (typeof schoolLogo !== 'undefined' && schoolLogo) { %>
                 <div class="school-logo">
                     <img src="<%= schoolLogo %>" alt="School Logo">
                 </div>
+                <% } %>
                 <div class="school-name">P.P.M.H.S.S. KOTTUKKARA</div>
+                <div class="school-address">KOTTUKKARA, KONDOTTY, MALAPPURAM, KERALA 673638</div>
+                
+                <% 
+                let examLabel = (typeof cleanExamName !== 'undefined' && cleanExamName) 
+                    ? cleanExamName 
+                    : (typeof examName !== 'undefined' ? examName.replace(/\s*[-–]\s*\d{4}[-/]\d{2,4}\s*$/i, '').trim() : 'ANNUAL EVALUATION');
+                %>
                 <div class="marklist-title">
-                    MARKLIST OF <%= (typeof examName !== 'undefined' && examName ? examName : 'ANNUAL EVALUATION').toUpperCase() %> (<%= academicYear %>)<% if (typeof mode !== 'undefined' && mode === 'te') { %> - TE MARKS & GRADE<% } else if (typeof mode !== 'undefined' && mode === 'both') { %> - TE & TOTAL EVALUATION<% } %>
+                    MARKLIST OF <%= examLabel.toUpperCase() %> (<%= academicYear %>)
                 </div>
+                <% if (typeof mode !== 'undefined' && mode === 'te') { %>
+                    <div class="marklist-subtitle">TERMINAL EVALUATION (TE)</div>
+                <% } else if (typeof mode !== 'undefined' && mode === 'both') { %>
+                    <div class="marklist-subtitle">TE & TOTAL EVALUATION</div>
+                <% } %>
             </div>
             
             <!-- Student Info -->

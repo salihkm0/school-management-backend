@@ -6,8 +6,27 @@ const Mark = require('../../models/Mark');
 const { generateMarklistPDF } = require('../../services/pdf/marklistPdfService');
 const { calculateGrade, calculateGradeFromPercentage } = require('../../services/gradingService');
 
+const fs = require('fs');
+const path = require('path');
+
 // School logo URL
 const SCHOOL_LOGO_URL = 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
+
+let cachedLogoBase64 = null;
+function getSchoolLogoDataUri() {
+  if (cachedLogoBase64) return cachedLogoBase64;
+  try {
+    const localLogoPath = path.join(__dirname, '../../../public/school-logo.jpg');
+    if (fs.existsSync(localLogoPath)) {
+      const buf = fs.readFileSync(localLogoPath);
+      cachedLogoBase64 = `data:image/jpeg;base64,${buf.toString('base64')}`;
+      return cachedLogoBase64;
+    }
+  } catch (e) {
+    console.error('Error loading local logo:', e);
+  }
+  return SCHOOL_LOGO_URL;
+}
 
 const EXACT_SUBJECT_ORDER = [
   'Language I',
@@ -199,10 +218,19 @@ async function buildMarklistTemplateData(studentId, examId, mode = 'total') {
   const overallGrade = calculateGradeFromPercentage(Number(percentage));
   const overallTeGrade = calculateGradeFromPercentage(Number(tePercentage));
 
+  const rawExamName = exam?.displayName || exam?.name || 'ANNUAL EVALUATION';
+  
+  // Clean duplicate year in examName if already present (e.g., "First term Examination (Std 10) - 2026-2027")
+  const cleanExamName = rawExamName
+    .replace(/\s*[-–]\s*\d{4}[-/]\d{2,4}\s*$/i, '')
+    .replace(/\s*\(\s*\d{4}[-/]\d{2,4}\s*\)\s*$/i, '')
+    .trim();
+
   const templateData = {
-    schoolLogo: SCHOOL_LOGO_URL,
+    schoolLogo: getSchoolLogoDataUri(),
     academicYear: academicYearString,
-    examName: exam?.displayName || exam?.name || 'ANNUAL EVALUATION',
+    cleanExamName,
+    examName: rawExamName,
     mode, // 'total' | 'te' | 'both'
     student: {
       name: student.fullName,

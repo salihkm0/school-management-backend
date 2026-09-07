@@ -519,7 +519,39 @@ html, body {
                 </div>
             </div>
             
-        </div>  
+        </div>
+        
+        <!-- Bottom Section -->
+        <div class="bottom-section">
+            
+            <!-- Signatures -->
+            <div class="signature-section">
+                <div class="signature-item">
+                    <div class="signature-label">Class Teacher</div>
+                    <div class="signature-line"></div>
+                </div>
+                <div class="signature-item">
+                    <div class="signature-label">Headmaster</div>
+                    <div class="signature-line"></div>
+                </div>
+                <div class="signature-item">
+                    <div class="signature-label">Parent's Signature</div>
+                    <div class="signature-line"></div>
+                </div>
+            </div>
+            
+            <!-- Bottom Info Row -->
+            <div class="bottom-info-row">
+                <div class="grade-info">
+                    Overall Grade: <%= typeof overallTotalGrade !== 'undefined' ? overallTotalGrade : overallGrade %>
+                </div>
+                <div class="generated-info">
+                    Generated on: <%= new Date().toLocaleDateString('en-IN') %>
+                </div>
+            </div>
+            
+        </div>
+        
     </div>
 </div>
 

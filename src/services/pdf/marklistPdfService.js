@@ -15,7 +15,8 @@ const generateMarklistPDF = async (data) => {
     page = await browser.newPage();
 
     await page.setContent(html, {
-      waitUntil: 'networkidle0'
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
     });
 
     await page.emulateMediaType('screen');

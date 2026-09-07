@@ -325,7 +325,9 @@ html, body {
                     <img src="<%= schoolLogo %>" alt="School Logo">
                 </div>
                 <div class="school-name">P.P.M.H.S.S. KOTTUKKARA</div>
-                <div class="marklist-title">MARKLIST OF ANNUAL EVALUATION (<%= academicYear %>)</div>
+                <div class="marklist-title">
+                    MARKLIST OF <%= (typeof examName !== 'undefined' && examName ? examName : 'ANNUAL EVALUATION').toUpperCase() %> (<%= academicYear %>)<% if (typeof mode !== 'undefined' && mode === 'te') { %> - TE MARKS & GRADE<% } else if (typeof mode !== 'undefined' && mode === 'both') { %> - TE & TOTAL EVALUATION<% } %>
+                </div>
             </div>
             
             <!-- Student Info -->
@@ -346,40 +348,156 @@ html, body {
             
             <!-- Marks Table -->
             <table class="marks-table">
-                <thead>
-                    <tr>
-                        <th>Subject</th>
-                        <th>Marks obtained</th>
-                        <th>Maximum Mark</th>
-                        <th>Grade</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <% 
-                    let totalObtained = 0;
-                    let totalMax = 0;
-                    
-                    subjects.forEach(function(subject) {
-                        totalObtained += subject.obtained;
-                        totalMax += subject.max;
-                    %>
-                    <tr>
-                        <td><%= subject.name %></td>
-                        <td><%= subject.obtained %></td>
-                        <td><%= subject.max %></td>
-                        <td><%= subject.grade %></td>
-                    </tr>
-                    <% }); %>
-                    
-                    <% const percentage = totalMax > 0 ? ((totalObtained / totalMax) * 100).toFixed(0) : 0; %>
-                    
-                    <tr class="total-row">
-                        <td><strong>Total</strong></td>
-                        <td><strong><%= totalObtained %></strong></td>
-                        <td><strong><%= totalMax %></strong></td>
-                        <td><strong><%= percentage %>%</strong></td>
-                    </tr>
-                </tbody>
+                <% const viewMode = typeof mode !== 'undefined' ? mode : 'total'; %>
+                <% if (viewMode === 'te') { %>
+                    <thead>
+                        <tr>
+                            <th style="width: 40%;">Subject</th>
+                            <th style="width: 20%;">TE Marks obtained</th>
+                            <th style="width: 20%;">TE Maximum Mark</th>
+                            <th style="width: 20%;">TE Grade</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% 
+                        let totalTeObtained = 0;
+                        let totalTeMax = 0;
+                        
+                        subjects.forEach(function(subject) {
+                            const obt = subject.isAbsent ? 0 : (subject.teObtained !== undefined ? subject.teObtained : subject.obtained);
+                            const maxM = subject.teMax !== undefined ? subject.teMax : subject.max;
+                            totalTeObtained += obt;
+                            totalTeMax += maxM;
+                        %>
+                        <tr>
+                            <td><%= subject.name %></td>
+                            <td><%= subject.isAbsent ? 'AB' : (subject.teObtained !== undefined ? subject.teObtained : subject.obtained) %></td>
+                            <td><%= subject.teMax !== undefined ? subject.teMax : subject.max %></td>
+                            <td style="font-weight: bold;"><%= subject.teGrade || subject.grade %></td>
+                        </tr>
+                        <% }); %>
+                        
+                        <% 
+                        const finalTeObt = (typeof totals !== 'undefined' && totals && totals.teTotalObtained !== undefined) ? totals.teTotalObtained : totalTeObtained;
+                        const finalTeMax = (typeof totals !== 'undefined' && totals && totals.teTotalMax !== undefined) ? totals.teTotalMax : totalTeMax;
+                        const finalTePct = (typeof totals !== 'undefined' && totals && totals.tePercentage !== undefined) ? totals.tePercentage : (finalTeMax > 0 ? ((finalTeObt / finalTeMax) * 100).toFixed(0) : 0);
+                        const finalTeGrd = (typeof totals !== 'undefined' && totals && totals.overallTeGrade) ? totals.overallTeGrade : '';
+                        %>
+                        
+                        <tr class="total-row">
+                            <td><strong>Total</strong></td>
+                            <td><strong><%= finalTeObt %></strong></td>
+                            <td><strong><%= finalTeMax %></strong></td>
+                            <td><strong><%= finalTeGrd ? finalTeGrd + ' (' + finalTePct + '%)' : finalTePct + '%' %></strong></td>
+                        </tr>
+                    </tbody>
+                <% } else if (viewMode === 'both') { %>
+                    <thead>
+                        <tr>
+                            <th rowspan="2" style="width: 31%;">Subject</th>
+                            <th colspan="3" style="width: 34%; background: #EFF6FF;">Terminal Evaluation (TE)</th>
+                            <th colspan="3" style="width: 35%;">Total (TE + CE)</th>
+                        </tr>
+                        <tr>
+                            <th style="background: #EFF6FF; font-size: 9.5px;">Marks</th>
+                            <th style="background: #EFF6FF; font-size: 9.5px;">Max</th>
+                            <th style="background: #EFF6FF; font-size: 9.5px;">Grade</th>
+                            <th style="font-size: 9.5px;">Marks</th>
+                            <th style="font-size: 9.5px;">Max</th>
+                            <th style="font-size: 9.5px;">Grade</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% 
+                        let totalTeObt = 0;
+                        let totalTeM = 0;
+                        let totalObt = 0;
+                        let totalM = 0;
+                        
+                        subjects.forEach(function(subject) {
+                            const teObt = subject.isAbsent ? 0 : (subject.teObtained !== undefined ? subject.teObtained : subject.obtained);
+                            const teM = subject.teMax !== undefined ? subject.teMax : subject.max;
+                            const obt = subject.isAbsent ? 0 : subject.obtained;
+                            const m = subject.max;
+                            totalTeObt += teObt;
+                            totalTeM += teM;
+                            totalObt += obt;
+                            totalM += m;
+                        %>
+                        <tr>
+                            <td><%= subject.name %></td>
+                            <td style="background: #F8FAFC;"><%= subject.isAbsent ? 'AB' : (subject.teObtained !== undefined ? subject.teObtained : subject.obtained) %></td>
+                            <td style="background: #F8FAFC;"><%= subject.teMax !== undefined ? subject.teMax : subject.max %></td>
+                            <td style="background: #F8FAFC; font-weight: bold;"><%= subject.teGrade || subject.grade %></td>
+                            <td><%= subject.isAbsent ? 'AB' : subject.obtained %></td>
+                            <td><%= subject.max %></td>
+                            <td style="font-weight: bold;"><%= subject.grade %></td>
+                        </tr>
+                        <% }); %>
+                        
+                        <% 
+                        const finalTeObt = (typeof totals !== 'undefined' && totals && totals.teTotalObtained !== undefined) ? totals.teTotalObtained : totalTeObt;
+                        const finalTeMax = (typeof totals !== 'undefined' && totals && totals.teTotalMax !== undefined) ? totals.teTotalMax : totalTeM;
+                        const finalTePct = (typeof totals !== 'undefined' && totals && totals.tePercentage !== undefined) ? totals.tePercentage : (finalTeMax > 0 ? ((finalTeObt / finalTeMax) * 100).toFixed(0) : 0);
+                        const finalTeGrd = (typeof totals !== 'undefined' && totals && totals.overallTeGrade) ? totals.overallTeGrade : '';
+
+                        const finalTotObt = (typeof totals !== 'undefined' && totals && totals.totalObtained !== undefined) ? totals.totalObtained : totalObt;
+                        const finalTotMax = (typeof totals !== 'undefined' && totals && totals.totalMax !== undefined) ? totals.totalMax : totalM;
+                        const finalTotPct = (typeof totals !== 'undefined' && totals && totals.percentage !== undefined) ? totals.percentage : (finalTotMax > 0 ? ((finalTotObt / finalTotMax) * 100).toFixed(0) : 0);
+                        const finalTotGrd = (typeof totals !== 'undefined' && totals && totals.overallGrade) ? totals.overallGrade : '';
+                        %>
+                        
+                        <tr class="total-row">
+                            <td><strong>Total</strong></td>
+                            <td style="background: #EFF6FF;"><strong><%= finalTeObt %></strong></td>
+                            <td style="background: #EFF6FF;"><strong><%= finalTeMax %></strong></td>
+                            <td style="background: #EFF6FF;"><strong><%= finalTeGrd ? finalTeGrd + ' (' + finalTePct + '%)' : finalTePct + '%' %></strong></td>
+                            <td><strong><%= finalTotObt %></strong></td>
+                            <td><strong><%= finalTotMax %></strong></td>
+                            <td><strong><%= finalTotGrd ? finalTotGrd + ' (' + finalTotPct + '%)' : finalTotPct + '%' %></strong></td>
+                        </tr>
+                    </tbody>
+                <% } else { %>
+                    <thead>
+                        <tr>
+                            <th style="width: 40%;">Subject</th>
+                            <th style="width: 20%;">Marks obtained</th>
+                            <th style="width: 20%;">Maximum Mark</th>
+                            <th style="width: 20%;">Grade</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% 
+                        let totalObtained = 0;
+                        let totalMax = 0;
+                        
+                        subjects.forEach(function(subject) {
+                            totalObtained += (subject.isAbsent ? 0 : subject.obtained);
+                            totalMax += subject.max;
+                        %>
+                        <tr>
+                            <td><%= subject.name %></td>
+                            <td><%= subject.isAbsent ? 'AB' : subject.obtained %></td>
+                            <td><%= subject.max %></td>
+                            <td style="font-weight: bold;"><%= subject.grade %></td>
+                        </tr>
+                        <% }); %>
+                        
+                        <% 
+                        const finalTotObt = (typeof totals !== 'undefined' && totals && totals.totalObtained !== undefined) ? totals.totalObtained : totalObtained;
+                        const finalTotMax = (typeof totals !== 'undefined' && totals && totals.totalMax !== undefined) ? totals.totalMax : totalMax;
+                        const percentage = (typeof totals !== 'undefined' && totals && totals.percentage !== undefined) ? totals.percentage : (finalTotMax > 0 ? ((finalTotObt / finalTotMax) * 100).toFixed(0) : 0);
+                        const finalTotGrd = (typeof totals !== 'undefined' && totals && totals.overallGrade) ? totals.overallGrade : '';
+                        %>
+                        
+                        <tr class="total-row">
+                            <td><strong>Total</strong></td>
+                            <td><strong><%= finalTotObt %></strong></td>
+                            <td><strong><%= finalTotMax %></strong></td>
+                            <td><strong><%= finalTotGrd ? finalTotGrd + ' (' + percentage + '%)' : percentage + '%' %></strong></td>
+                        </tr>
+                    </tbody>
+                <% } %>
             </table>
             
             <!-- Remarks Section -->

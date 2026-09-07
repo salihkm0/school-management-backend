@@ -380,7 +380,7 @@ sections.forEach(function(section) {
                 <table class="main-table <%= isSubJunior ? 'table-sub-junior' : 'table-junior-senior' %>" cellspacing="0" cellpadding="0">
                     <thead>
                         <tr>
-                            <th class="col-sl">Sl No</th>
+                            <th class="col-sl">Roll No</th>
                             <th class="col-adm">Adm No</th>
                             <th class="col-name">Name of Student</th>
                             <th class="col-chest">Chest No</th>
@@ -393,10 +393,9 @@ sections.forEach(function(section) {
                     <tbody>
                         <% 
                         pageStudents.forEach(function(student, index) { 
-                            const slNo = startIndex + index + 1;
                         %>
                         <tr>
-                            <td class="text-center"><%= slNo %></td>
+                            <td class="text-center"><%= student.rollNumber || '-' %></td>
                             <td class="text-center"><%= student.admissionNo || '-' %></td>
                             <td class="text-left student-name"><%= student.name %></td>
                             <td class="text-center">&nbsp;</td>
@@ -414,7 +413,7 @@ sections.forEach(function(section) {
                             const blankSlNo = startIndex + pageStudents.length + b + 1;
                         %>
                         <tr>
-                            <td class="text-center"><%= blankSlNo %></td>
+                            <td class="text-center">&nbsp;</td>
                             <td class="text-center">&nbsp;</td>
                             <td class="text-left student-name" style="color: #bbb;">&nbsp;</td>
                             <td class="text-center">&nbsp;</td>

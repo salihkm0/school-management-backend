@@ -90,6 +90,7 @@ const buildSportsData = async (req) => {
   const boys = sortedStudents
     .filter(s => s.gender === 'M')
     .map(s => ({
+      rollNumber: s.rollNumber || '',
       admissionNo: s.admissionNo || '-',
       name: s.fullName || s.name || '-'
     }));
@@ -97,6 +98,7 @@ const buildSportsData = async (req) => {
   const girls = sortedStudents
     .filter(s => s.gender === 'F')
     .map(s => ({
+      rollNumber: s.rollNumber || '',
       admissionNo: s.admissionNo || '-',
       name: s.fullName || s.name || '-'
     }));

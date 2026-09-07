@@ -139,14 +139,14 @@ html, body {
 .marks-table {
     width: 100%;
     border-collapse: collapse;
-    margin: 18px 0;
-    font-size: 10px;
+    margin: 10px 0 6px 0;
+    font-size: 11px;
 }
 
 .marks-table th,
 .marks-table td {
     border: 1px solid #000;
-    padding: 8.5px 6px;
+    padding: 12px 5px;
     text-align: center;
     vertical-align: middle;
 }
@@ -155,14 +155,15 @@ html, body {
     background: #f0f0f0;
     font-weight: 900;
     text-transform: uppercase;
-    font-size: 9px;
-    padding: 7px 4px;
+    font-size: 9.5px;
+    padding: 9px 4px;
 }
 
 .marks-table td:first-child {
     text-align: left;
     font-weight: 600;
     padding-left: 8px;
+    width: 27%;
 }
 
 .warning-cell {
@@ -182,24 +183,30 @@ html, body {
 
 /* Attendance Section */
 .attendance-section {
-    margin: 15px 0;
-    padding: 8px 10px;
+    margin: 18px 0 18px 0;
+    padding: 9px 12px;
     border: 1.5px solid #000;
     background: #fff;
 }
 
 .attendance-row {
     display: flex;
-    justify-content: space-between;
+    justify-content: space-around;
     font-size: 11px;
     font-weight: 700;
 }
 
 /* Remarks Section */
 .remarks-section {
-    margin-top: 15px;
-    font-size: 10px;
+    margin: 14px 0 14px 0;
+    font-size: 11px;
     font-weight: bold;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.remarks-row {
     display: flex;
     align-items: flex-end;
     gap: 8px;
@@ -212,12 +219,12 @@ html, body {
 .remarks-line {
     flex: 1;
     border-bottom: 1.5px solid #000;
-    margin-bottom: 2px;
+    height: 12px;
 }
 
 /* Signature Section */
 .signature-section {
-    margin-top: 20px;
+    margin-top: 14px;
     display: flex;
     justify-content: space-between;
     gap: 20px;
@@ -229,15 +236,14 @@ html, body {
 }
 
 .signature-label {
-    font-size: 10px;
+    font-size: 10.5px;
     font-weight: 700;
-    margin-bottom: 20px;
+    margin-bottom: 38px;
 }
 
 .signature-line {
     border-top: 1.5px solid #000;
     width: 100%;
-    margin-top: 5px;
 }
 
 /* Instructions Section */
@@ -269,10 +275,10 @@ html, body {
 
 /* Grade Legend */
 .grade-legend {
-    margin-top: 10px;
-    padding: 6px 10px;
+    margin: 14px 0 16px 0;
+    padding: 7px 12px;
     border: 1.5px solid #000;
-    background: #fff;
+    background: #fafafa;
 }
 
 .legend-title {
@@ -282,9 +288,15 @@ html, body {
 }
 
 .legend-text {
-    font-size: 8px;
+    font-size: 8.5px;
     font-weight: 600;
-    line-height: 1.4;
+    line-height: 1.35;
+}
+
+.legend-subtext {
+    font-size: 8px;
+    color: #444;
+    margin-top: 3px;
 }
 
 /* Bottom Info Row */
@@ -292,14 +304,14 @@ html, body {
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    margin-top: 10px;
+    margin-top: 8px;
     border-top: 1px solid #000;
-    padding-top: 8px;
+    padding-top: 6px;
 }
 
 .grade-info {
-    font-size: 8px;
-    font-weight: bold;
+    font-size: 10.5px;
+    font-weight: 900;
     text-align: left;
 }
 
@@ -398,8 +410,9 @@ html, body {
                         <th rowspan="2">SUBJECT</th>
                         <th colspan="2">Max. Score</th>
                         <th colspan="2">Score Obtained</th>
-                        <th rowspan="2">TOTAL</th>
                         <th rowspan="2">TE GRADE</th>
+                        <th rowspan="2">TOTAL</th>
+                        <th rowspan="2">TOTAL GRADE</th>
                     </tr>
                     <tr>
                         <th>CE</th>
@@ -413,6 +426,8 @@ html, body {
                         <th>MAX. SCORE</th>
                         <th>SCORE OBTAINED</th>
                         <th>TE GRADE</th>
+                        <th>TOTAL</th>
+                        <th>TOTAL GRADE</th>
                     </tr>
                     <% } %>
                 </thead>
@@ -420,6 +435,8 @@ html, body {
                 <% 
                 subjects.forEach(function(subject) {
                     const isWarn = subject.isTeWarning;
+                    const teGrade = subject.teGrade || subject.grade;
+                    const totalGrade = subject.totalGrade || subject.grade;
                 %>
                 <tr>
                     <td><%= subject.name %></td>
@@ -430,18 +447,21 @@ html, body {
                     <td class="<%= isWarn ? 'warning-cell' : '' %>">
                         <%= subject.teMarks %><%= isWarn ? '*' : '' %>
                     </td>
-                    <td><%= subject.total %></td>
                     <td class="<%= isWarn ? 'warning-cell' : '' %>">
-                        <%= subject.grade %><%= isWarn ? '*' : '' %>
+                        <%= teGrade %><%= isWarn ? '*' : '' %>
                     </td>
+                    <td><%= subject.total %></td>
+                    <td><%= totalGrade %></td>
                     <% } else { %>
                     <td><%= subject.teMax %></td>
                     <td class="<%= isWarn ? 'warning-cell' : '' %>">
                         <%= subject.teMarks %><%= isWarn ? '*' : '' %>
                     </td>
                     <td class="<%= isWarn ? 'warning-cell' : '' %>">
-                        <%= subject.grade %><%= isWarn ? '*' : '' %>
+                        <%= teGrade %><%= isWarn ? '*' : '' %>
                     </td>
+                    <td><%= subject.total %></td>
+                    <td><%= totalGrade %></td>
                     <% } %>
                 </tr>
                 <% }); %>
@@ -453,18 +473,21 @@ html, body {
                     <td><strong><%= totalTEMax %></strong></td>
                     <td><strong><%= totalCE %></strong></td>
                     <td><strong><%= totalTE %></strong></td>
+                    <td><strong><%= typeof overallTeGrade !== 'undefined' ? overallTeGrade : overallGrade %></strong></td>
                     <td><strong><%= grandTotal %></strong></td>
-                    <td><strong><%= overallGrade %></strong></td>
+                    <td><strong><%= typeof overallTotalGrade !== 'undefined' ? overallTotalGrade : overallGrade %></strong></td>
                     <% } else { %>
                     <td><strong><%= totalTEMax %></strong></td>
                     <td><strong><%= totalTE %></strong></td>
-                    <td><strong><%= overallGrade %></strong></td>
+                    <td><strong><%= typeof overallTeGrade !== 'undefined' ? overallTeGrade : overallGrade %></strong></td>
+                    <td><strong><%= grandTotal %></strong></td>
+                    <td><strong><%= typeof overallTotalGrade !== 'undefined' ? overallTotalGrade : overallGrade %></strong></td>
                     <% } %>
                 </tr>
                 </tbody>
             </table>
             <% if (subjects.some(s => s.isTeWarning)) { %>
-            <div style="margin-top: 5px; font-size: 9px; color: #dc2626; font-weight: 600;">
+            <div style="margin-top: 4px; font-size: 8.5px; color: #dc2626; font-weight: 600;">
                 * TE score is below 30% (Needs Improvement)
             </div>
             <% } %>
@@ -476,8 +499,8 @@ html, body {
             
             <!-- Attendance Section -->
             <% if (typeof attendance !== 'undefined' && attendance && attendance.totalDays > 0) { %>
-            <div style="margin: 16px 0 22px 0; padding: 6.5px 10px; border: 1px solid #000; background: #fff;">
-                <div style="display: flex; justify-content: space-around; font-size: 10px; font-weight: 700;">
+            <div class="attendance-section">
+                <div class="attendance-row">
                     <span>Total Working Days: <strong><%= attendance.totalDays %></strong></span>
                     <span>Days Present: <strong><%= attendance.presentDays %></strong></span>
                     <span>Attendance: <strong><%= attendance.percentage %>%</strong></span>
@@ -486,9 +509,14 @@ html, body {
             <% } %>
             
             <!-- Remarks Section -->
-            <div class="remarks-section" style="margin-top: 22px;">
-                <span class="remarks-label">Remarks :</span>
-                <span class="remarks-line"></span>
+            <div class="remarks-section">
+                <div class="remarks-row">
+                    <span class="remarks-label">Remarks :</span>
+                    <span class="remarks-line"></span>
+                </div>
+                <div class="remarks-row">
+                    <span class="remarks-line" style="margin-left: 60px;"></span>
+                </div>
             </div>
             
         </div>
@@ -496,6 +524,17 @@ html, body {
         <!-- Bottom Section -->
         <div class="bottom-section">
             
+            <!-- Grade Legend -->
+            <div class="grade-legend">
+                <div class="legend-title">GRADE SCALE:</div>
+                <div class="legend-text">
+                    <strong>A+</strong> (90-100%) &nbsp;|&nbsp; <strong>A</strong> (80-89%) &nbsp;|&nbsp; <strong>B+</strong> (70-79%) &nbsp;|&nbsp; <strong>B</strong> (60-69%) &nbsp;|&nbsp; <strong>C+</strong> (50-59%) &nbsp;|&nbsp; <strong>C</strong> (40-49%) &nbsp;|&nbsp; <strong>D+</strong> (30-39%) &nbsp;|&nbsp; <strong>D</strong> (20-29%) &nbsp;|&nbsp; <strong>E</strong> (Below 20%)
+                </div>
+                <div class="legend-subtext">
+                    CE: Continuous Evaluation &nbsp;|&nbsp; TE: Terminal Evaluation &nbsp;|&nbsp; Qualifying Minimum for TE is 30%
+                </div>
+            </div>
+
             <!-- Signatures -->
             <div class="signature-section">
                 <div class="signature-item">
@@ -512,36 +551,10 @@ html, body {
                 </div>
             </div>
             
-            <!-- Instructions Section -->
-            <!-- <div class="instructions-section">
-                <div class="instructions-title">Instructions :</div>
-                <ul class="instructions-list">
-                    <li>1. This progress report is valid only with the school seal and authorized signature.</li>
-                    <li>2. Any corrections or overwriting must be authenticated by the Headmaster.</li>
-                    <li>3. This document should be preserved carefully for future reference.</li>
-                    <li>4. For any queries regarding marks, contact the school office within 10 working days.</li>
-                    <li>5. Duplicate progress report will be issued only on submission of proper application.</li>
-                    <li>6. Minimum attendance required for eligibility is 75%.</li>
-                    <li>7. Parents are requested to sign and return the acknowledgement copy to the class teacher.</li>
-                    <li>8. Parent-Teacher Meeting schedule will be communicated separately.</li>
-                </ul>
-            </div> -->
-            
-            <!-- Grade Legend -->
-            <!-- <div class="grade-legend">
-                <div class="legend-title">GRADE BOUNDARIES:</div>
-                <div class="legend-text">
-                    A+ (90-100) | A (80-89) | B+ (70-79) | B (60-69) | C+ (50-59) | C (40-49) | D+ (30-39) | D (20-29) | E (Below 20)
-                </div>
-                <div class="legend-text" style="margin-top: 3px;">
-                    CE: Continuous Evaluation (20%) | TE: Term Evaluation (80%) | Overall Grade: <%= overallGrade %>
-                </div>
-            </div> -->
-            
             <!-- Bottom Info Row -->
             <div class="bottom-info-row">
                 <div class="grade-info">
-                    Overall Grade: <%= overallGrade %>
+                    Overall Grade: <%= typeof overallTotalGrade !== 'undefined' ? overallTotalGrade : overallGrade %>
                 </div>
                 <div class="generated-info">
                     Generated on: <%= new Date().toLocaleDateString('en-IN') %>

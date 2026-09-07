@@ -156,6 +156,11 @@ const prepareStudentReportData = async (student, examId, academicYear, options =
       const teGrade = getGrade(tePercentage);
       const isTeWarning = teMax > 0 && tePercentage < 30;
 
+      // Total Grade (CE + TE)
+      const subjectTotalMax = ceMax + teMax;
+      const totalPercentage = subjectTotalMax > 0 ? (totalObtained / subjectTotalMax) * 100 : 0;
+      const totalGrade = getGrade(totalPercentage);
+
       return {
         name: subject.subjectName,
         ceMax: ceMax,
@@ -163,7 +168,9 @@ const prepareStudentReportData = async (student, examId, academicYear, options =
         ceMarks: ce,
         teMarks: te,
         total: totalObtained,
-        grade: teGrade,
+        teGrade: teGrade,
+        totalGrade: totalGrade,
+        grade: totalGrade,
         isTeWarning: isTeWarning
       };
     });
@@ -198,8 +205,12 @@ const prepareStudentReportData = async (student, examId, academicYear, options =
       });
 
       const combinedTePercentage = combinedTeMax > 0 ? (combinedTe / combinedTeMax) * 100 : 0;
-      const combinedGrade = getGrade(combinedTePercentage);
+      const combinedTeGrade = getGrade(combinedTePercentage);
       const combinedIsTeWarning = combinedTeMax > 0 && combinedTePercentage < 30;
+
+      const combinedTotalMax = combinedCeMax + combinedTeMax;
+      const combinedTotalPercentage = combinedTotalMax > 0 ? (combinedTotal / combinedTotalMax) * 100 : 0;
+      const combinedTotalGrade = getGrade(combinedTotalPercentage);
 
       const basicScienceSubject = {
         name: 'BASIC SCIENCE',
@@ -208,7 +219,9 @@ const prepareStudentReportData = async (student, examId, academicYear, options =
         ceMarks: combinedCe,
         teMarks: combinedTe,
         total: combinedTotal,
-        grade: combinedGrade,
+        teGrade: combinedTeGrade,
+        totalGrade: combinedTotalGrade,
+        grade: combinedTotalGrade,
         isTeWarning: combinedIsTeWarning
       };
 
@@ -220,12 +233,14 @@ const prepareStudentReportData = async (student, examId, academicYear, options =
     }
   }
   
-  // Calculate overall percentage & overall TE grade
+  // Calculate overall percentage & overall TE and Total grades
   const grandTotal = totalCE + totalTE;
   const grandMax = totalCEMax + totalTEMax;
   const overallPercentage = grandMax > 0 ? Math.round((grandTotal / grandMax) * 100) : 0;
   const overallTePercentage = totalTEMax > 0 ? Math.round((totalTE / totalTEMax) * 100) : 0;
-  const overallGrade = getGrade(overallTePercentage);
+  const overallTeGrade = getGrade(overallTePercentage);
+  const overallTotalGrade = getGrade(overallPercentage);
+  const overallGrade = overallTotalGrade;
 
   // ── Calculate Real Attendance for Exam Months ────────────────
   let attendanceInfo = {
@@ -377,6 +392,8 @@ const prepareStudentReportData = async (student, examId, academicYear, options =
     grandTotal,
     grandMax,
     overallPercentage,
+    overallTeGrade,
+    overallTotalGrade,
     overallGrade: overallGrade,
     attendance: attendanceInfo
   };

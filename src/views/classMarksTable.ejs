@@ -234,7 +234,7 @@ td.text-left {
             <thead>
                 <!-- School Header (spans all columns) -->
                 <tr>
-                    <th class="school-header-cell" colspan="<%= subjects.length + 4 %>">
+                    <th class="school-header-cell" colspan="<%= subjects.length + 5 %>">
                         <div class="header-content">
                             <% if (schoolLogo) { %>
                                 <div class="school-logo">
@@ -275,6 +275,12 @@ td.text-left {
                                 <span class="info-label">VIEW MODE:</span>
                                 <span><%= viewMode === 'te' ? 'TE Marks & Grade' : (viewMode === 'both' ? 'Both (TE & TE+CE)' : 'TE+CE Total Marks & Grade') %></span>
                             </div>
+                            <% if (typeof sortBy !== 'undefined' && sortBy && sortBy !== 'rollno') { %>
+                            <div class="info-item">
+                                <span class="info-label">ORDER:</span>
+                                <span><%= sortBy === 'rank' ? 'Rank Order' : (sortBy === 'percentage' ? 'Percentage Order' : 'Alphabetical Order') %></span>
+                            </div>
+                            <% } %>
                         </div>
                     </th>
                 </tr>
@@ -299,6 +305,7 @@ td.text-left {
                         <%= viewMode === 'te' ? 'TE Total' : (viewMode === 'both' ? 'Total (TE/Tot)' : 'Total') %>
                     </th>
                     <th class="col-header" style="width: 5%"><%= viewMode === 'te' ? 'TE %' : '%' %></th>
+                    <th class="col-header" style="width: 4%">Rank</th>
                 </tr>
             </thead>
             <tbody>
@@ -338,35 +345,27 @@ td.text-left {
                                             <div class="cell-both">
                                                 <div><strong>TE:</strong> <span class="ab">AB</span></div>
                                                 <div style="border-top: 0.5px solid #777777; padding-top: 1px;">
-                                                    <strong>Tot:</strong> 
-                                                    <% if (currentTotalMarks > 0) { %>
-                                                        <%= currentTotalMarks %> (<%= currentTotalGrade %>)
-                                                    <% } else { %>
-                                                        <span class="ab">AB</span>
-                                                    <% } %>
+                                                    <strong>Tot:</strong> <%= currentTotalMarks %> (<span class="ab"><%= currentTotalGrade %></span>)
                                                 </div>
                                             </div>
                                         <% } else { %>
-                                            <% if (currentTotalMarks > 0) { %>
-                                                <div class="bold"><%= currentTotalMarks %></div>
-                                                <div class="grade-pill"><%= currentTotalGrade %></div>
-                                            <% } else { %>
-                                                <span class="ab">AB</span>
-                                            <% } %>
+                                            <span class="ab"><%= currentTotalMarks %> (AB)</span>
                                         <% } %>
-                                    <% } else if(!sm.isEntered && sm.total === undefined && sm.totalScore === undefined) { %>
+                                    <% } else if (!sm.isEntered) { %>
                                         <span class="not-entered">—</span>
                                     <% } else { %>
                                         <% if (viewMode === 'te') { %>
-                                            <div class="bold"><%= sm.teMarks !== undefined ? sm.teMarks : (sm.theoryScore !== undefined ? sm.theoryScore : 0) %></div>
-                                            <div class="grade-pill grade-te"><%= sm.teGrade || '-' %></div>
+                                            <div><%= sm.teMarks !== undefined ? sm.teMarks : (sm.theoryMarks !== undefined ? sm.theoryMarks : '-') %></div>
+                                            <div class="grade-pill"><%= sm.teGrade || '-' %></div>
                                         <% } else if (viewMode === 'both') { %>
                                             <div class="cell-both">
-                                                <div><strong>TE:</strong> <%= sm.teMarks !== undefined ? sm.teMarks : (sm.theoryScore !== undefined ? sm.theoryScore : 0) %> (<%= sm.teGrade || '-' %>)</div>
-                                                <div style="border-top: 0.5px solid #777777; padding-top: 1px;"><strong>Tot:</strong> <%= currentTotalMarks %> (<%= currentTotalGrade %>)</div>
+                                                <div><strong>TE:</strong> <%= sm.teMarks !== undefined ? sm.teMarks : (sm.theoryMarks !== undefined ? sm.theoryMarks : '-') %> (<%= sm.teGrade || '-' %>)</div>
+                                                <div style="border-top: 0.5px solid #777777; padding-top: 1px;">
+                                                    <strong>Tot:</strong> <%= currentTotalMarks %> (<%= currentTotalGrade %>)
+                                                </div>
                                             </div>
                                         <% } else { %>
-                                            <div class="bold"><%= currentTotalMarks %></div>
+                                            <div><%= currentTotalMarks %></div>
                                             <div class="grade-pill"><%= currentTotalGrade %></div>
                                         <% } %>
                                     <% } %>
@@ -400,12 +399,15 @@ td.text-left {
                                 <%= (student.percentage !== undefined ? student.percentage : 0).toFixed(1) %>%
                             </td>
                         <% } %>
+                        <td class="bold" style="background-color: #F8FAFC; font-size: 8.5px;">
+                            <%= student.rank ? '#' + student.rank : '-' %>
+                        </td>
                     </tr>
                 <% }); %>
             </tbody>
             <tfoot>
                 <tr>
-                    <td class="footer-cell" colspan="<%= subjects.length + 4 %>">
+                    <td class="footer-cell" colspan="<%= subjects.length + 5 %>">
                         Generated on <%= new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) %> | PPM Higher Secondary School
                     </td>
                 </tr>

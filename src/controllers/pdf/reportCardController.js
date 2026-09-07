@@ -1017,6 +1017,8 @@ exports.downloadClassMarksTablePDF = async (req, res) => {
       };
     });
 
+    const sortBy = (req.query.sortBy || req.query.sort || 'rollNo').toLowerCase();
+
     const rankedStudents = [...formattedStudents]
       .sort((a, b) => {
         if (mode === 'te') {
@@ -1026,7 +1028,23 @@ exports.downloadClassMarksTablePDF = async (req, res) => {
       })
       .map((s, idx) => ({ ...s, rank: idx + 1 }));
 
-    const finalSortedStudents = sortStudents(rankedStudents);
+    let finalSortedStudents;
+    if (sortBy === 'rank') {
+      finalSortedStudents = [...rankedStudents].sort((a, b) => (a.rank || 0) - (b.rank || 0));
+    } else if (sortBy === 'percentage') {
+      finalSortedStudents = [...rankedStudents].sort((a, b) => {
+        if (mode === 'te') return (b.tePercentage || 0) - (a.tePercentage || 0);
+        return (b.percentage || 0) - (a.percentage || 0);
+      });
+    } else if (sortBy === 'name') {
+      finalSortedStudents = [...rankedStudents].sort((a, b) => {
+        const nameA = a.name || a.studentName || a.fullName || '';
+        const nameB = b.name || b.studentName || b.fullName || '';
+        return nameA.localeCompare(nameB);
+      });
+    } else {
+      finalSortedStudents = sortStudents(rankedStudents);
+    }
 
     const cleanExamName = (examName || 'Exam')
       .replace(/\s*[-–]\s*\d{4}[-/]\d{2,4}\s*$/i, '')
@@ -1039,6 +1057,7 @@ exports.downloadClassMarksTablePDF = async (req, res) => {
       className: finalClassName,
       examName: cleanExamName || examName || 'Exam',
       mode: mode,
+      sortBy: sortBy,
       subjects: finalSubjects,
       students: finalSortedStudents,
       totalStudents: finalSortedStudents.length
@@ -1268,6 +1287,8 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
       };
     });
 
+    const sortBy = (req.query.sortBy || req.query.sort || 'rollNo').toLowerCase();
+
     const rankedStudents = [...formattedStudents]
       .sort((a, b) => {
         if (mode === 'te') return b.tePercentage - a.tePercentage;
@@ -1275,7 +1296,23 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
       })
       .map((s, idx) => ({ ...s, rank: idx + 1 }));
 
-    const finalSortedStudents = sortStudents(rankedStudents);
+    let finalSortedStudents;
+    if (sortBy === 'rank') {
+      finalSortedStudents = [...rankedStudents].sort((a, b) => (a.rank || 0) - (b.rank || 0));
+    } else if (sortBy === 'percentage') {
+      finalSortedStudents = [...rankedStudents].sort((a, b) => {
+        if (mode === 'te') return (b.tePercentage || 0) - (a.tePercentage || 0);
+        return (b.percentage || 0) - (a.percentage || 0);
+      });
+    } else if (sortBy === 'name') {
+      finalSortedStudents = [...rankedStudents].sort((a, b) => {
+        const nameA = a.name || a.studentName || a.fullName || '';
+        const nameB = b.name || b.studentName || b.fullName || '';
+        return nameA.localeCompare(nameB);
+      });
+    } else {
+      finalSortedStudents = sortStudents(rankedStudents);
+    }
 
     finalSortedStudents.forEach((st, idx) => {
       const rowData = [

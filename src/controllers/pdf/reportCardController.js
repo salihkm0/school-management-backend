@@ -952,30 +952,33 @@ exports.downloadClassMarksTablePDF = async (req, res) => {
 
         const teMax = sm.termMaxMarks || sm.theoryMaxMarks || subjConfig?.teMax || 80;
         const totalMax = sm.maxMarks || subjConfig?.totalMax || 100;
-        const teMarks = sm.isAbsent ? 0 : (sm.theoryScore !== undefined ? sm.theoryScore : 0);
-        const ceMarks = sm.isAbsent ? 0 : (sm.ceMarks !== undefined ? sm.ceMarks : (sm.ceScore || 0));
-        const totalMarks = sm.isAbsent ? 0 : (sm.totalScore !== undefined ? sm.totalScore : (teMarks + ceMarks));
+        const isAbsent = Boolean(sm.isAbsent);
+        const teMarks = isAbsent ? 0 : (sm.theoryScore !== undefined ? sm.theoryScore : 0);
+        const ceMarks = sm.ceMarks !== undefined ? sm.ceMarks : (sm.ceScore || 0);
+        const totalMarks = (sm.totalScore !== undefined && sm.totalScore > 0) ? sm.totalScore : (teMarks + ceMarks);
 
         const tePercentage = teMax > 0 ? (teMarks / teMax) * 100 : 0;
         const totalPercentage = totalMax > 0 ? (totalMarks / totalMax) * 100 : 0;
 
-        const teGrade = getGrade(tePercentage);
-        const totalGrade = getGrade(totalPercentage);
+        const teGrade = isAbsent ? 'AB' : getGrade(tePercentage);
+        const totalGrade = (isAbsent && totalMarks === 0) ? 'AB' : getGrade(totalPercentage);
 
         const isEntered = Boolean(
-          sm.isAbsent ||
+          isAbsent ||
           sm.isEnteredExplicitly ||
           (sm.isEntered && (
             (sm.theoryScore != null && Number(sm.theoryScore) > 0) ||
             (sm.ceScore != null && Number(sm.ceScore) > 0) ||
-            sm.isAbsent ||
+            (sm.ceMarks != null && Number(sm.ceMarks) > 0) ||
+            isAbsent ||
             sm.isEnteredExplicitly
           )) ||
           (sm.theoryScore != null && Number(sm.theoryScore) > 0) ||
-          (sm.ceScore != null && Number(sm.ceScore) > 0)
+          (sm.ceScore != null && Number(sm.ceScore) > 0) ||
+          (sm.ceMarks != null && Number(sm.ceMarks) > 0)
         );
 
-        if (!sm.isAbsent && isEntered) {
+        if (isEntered || (isAbsent && ceMarks > 0)) {
           teTotalObtained += teMarks;
           teTotalMax += teMax;
           grandTotal += totalMarks;
@@ -1219,24 +1222,27 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
 
         const teMax = sm.termMaxMarks || sm.theoryMaxMarks || subj.termMaxMarks || subj.theoryMaxMarks || 80;
         const totalMax = sm.maxMarks || subj.maxMarks || 100;
-        const teMarks = sm.isAbsent ? 0 : (sm.theoryScore !== undefined ? sm.theoryScore : 0);
-        const ceMarks = sm.isAbsent ? 0 : (sm.ceMarks !== undefined ? sm.ceMarks : (sm.ceScore || 0));
-        const totalMarks = sm.isAbsent ? 0 : (sm.totalScore !== undefined ? sm.totalScore : (teMarks + ceMarks));
+        const isAbsent = Boolean(sm.isAbsent);
+        const teMarks = isAbsent ? 0 : (sm.theoryScore !== undefined ? sm.theoryScore : 0);
+        const ceMarks = sm.ceMarks !== undefined ? sm.ceMarks : (sm.ceScore || 0);
+        const totalMarks = (sm.totalScore !== undefined && sm.totalScore > 0) ? sm.totalScore : (teMarks + ceMarks);
 
         const isEntered = Boolean(
-          sm.isAbsent ||
+          isAbsent ||
           sm.isEnteredExplicitly ||
           (sm.isEntered && (
             (sm.theoryScore != null && Number(sm.theoryScore) > 0) ||
             (sm.ceScore != null && Number(sm.ceScore) > 0) ||
-            sm.isAbsent ||
+            (sm.ceMarks != null && Number(sm.ceMarks) > 0) ||
+            isAbsent ||
             sm.isEnteredExplicitly
           )) ||
           (sm.theoryScore != null && Number(sm.theoryScore) > 0) ||
-          (sm.ceScore != null && Number(sm.ceScore) > 0)
+          (sm.ceScore != null && Number(sm.ceScore) > 0) ||
+          (sm.ceMarks != null && Number(sm.ceMarks) > 0)
         );
 
-        if (!sm.isAbsent && isEntered) {
+        if (isEntered || (isAbsent && ceMarks > 0)) {
           teTotalObtained += teMarks;
           teTotalMax += teMax;
           grandTotal += totalMarks;
@@ -1287,14 +1293,29 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
 
         const teMax = sm.termMaxMarks || sm.theoryMaxMarks || subj.termMaxMarks || subj.theoryMaxMarks || 80;
         const totalMax = sm.maxMarks || subj.maxMarks || 100;
-        const teMarks = sm.isAbsent ? 0 : (sm.theoryScore !== undefined ? sm.theoryScore : 0);
-        const ceMarks = sm.isAbsent ? 0 : (sm.ceMarks !== undefined ? sm.ceMarks : (sm.ceScore || 0));
-        const totalMarks = sm.isAbsent ? 0 : (sm.totalScore !== undefined ? sm.totalScore : (teMarks + ceMarks));
-        const teGrade = getGrade(teMax > 0 ? (teMarks / teMax) * 100 : 0);
-        const totalGrade = getGrade(totalMax > 0 ? (totalMarks / totalMax) * 100 : 0);
+        const isAbsent = Boolean(sm.isAbsent);
+        const teMarks = isAbsent ? 0 : (sm.theoryScore !== undefined ? sm.theoryScore : 0);
+        const ceMarks = sm.ceMarks !== undefined ? sm.ceMarks : (sm.ceScore || 0);
+        const totalMarks = (sm.totalScore !== undefined && sm.totalScore > 0) ? sm.totalScore : (teMarks + ceMarks);
+        const teGrade = isAbsent ? 'AB' : getGrade(teMax > 0 ? (teMarks / teMax) * 100 : 0);
+        const totalGrade = (isAbsent && totalMarks === 0) ? 'AB' : getGrade(totalMax > 0 ? (totalMarks / totalMax) * 100 : 0);
 
-        if (sm.isAbsent) {
-          rowData.push('AB');
+        if (isAbsent) {
+          if (mode === 'te') {
+            rowData.push('AB');
+          } else if (mode === 'both') {
+            if (totalMarks > 0) {
+              rowData.push(`TE: AB | Tot: ${totalMarks} (${totalGrade})`);
+            } else {
+              rowData.push('AB');
+            }
+          } else {
+            if (totalMarks > 0) {
+              rowData.push(`${totalMarks} (${totalGrade})`);
+            } else {
+              rowData.push('AB');
+            }
+          }
         } else if (sm.isEntered || sm.totalScore !== undefined || sm.total !== undefined) {
           if (mode === 'te') {
             rowData.push(`${teMarks} (${teGrade})`);

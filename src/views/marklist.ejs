@@ -448,7 +448,7 @@ html, body {
                         subjects.forEach(function(subject) {
                             const teObt = subject.isAbsent ? 0 : (subject.teObtained !== undefined ? subject.teObtained : subject.obtained);
                             const teM = subject.teMax !== undefined ? subject.teMax : subject.max;
-                            const obt = subject.isAbsent ? 0 : subject.obtained;
+                            const obt = (subject.isAbsent && (!subject.obtained || subject.obtained === 0)) ? 0 : (subject.obtained || 0);
                             const m = subject.max;
                             totalTeObt += teObt;
                             totalTeM += teM;
@@ -460,7 +460,7 @@ html, body {
                             <td style="background: #FAFAFA;"><%= subject.isAbsent ? 'AB' : (subject.teObtained !== undefined ? subject.teObtained : subject.obtained) %></td>
                             <td style="background: #FAFAFA;"><%= subject.teMax !== undefined ? subject.teMax : subject.max %></td>
                             <td style="background: #FAFAFA; font-weight: bold;"><%= subject.teGrade || subject.grade %></td>
-                            <td><%= subject.isAbsent ? 'AB' : subject.obtained %></td>
+                            <td><%= (subject.isAbsent && (!subject.obtained || subject.obtained === 0)) ? 'AB' : subject.obtained %></td>
                             <td><%= subject.max %></td>
                             <td style="font-weight: bold;"><%= subject.grade %></td>
                         </tr>
@@ -503,12 +503,12 @@ html, body {
                         let totalMax = 0;
                         
                         subjects.forEach(function(subject) {
-                            totalObtained += (subject.isAbsent ? 0 : subject.obtained);
+                            totalObtained += (subject.isAbsent && (!subject.obtained || subject.obtained === 0) ? 0 : (subject.obtained || 0));
                             totalMax += subject.max;
                         %>
                         <tr>
                             <td><%= subject.name %></td>
-                            <td><%= subject.isAbsent ? 'AB' : subject.obtained %></td>
+                            <td><%= (subject.isAbsent && (!subject.obtained || subject.obtained === 0)) ? 'AB' : subject.obtained %></td>
                             <td><%= subject.max %></td>
                             <td style="font-weight: bold;"><%= subject.grade %></td>
                         </tr>

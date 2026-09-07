@@ -129,11 +129,13 @@ async function buildMarklistTemplateData(studentId, examId, mode = 'total') {
 
       const isAbsent = Boolean(subject.isAbsent);
       const teObtained = isAbsent ? 0 : (subject.theoryScore !== undefined ? subject.theoryScore : 0);
-      const ceObtained = isAbsent ? 0 : (subject.ceScore !== undefined ? subject.ceScore : (subject.ceMarks || 0));
-      const totalObtained = isAbsent ? 0 : (subject.totalScore !== undefined ? subject.totalScore : (teObtained + ceObtained));
+      const ceObtained = subject.ceScore !== undefined ? subject.ceScore : (subject.ceMarks || 0);
+      const totalObtained = (subject.totalScore !== undefined && subject.totalScore > 0)
+        ? subject.totalScore
+        : (teObtained + ceObtained);
 
       const teGrade = isAbsent ? 'AB' : calculateGrade(teObtained, teMax);
-      const totalGrade = isAbsent ? 'AB' : (subject.grade || calculateGrade(totalObtained, totalMax));
+      const totalGrade = (isAbsent && totalObtained === 0) ? 'AB' : (subject.grade || calculateGrade(totalObtained, totalMax));
 
       return {
         name: normalizeSubjectName(subject.subjectName),
@@ -178,7 +180,7 @@ async function buildMarklistTemplateData(studentId, examId, mode = 'total') {
         ceObtained: (phy.ceObtained || 0) + (che.ceObtained || 0) + (bio.ceObtained || 0),
         obtained: combinedObtained,
         max: combinedMax,
-        grade: combinedIsAbsent ? 'AB' : calculateGrade(combinedObtained, combinedMax),
+        grade: (combinedIsAbsent && combinedObtained === 0) ? 'AB' : calculateGrade(combinedObtained, combinedMax),
         isAbsent: combinedIsAbsent
       };
 
@@ -206,8 +208,8 @@ async function buildMarklistTemplateData(studentId, examId, mode = 'total') {
   subjects.forEach(s => {
     grandTotalMax += s.max;
     grandTeMax += s.teMax;
+    grandTotalObtained += (s.obtained || 0);
     if (!s.isAbsent) {
-      grandTotalObtained += s.obtained;
       grandTeObtained += s.teObtained;
     }
   });

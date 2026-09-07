@@ -335,8 +335,33 @@ td.text-left {
                             %>
                             <td>
                                 <% if(sm) { %>
+                                    <% 
+                                       var currentTotalMarks = sm.totalMarks !== undefined ? sm.totalMarks : (sm.totalScore !== undefined ? sm.totalScore : sm.total);
+                                       var currentTotalGrade = sm.totalGrade || sm.grade || '-';
+                                    %>
                                     <% if(sm.isAbsent) { %>
-                                        <span class="ab">AB</span>
+                                        <% if (viewMode === 'te') { %>
+                                            <span class="ab">AB</span>
+                                        <% } else if (viewMode === 'both') { %>
+                                            <div class="cell-both">
+                                                <div><strong>TE:</strong> <span class="ab">AB</span></div>
+                                                <div style="border-top: 0.5px solid #777777; padding-top: 1px;">
+                                                    <strong>Tot:</strong> 
+                                                    <% if (currentTotalMarks > 0) { %>
+                                                        <%= currentTotalMarks %> (<%= currentTotalGrade %>)
+                                                    <% } else { %>
+                                                        <span class="ab">AB</span>
+                                                    <% } %>
+                                                </div>
+                                            </div>
+                                        <% } else { %>
+                                            <% if (currentTotalMarks > 0) { %>
+                                                <div class="bold"><%= currentTotalMarks %></div>
+                                                <div class="grade-pill"><%= currentTotalGrade %></div>
+                                            <% } else { %>
+                                                <span class="ab">AB</span>
+                                            <% } %>
+                                        <% } %>
                                     <% } else if(!sm.isEntered && sm.total === undefined && sm.totalScore === undefined) { %>
                                         <span class="not-entered">—</span>
                                     <% } else { %>
@@ -346,11 +371,11 @@ td.text-left {
                                         <% } else if (viewMode === 'both') { %>
                                             <div class="cell-both">
                                                 <div><strong>TE:</strong> <%= sm.teMarks !== undefined ? sm.teMarks : (sm.theoryScore !== undefined ? sm.theoryScore : 0) %> (<%= sm.teGrade || '-' %>)</div>
-                                                <div style="border-top: 0.5px solid #777777; padding-top: 1px;"><strong>Tot:</strong> <%= sm.totalMarks !== undefined ? sm.totalMarks : (sm.totalScore !== undefined ? sm.totalScore : sm.total) %> (<%= sm.totalGrade || sm.grade || '-' %>)</div>
+                                                <div style="border-top: 0.5px solid #777777; padding-top: 1px;"><strong>Tot:</strong> <%= currentTotalMarks %> (<%= currentTotalGrade %>)</div>
                                             </div>
                                         <% } else { %>
-                                            <div class="bold"><%= sm.totalMarks !== undefined ? sm.totalMarks : (sm.totalScore !== undefined ? sm.totalScore : sm.total) %></div>
-                                            <div class="grade-pill"><%= sm.totalGrade || sm.grade || '-' %></div>
+                                            <div class="bold"><%= currentTotalMarks %></div>
+                                            <div class="grade-pill"><%= currentTotalGrade %></div>
                                         <% } %>
                                     <% } %>
                                 <% } else { %>

@@ -64,6 +64,7 @@ html, body {
     height: 120mm;
     object-fit: contain;
     opacity: 0.06;
+    filter: grayscale(100%);
 }
 
 .content-layer {
@@ -83,21 +84,22 @@ html, body {
 /* Header Section */
 .header-section {
     text-align: center;
-    margin-bottom: 10px;
-    padding-bottom: 5px;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
     border-bottom: 2px solid #000;
 }
 
 .school-logo {
     width: 20mm;
     height: 20mm;
-    margin: 0 auto 5px;
+    margin: 0 auto 4px;
 }
 
 .school-logo img {
     width: 100%;
     height: 100%;
     object-fit: contain;
+    filter: grayscale(100%);
 }
 
 .school-name {
@@ -116,17 +118,17 @@ html, body {
 }
 
 .main-title {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 900;
     text-transform: uppercase;
     text-decoration: underline;
-    margin: 5px 0;
+    margin: 4px 0;
 }
 
 .page-number {
     text-align: right;
-    font-size: 9px;
-    margin: 3px 0 5px;
+    font-size: 8.5px;
+    margin: 2px 0 4px;
     font-weight: bold;
 }
 
@@ -135,30 +137,30 @@ html, body {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 5px;
-    margin-top: 5px;
+    margin-top: 4px;
 }
 
 /* Grid Table */
 .grid-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 10px;
+    font-size: 9.5px;
 }
 
 .grid-table th,
 .grid-table td {
     border: 1.5px solid #000;
-    padding: 5px 3px;
+    padding: 2.8px 2px;
     text-align: center;
     vertical-align: middle;
 }
 
 .grid-table th {
-    background: #f0f0f0;
+    background: #ECECEC;
     font-weight: 900;
     text-transform: uppercase;
     font-size: 9px;
-    padding: 5px 3px;
+    padding: 3.5px 2px;
 }
 
 .grid-table td {
@@ -241,7 +243,7 @@ html, body {
 <body>
 
 <%
-const itemsPerPage = 40;
+const itemsPerPage = 84;
 const totalPages = Math.ceil(classList.length / itemsPerPage);
 const displayAcademicYear = typeof academicYear !== 'undefined' ? academicYear : '2024-25';
 const schoolLogo = typeof schoolLogoUrl !== 'undefined' ? schoolLogoUrl : 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';

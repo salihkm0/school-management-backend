@@ -15,7 +15,21 @@ const generateClassTeacherListPDF = async (data) => {
     page = await browser.newPage();
 
     await page.setContent(html, {
-      waitUntil: 'networkidle0'
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
+    });
+
+    // Ensure all images (logo & watermark) are completely loaded
+    await page.evaluate(async () => {
+      const selectors = Array.from(document.querySelectorAll('img'));
+      await Promise.all(selectors.map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise((resolve) => {
+          img.addEventListener('load', resolve);
+          img.addEventListener('error', resolve);
+          setTimeout(resolve, 3000);
+        });
+      }));
     });
 
     await page.emulateMediaType('screen');

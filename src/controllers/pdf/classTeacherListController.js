@@ -1,4 +1,6 @@
 // controllers/classTeacherListController.js
+const fs = require('fs');
+const path = require('path');
 const Class = require('../../models/Class');
 const Staff = require('../../models/Staff');
 const StaffAssignment = require('../../models/StaffAssignment');
@@ -7,6 +9,22 @@ const { generateClassTeacherListPDF } = require('../../services/pdf/classTeacher
 
 // School logo URL
 const SCHOOL_LOGO_URL = 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
+
+let cachedLogoBase64 = null;
+function getSchoolLogoDataUri() {
+  if (cachedLogoBase64) return cachedLogoBase64;
+  try {
+    const localLogoPath = path.join(__dirname, '../../../public/school-logo.jpg');
+    if (fs.existsSync(localLogoPath)) {
+      const buf = fs.readFileSync(localLogoPath);
+      cachedLogoBase64 = `data:image/jpeg;base64,${buf.toString('base64')}`;
+      return cachedLogoBase64;
+    }
+  } catch (e) {
+    console.error('Error loading local logo:', e);
+  }
+  return SCHOOL_LOGO_URL;
+}
 
 // Dummy data for testing
 const DUMMY_CLASS_LIST = [
@@ -41,7 +59,7 @@ const DUMMY_CLASS_LIST = [
     { className: '8 I', teacherShortName: 'PSN' }
 ];
 
-// Generate short name from full name
+// Generate fallback short name from full name
 function generateShortName(fullName) {
     if (!fullName) return '-';
     
@@ -54,6 +72,53 @@ function generateShortName(fullName) {
     
     // For 3+ parts, take first letter of each
     return parts.map(p => p.charAt(0)).join('').toUpperCase();
+}
+
+// Get accurate teacher short name (prefer staff.shortName from database)
+function getTeacherShortName(staff, fallbackName) {
+  if (staff) {
+    if (staff.shortName && staff.shortName.trim()) {
+      return staff.shortName.trim().toUpperCase();
+    }
+    if (staff.shortForm && staff.shortForm.trim()) {
+      return staff.shortForm.trim().toUpperCase();
+    }
+    if (staff.name) {
+      return generateShortName(staff.name);
+    }
+  }
+  if (fallbackName) {
+    return generateShortName(fallbackName);
+  }
+  return '-';
+}
+
+// Helper to resolve class teacher with all fallbacks
+async function resolveClassTeacher(cls, assignments) {
+  const assignment = assignments.find(a => 
+    a.classTeacherOf && a.classTeacherOf._id.toString() === cls._id.toString()
+  );
+
+  let staff = null;
+  if (assignment && assignment.staffId) {
+    staff = await Staff.findById(assignment.staffId);
+  }
+  if (!staff && cls.classTeacherId) {
+    staff = await Staff.findById(cls.classTeacherId);
+  }
+  if (!staff && cls.classTeacherName) {
+    staff = await Staff.findOne({ name: new RegExp(`^${cls.classTeacherName.trim()}$`, 'i') });
+  }
+
+  const teacherName = staff ? staff.name : (cls.classTeacherName || '-');
+  const teacherShortName = getTeacherShortName(staff, cls.classTeacherName);
+  const teacherId = staff ? staff._id : (cls.classTeacherId || null);
+
+  return {
+    teacherId,
+    teacherName,
+    teacherShortName
+  };
 }
 
 /**
@@ -96,31 +161,11 @@ exports.generateClassTeacherListPDF = async (req, res) => {
 
       // Build class list with teacher info
       for (const cls of classes) {
-        const assignment = assignments.find(a => 
-          a.classTeacherOf && a.classTeacherOf._id.toString() === cls._id.toString()
-        );
-        
-        let teacherName = '-';
-        let teacherShortName = '-';
-        
-        if (assignment) {
-          const staff = await Staff.findById(assignment.staffId);
-          if (staff) {
-            teacherName = staff.name;
-            teacherShortName = generateShortName(staff.name);
-          }
-        } else if (cls.classTeacherId) {
-          const staff = await Staff.findById(cls.classTeacherId);
-          if (staff) {
-            teacherName = staff.name;
-            teacherShortName = generateShortName(staff.name);
-          }
-        }
-
+        const teacherInfo = await resolveClassTeacher(cls, assignments);
         classList.push({
           className: cls.section ? `${cls.name} ${cls.section}` : cls.name,
-          teacherName: teacherName,
-          teacherShortName: teacherShortName
+          teacherName: teacherInfo.teacherName,
+          teacherShortName: teacherInfo.teacherShortName
         });
       }
     }
@@ -132,7 +177,7 @@ exports.generateClassTeacherListPDF = async (req, res) => {
     }
 
     const templateData = {
-      schoolLogoUrl: SCHOOL_LOGO_URL,
+      schoolLogoUrl: getSchoolLogoDataUri(),
       academicYear: academicYearString,
       classList: classList
     };
@@ -192,31 +237,11 @@ exports.downloadClassTeacherListPDF = async (req, res) => {
       }).populate('classTeacherOf', 'name section');
 
       for (const cls of classes) {
-        const assignment = assignments.find(a => 
-          a.classTeacherOf && a.classTeacherOf._id.toString() === cls._id.toString()
-        );
-        
-        let teacherName = '-';
-        let teacherShortName = '-';
-        
-        if (assignment) {
-          const staff = await Staff.findById(assignment.staffId);
-          if (staff) {
-            teacherName = staff.name;
-            teacherShortName = generateShortName(staff.name);
-          }
-        } else if (cls.classTeacherId) {
-          const staff = await Staff.findById(cls.classTeacherId);
-          if (staff) {
-            teacherName = staff.name;
-            teacherShortName = generateShortName(staff.name);
-          }
-        }
-
+        const teacherInfo = await resolveClassTeacher(cls, assignments);
         classList.push({
           className: cls.section ? `${cls.name} ${cls.section}` : cls.name,
-          teacherName: teacherName,
-          teacherShortName: teacherShortName
+          teacherName: teacherInfo.teacherName,
+          teacherShortName: teacherInfo.teacherShortName
         });
       }
     }
@@ -227,7 +252,7 @@ exports.downloadClassTeacherListPDF = async (req, res) => {
     }
 
     const templateData = {
-      schoolLogoUrl: SCHOOL_LOGO_URL,
+      schoolLogoUrl: getSchoolLogoDataUri(),
       academicYear: academicYearString,
       classList: classList
     };
@@ -287,36 +312,13 @@ exports.getClassTeacherListData = async (req, res) => {
       }).populate('classTeacherOf', 'name section');
 
       for (const cls of classes) {
-        const assignment = assignments.find(a => 
-          a.classTeacherOf && a.classTeacherOf._id.toString() === cls._id.toString()
-        );
-        
-        let teacherName = '-';
-        let teacherShortName = '-';
-        let teacherId = null;
-        
-        if (assignment) {
-          const staff = await Staff.findById(assignment.staffId);
-          if (staff) {
-            teacherId = staff._id;
-            teacherName = staff.name;
-            teacherShortName = generateShortName(staff.name);
-          }
-        } else if (cls.classTeacherId) {
-          const staff = await Staff.findById(cls.classTeacherId);
-          if (staff) {
-            teacherId = staff._id;
-            teacherName = staff.name;
-            teacherShortName = generateShortName(staff.name);
-          }
-        }
-
+        const teacherInfo = await resolveClassTeacher(cls, assignments);
         classList.push({
           classId: cls._id,
           className: cls.section ? `${cls.name} ${cls.section}` : cls.name,
-          teacherId: teacherId,
-          teacherName: teacherName,
-          teacherShortName: teacherShortName
+          teacherId: teacherInfo.teacherId,
+          teacherName: teacherInfo.teacherName,
+          teacherShortName: teacherInfo.teacherShortName
         });
       }
     }

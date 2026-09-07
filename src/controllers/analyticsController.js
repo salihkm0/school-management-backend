@@ -824,74 +824,374 @@ exports.getPerformanceAnalytics = async (req, res) => {
 
 // ==================== ATTENDANCE ANALYTICS ====================
 
+// ==================== ATTENDANCE ANALYTICS ====================
+
 exports.getAttendanceAnalytics = async (req, res) => {
   try {
-    const { classId, startDate, endDate, academicYearId } = req.query;
+    const { classId, year, month, academicYearId } = req.query;
+
+    let targetAcademicYear = null;
+    if (academicYearId && academicYearId.match(/^[0-9a-fA-F]{24}$/)) {
+      targetAcademicYear = await AcademicYear.findById(academicYearId);
+    }
+    if (!targetAcademicYear) {
+      targetAcademicYear = await AcademicYear.findOne({ isCurrent: true });
+    }
 
     const query = {};
-    if (classId) {
-      const students = await Student.find({ classId }).select("_id");
-      query.studentId = { $in: students.map((s) => s._id) };
+    if (targetAcademicYear) {
+      query.academicYearId = targetAcademicYear._id;
     }
-    if (academicYearId) query.academicYearId = academicYearId;
-    if (startDate) query.date = { $gte: new Date(startDate) };
-    if (endDate) query.date = { ...query.date, $lte: new Date(endDate) };
+    if (classId && classId.match(/^[0-9a-fA-F]{24}$/)) {
+      query.classId = classId;
+    }
+    if (year && !isNaN(parseInt(year, 10))) {
+      query.year = parseInt(year, 10);
+    }
 
-    const attendance = await Attendance.find(query);
+    const targetMonth = (month && month !== 'all' && !isNaN(parseInt(month, 10)))
+      ? parseInt(month, 10)
+      : null;
 
-    const monthlyAttendance = {};
+    if (targetMonth) {
+      query.month = targetMonth;
+    }
 
-    attendance.forEach((record) => {
-      const month = record.date ? record.date.getMonth() + 1 : new Date().getMonth() + 1;
-      const year = record.date ? record.date.getFullYear() : new Date().getFullYear();
-      const monthKey = `${year}-${month}`;
-      
-      if (!monthlyAttendance[monthKey]) {
-        monthlyAttendance[monthKey] = { 
-          present: 0, 
-          absent: 0, 
-          total: 0,
-          month,
-          year
+    // Fetch all matching attendance records
+    const records = await Attendance.find(query)
+      .populate({
+        path: "studentId",
+        select: "fullName admissionNo rollNumber studentCode classId status gender"
+      })
+      .populate("classId", "name section displayName")
+      .lean();
+
+    const monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthFullNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+    // If no records found, return clean empty response
+    if (!records || records.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          academicYear: targetAcademicYear ? {
+            id: targetAcademicYear._id,
+            name: targetAcademicYear.name,
+            year: targetAcademicYear.year
+          } : null,
+          selectedMonth: targetMonth,
+          summary: {
+            totalStudents: 0,
+            totalWorkingDays: 0,
+            totalPresentDays: 0,
+            totalAbsentDays: 0,
+            averagePercentage: 0,
+            goodStandingCount: 0,
+            goodStandingPercentage: 0,
+            needsAttentionCount: 0,
+            criticalCount: 0,
+            perfectCount: 0,
+            perfectPercentage: 0
+          },
+          distribution: [
+            { category: 'Excellent', range: '≥ 90%', min: 90, max: 100, count: 0, percentage: 0, color: '#10B981' },
+            { category: 'Good', range: '75% - 89%', min: 75, max: 89.9, count: 0, percentage: 0, color: '#059669' },
+            { category: 'Average', range: '60% - 74%', min: 60, max: 74.9, count: 0, percentage: 0, color: '#F59E0B' },
+            { category: 'Critical', range: '< 60%', min: 0, max: 59.9, count: 0, percentage: 0, color: '#EF4444' }
+          ],
+          monthlyTrends: [],
+          classWiseComparison: [],
+          breakdown: {
+            needsAttention: [],
+            perfectAttendance: [],
+            topAttendance: [],
+            allStudents: []
+          }
+        }
+      });
+    }
+
+    // 1. Group records by student to compute per-student cumulative stats (or month-specific stats)
+    const studentMap = new Map();
+    const monthlyMap = new Map();
+    const classMap = new Map();
+
+    records.forEach(rec => {
+      const sId = rec.studentId?._id?.toString() || rec.studentId?.toString();
+      if (!sId) return;
+
+      const workingDays = rec.totalWorkingDays || 0;
+      const presentDays = rec.presentDays || 0;
+      const absentDays = rec.absentDays || 0;
+
+      // Student aggregation
+      if (!studentMap.has(sId)) {
+        const studentInfo = rec.studentId && typeof rec.studentId === 'object' ? rec.studentId : {};
+        const classInfo = rec.classId && typeof rec.classId === 'object' ? rec.classId : {};
+        const className = classInfo.displayName || `${classInfo.name || ''} ${classInfo.section || ''}`.trim() || 'Class';
+
+        studentMap.set(sId, {
+          studentId: sId,
+          name: studentInfo.fullName || rec.studentName || 'Student',
+          admissionNo: studentInfo.admissionNo || studentInfo.studentCode || '-',
+          rollNumber: studentInfo.rollNumber || '-',
+          gender: studentInfo.gender || '-',
+          classId: classInfo._id?.toString() || rec.classId?.toString(),
+          className,
+          totalWorkingDays: 0,
+          presentDays: 0,
+          absentDays: 0,
+          monthsCount: 0
+        });
+      }
+
+      const st = studentMap.get(sId);
+      st.totalWorkingDays += workingDays;
+      st.presentDays += presentDays;
+      st.absentDays += absentDays;
+      st.monthsCount += 1;
+
+      // Monthly aggregation
+      const mKey = `${rec.year || 0}-${rec.month || 0}`;
+      if (!monthlyMap.has(mKey)) {
+        monthlyMap.set(mKey, {
+          year: rec.year,
+          month: rec.month,
+          monthName: monthNames[rec.month] || `M${rec.month}`,
+          monthFullName: monthFullNames[rec.month] || `Month ${rec.month}`,
+          workingDays: workingDays,
+          totalPresent: 0,
+          totalPossible: 0,
+          recordsCount: 0
+        });
+      }
+      const mData = monthlyMap.get(mKey);
+      mData.totalPresent += presentDays;
+      mData.totalPossible += workingDays;
+      mData.recordsCount += 1;
+      if (workingDays > mData.workingDays) {
+        mData.workingDays = workingDays;
+      }
+
+      // Class aggregation
+      const cId = (rec.classId && typeof rec.classId === 'object' ? rec.classId._id : rec.classId)?.toString();
+      if (cId) {
+        if (!classMap.has(cId)) {
+          const classInfo = rec.classId && typeof rec.classId === 'object' ? rec.classId : {};
+          const cName = classInfo.displayName || `${classInfo.name || ''} ${classInfo.section || ''}`.trim() || 'Class';
+          classMap.set(cId, {
+            classId: cId,
+            className: cName,
+            studentSet: new Set(),
+            totalPresent: 0,
+            totalPossible: 0,
+            goodStandingCount: 0,
+            criticalCount: 0
+          });
+        }
+        const cData = classMap.get(cId);
+        cData.studentSet.add(sId);
+        cData.totalPresent += presentDays;
+        cData.totalPossible += workingDays;
+      }
+    });
+
+    // 2. Finalize per-student percentages
+    const studentList = Array.from(studentMap.values()).map(st => {
+      const pct = st.totalWorkingDays > 0 ? (st.presentDays / st.totalWorkingDays) * 100 : 0;
+      let status = 'Good';
+      if (pct >= 90) status = 'Excellent';
+      else if (pct >= 75) status = 'Good';
+      else if (pct >= 60) status = 'Average';
+      else status = 'Critical';
+
+      return {
+        ...st,
+        percentage: parseFloat(pct.toFixed(1)),
+        status
+      };
+    });
+
+    const totalStudents = studentList.length;
+
+    // 3. Overall Summary
+    let totalWorkingDaysSum = 0;
+    let totalPresentDaysSum = 0;
+    let goodStandingCount = 0;
+    let criticalCount = 0;
+    let needsAttentionCount = 0;
+    let perfectCount = 0;
+    let excellentCount = 0;
+    let goodCount = 0;
+    let averageCount = 0;
+
+    studentList.forEach(st => {
+      totalWorkingDaysSum += st.totalWorkingDays;
+      totalPresentDaysSum += st.presentDays;
+
+      if (st.percentage >= 100 && st.totalWorkingDays > 0) perfectCount++;
+      if (st.percentage >= 75) goodStandingCount++;
+      else needsAttentionCount++;
+
+      if (st.percentage >= 90) excellentCount++;
+      else if (st.percentage >= 75) goodCount++;
+      else if (st.percentage >= 60) averageCount++;
+      else criticalCount++;
+
+      // Update class good/critical
+      if (st.classId && classMap.has(st.classId)) {
+        const cData = classMap.get(st.classId);
+        if (st.percentage >= 75) cData.goodStandingCount++;
+        if (st.percentage < 60) cData.criticalCount++;
+      }
+    });
+
+    const averagePercentage = totalWorkingDaysSum > 0
+      ? parseFloat(((totalPresentDaysSum / totalWorkingDaysSum) * 100).toFixed(1))
+      : 0;
+
+    const avgWorkingDays = totalStudents > 0
+      ? Math.round(totalWorkingDaysSum / totalStudents)
+      : 0;
+
+    // 4. Category Distribution
+    const distribution = [
+      {
+        category: 'Excellent',
+        label: 'Excellent (≥ 90%)',
+        range: '≥ 90%',
+        min: 90,
+        max: 100,
+        count: excellentCount,
+        percentage: totalStudents > 0 ? parseFloat(((excellentCount / totalStudents) * 100).toFixed(1)) : 0,
+        color: '#10B981'
+      },
+      {
+        category: 'Good',
+        label: 'Good (75% - 89%)',
+        range: '75% - 89%',
+        min: 75,
+        max: 89.9,
+        count: goodCount,
+        percentage: totalStudents > 0 ? parseFloat(((goodCount / totalStudents) * 100).toFixed(1)) : 0,
+        color: '#059669'
+      },
+      {
+        category: 'Average',
+        label: 'Average (60% - 74%)',
+        range: '60% - 74%',
+        min: 60,
+        max: 74.9,
+        count: averageCount,
+        percentage: totalStudents > 0 ? parseFloat(((averageCount / totalStudents) * 100).toFixed(1)) : 0,
+        color: '#F59E0B'
+      },
+      {
+        category: 'Critical',
+        label: 'Needs Attention (< 60%)',
+        range: '< 60%',
+        min: 0,
+        max: 59.9,
+        count: criticalCount,
+        percentage: totalStudents > 0 ? parseFloat(((criticalCount / totalStudents) * 100).toFixed(1)) : 0,
+        color: '#EF4444'
+      }
+    ];
+
+    // 5. Monthly Trends (academic year order: Jun to Mar)
+    const academicMonthOrder = [6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5];
+    const monthlyTrends = Array.from(monthlyMap.values())
+      .map(m => {
+        const pct = m.totalPossible > 0 ? (m.totalPresent / m.totalPossible) * 100 : 0;
+        return {
+          year: m.year,
+          month: m.month,
+          monthName: m.monthName,
+          monthFullName: m.monthFullName,
+          workingDays: m.workingDays,
+          totalStudents: m.recordsCount,
+          totalPresent: m.totalPresent,
+          totalPossible: m.totalPossible,
+          averagePercentage: parseFloat(pct.toFixed(1))
         };
-      }
-      monthlyAttendance[monthKey].total++;
-      if (record.status === "present") {
-        monthlyAttendance[monthKey].present++;
-      } else {
-        monthlyAttendance[monthKey].absent++;
-      }
-    });
+      })
+      .sort((a, b) => {
+        const orderA = academicMonthOrder.indexOf(a.month);
+        const orderB = academicMonthOrder.indexOf(b.month);
+        if (orderA !== -1 && orderB !== -1) return orderA - orderB;
+        if (a.year !== b.year) return a.year - b.year;
+        return a.month - b.month;
+      });
 
-    const monthlyChartData = Object.entries(monthlyAttendance).map(([key, data]) => ({
-      month: new Date(data.year, data.month - 1, 1).toLocaleString('default', { month: 'short' }),
-      percentage: data.total > 0 ? (data.present / data.total) * 100 : 0,
-      present: data.present,
-      absent: data.absent,
-      total: data.total
-    })).sort((a, b) => {
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      return months.indexOf(a.month) - months.indexOf(b.month);
-    });
+    // 6. Class-wise Comparison
+    const classWiseComparison = Array.from(classMap.values())
+      .map(c => {
+        const pct = c.totalPossible > 0 ? (c.totalPresent / c.totalPossible) * 100 : 0;
+        return {
+          classId: c.classId,
+          className: c.className,
+          totalStudents: c.studentSet.size,
+          averagePercentage: parseFloat(pct.toFixed(1)),
+          goodStandingCount: c.goodStandingCount,
+          criticalCount: c.criticalCount
+        };
+      })
+      .sort((a, b) => b.averagePercentage - a.averagePercentage);
 
-    const totalPresent = attendance.filter(
-      (a) => a.status === "present",
-    ).length;
+    // 7. Student Breakdown lists
+    const needsAttention = studentList
+      .filter(st => st.percentage < 75)
+      .sort((a, b) => a.percentage - b.percentage);
+
+    const perfectAttendance = studentList
+      .filter(st => st.percentage >= 100 && st.totalWorkingDays > 0)
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const topAttendance = [...studentList]
+      .sort((a, b) => b.percentage - a.percentage || b.presentDays - a.presentDays)
+      .slice(0, 25);
+
+    const allStudents = [...studentList].sort((a, b) => {
+      const rollA = parseInt(a.rollNumber, 10);
+      const rollB = parseInt(b.rollNumber, 10);
+      if (!isNaN(rollA) && !isNaN(rollB)) return rollA - rollB;
+      return a.name.localeCompare(b.name);
+    });
 
     res.json({
       success: true,
       data: {
-        monthlyAttendance: monthlyChartData,
-        overallAttendance: {
-          total: attendance.length,
-          present: totalPresent,
-          absent: attendance.length - totalPresent,
-          percentage:
-            attendance.length > 0
-              ? (totalPresent / attendance.length) * 100
-              : 0,
+        academicYear: targetAcademicYear ? {
+          id: targetAcademicYear._id,
+          name: targetAcademicYear.name,
+          year: targetAcademicYear.year
+        } : null,
+        selectedMonth: targetMonth,
+        summary: {
+          totalStudents,
+          totalWorkingDays: avgWorkingDays,
+          totalPresentDays: totalPresentDaysSum,
+          totalAbsentDays: totalWorkingDaysSum - totalPresentDaysSum,
+          averagePercentage,
+          goodStandingCount,
+          goodStandingPercentage: totalStudents > 0 ? parseFloat(((goodStandingCount / totalStudents) * 100).toFixed(1)) : 0,
+          needsAttentionCount,
+          needsAttentionPercentage: totalStudents > 0 ? parseFloat(((needsAttentionCount / totalStudents) * 100).toFixed(1)) : 0,
+          criticalCount,
+          criticalPercentage: totalStudents > 0 ? parseFloat(((criticalCount / totalStudents) * 100).toFixed(1)) : 0,
+          perfectCount,
+          perfectPercentage: totalStudents > 0 ? parseFloat(((perfectCount / totalStudents) * 100).toFixed(1)) : 0
         },
-      },
+        distribution,
+        monthlyTrends,
+        classWiseComparison,
+        breakdown: {
+          needsAttention,
+          perfectAttendance,
+          topAttendance,
+          allStudents
+        }
+      }
     });
   } catch (error) {
     console.error("Error in getAttendanceAnalytics:", error);

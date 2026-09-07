@@ -10,9 +10,12 @@ const validate = (validations) => {
       return next();
     }
 
+    const errArray = errors.array();
+    const firstMsg = errArray[0]?.msg || 'Validation error';
+
     res.status(400).json({
-      message: 'Validation error',
-      errors: errors.array()
+      message: firstMsg,
+      errors: errArray
     });
   };
 };
@@ -50,17 +53,17 @@ const isValidPhone = (value) => {
 };
 
 const registerValidation = [
-  body('email').optional().isEmail().withMessage('Valid email required'),
-  body('phone').optional().custom(isValidPhone).withMessage('Enter a valid 10-digit mobile number'),
+  body('email').optional({ values: 'falsy', checkFalsy: true }).trim().isEmail().withMessage('Valid email required'),
+  body('phone').optional({ values: 'falsy', checkFalsy: true }).trim().custom(isValidPhone).withMessage('Enter a valid 10-digit mobile number'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-  body('name').notEmpty().withMessage('Name required'),
+  body('name').trim().notEmpty().withMessage('Name required'),
   body('role').isIn(['admin', 'staff', 'parent']).withMessage('Invalid role')
 ];
 
 // Updated login validation to support both email and phone
 const loginValidation = [
-  body('email').optional().isEmail().withMessage('Valid email required'),
-  body('phone').optional().custom(isValidPhone).withMessage('Enter a valid 10-digit mobile number'),
+  body('email').optional({ values: 'falsy', checkFalsy: true }).trim().isEmail().withMessage('Valid email required'),
+  body('phone').optional({ values: 'falsy', checkFalsy: true }).trim().custom(isValidPhone).withMessage('Enter a valid 10-digit mobile number'),
   body('password').notEmpty().withMessage('Password required'),
   body().custom((value, { req }) => {
     if (!req.body.email && !req.body.phone) {
@@ -72,10 +75,10 @@ const loginValidation = [
 
 // Parent registration validation (phone is required)
 const parentRegisterValidation = [
-  body('fullName').notEmpty().withMessage('Full name required'),
-  body('phone').notEmpty().withMessage('Mobile number required').custom(isValidPhone).withMessage('Enter a valid 10-digit mobile number'),
-  body('alternatePhone').optional().custom(isValidPhone).withMessage('Enter a valid 10-digit phone number'),
-  body('email').optional().isEmail().withMessage('Valid email required'),
+  body('fullName').trim().notEmpty().withMessage('Full name required'),
+  body('phone').trim().notEmpty().withMessage('Mobile number required').custom(isValidPhone).withMessage('Enter a valid 10-digit mobile number'),
+  body('alternatePhone').optional({ values: 'falsy', checkFalsy: true }).trim().custom(isValidPhone).withMessage('Enter a valid 10-digit phone number'),
+  body('email').optional({ values: 'falsy', checkFalsy: true }).trim().isEmail().withMessage('Valid email required'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('confirmPassword').custom((value, { req }) => {
     if (value !== req.body.password) {
@@ -83,8 +86,8 @@ const parentRegisterValidation = [
     }
     return true;
   }),
-  body('occupation').optional().isString(),
-  body('address').optional().isString()
+  body('occupation').optional({ values: 'falsy', checkFalsy: true }).isString(),
+  body('address').optional({ values: 'falsy', checkFalsy: true }).isString()
 ];
 
 const studentValidation = [

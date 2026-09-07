@@ -36,19 +36,24 @@ exports.registerParent = async (req, res) => {
   try {
     const { email, password, fullName, phone, alternatePhone, address, occupation } = req.body;
     
-    if (!phone) {
+    const cleanPhone = phone ? phone.trim() : '';
+    if (!cleanPhone) {
       return res.status(400).json({ message: 'Mobile number is required' });
     }
+
+    const cleanEmail = email && typeof email === 'string' && email.trim().length > 0
+      ? email.trim().toLowerCase()
+      : undefined;
     
     // Check if user already exists with this phone
-    const existingUserByPhone = await User.findOne({ phone });
+    const existingUserByPhone = await User.findOne({ phone: cleanPhone });
     if (existingUserByPhone) {
       return res.status(400).json({ message: 'Mobile number already registered' });
     }
     
     // Check if email exists (only if provided)
-    if (email) {
-      const existingUserByEmail = await User.findOne({ email });
+    if (cleanEmail) {
+      const existingUserByEmail = await User.findOne({ email: cleanEmail });
       if (existingUserByEmail) {
         return res.status(400).json({ message: 'Email already registered' });
       }
@@ -57,13 +62,13 @@ exports.registerParent = async (req, res) => {
     // Create User for login
     const userData = {
       password,
-      name: fullName,
+      name: (fullName && typeof fullName === 'string') ? fullName.trim() : fullName,
       role: 'parent',
-      phone
+      phone: cleanPhone
     };
     
-    if (email) {
-      userData.email = email;
+    if (cleanEmail) {
+      userData.email = cleanEmail;
     }
     
     const user = await User.create(userData);
@@ -71,12 +76,12 @@ exports.registerParent = async (req, res) => {
     // Create Parent profile
     const parent = await Parent.create({
       userId: user._id,
-      fullName,
-      email: email || null,
-      phone,
-      alternatePhone: alternatePhone || '',
-      address: typeof address === 'string' ? { street: address } : address,
-      occupation: occupation || '',
+      fullName: (fullName && typeof fullName === 'string') ? fullName.trim() : fullName,
+      email: cleanEmail || null,
+      phone: cleanPhone,
+      alternatePhone: (alternatePhone && typeof alternatePhone === 'string') ? alternatePhone.trim() : '',
+      address: typeof address === 'string' ? { street: address.trim() } : address,
+      occupation: (occupation && typeof occupation === 'string') ? occupation.trim() : '',
       students: [],
       profileCompleted: true
     });
@@ -91,13 +96,13 @@ exports.registerParent = async (req, res) => {
     await user.save({ validateBeforeSave: false });
     
     // Send welcome email only if email provided
-    if (email) {
+    if (cleanEmail) {
       try {
         await sendEmail({
           email: user.email,
           subject: 'Welcome to School Management System',
           template: 'parent_welcome',
-          data: { name: fullName, email, phone, password: req.body.password }
+          data: { name: fullName, email: cleanEmail, phone: cleanPhone, password: req.body.password }
         });
       } catch (error) {
         console.error('Email error:', error);

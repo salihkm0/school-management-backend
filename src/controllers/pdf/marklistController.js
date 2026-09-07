@@ -58,6 +58,69 @@ function normalizeSubjectName(rawName) {
   return rawName;
 }
 
+// Helper to identify co-curricular subjects that do not have TE theory exams
+const isNonTeSubject = (subject) => {
+  if (!subject) return false;
+  const name = (
+    subject.displayName ||
+    subject.subjectName ||
+    subject.name ||
+    subject.title ||
+    ''
+  ).toLowerCase().trim();
+  const code = (
+    subject.subjectCode ||
+    subject.code ||
+    ''
+  ).toLowerCase().trim();
+
+  // Physical Education
+  if (
+    name.includes('physical education') ||
+    name.includes('phys educ') ||
+    name.includes('physical ed') ||
+    name === 'pe' ||
+    name === 'pet' ||
+    name === 'ped' ||
+    code === 'pet' ||
+    code === 'pe' ||
+    code === 'ped'
+  ) {
+    return true;
+  }
+
+  // Work Education / Work Experience
+  if (
+    name.includes('work education') ||
+    name.includes('work exp') ||
+    name.includes('work experience') ||
+    name === 'we' ||
+    name === 'wed' ||
+    code === 'we' ||
+    code === 'wed'
+  ) {
+    return true;
+  }
+
+  // Drawing / Art Education
+  if (
+    name.includes('drawing') ||
+    name.includes('art education') ||
+    name.includes('art & culture') ||
+    name.includes('art and culture') ||
+    name === 'art' ||
+    name === 'ae' ||
+    name === 'draw' ||
+    code === 'draw' ||
+    code === 'ae' ||
+    code === 'art'
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
 /**
  * Common data builder for student marklist
  */
@@ -189,6 +252,10 @@ async function buildMarklistTemplateData(studentId, examId, mode = 'total') {
     }
   }
 
+  if (mode === 'te') {
+    subjects = subjects.filter(s => !isNonTeSubject(s));
+  }
+
   // Sort subjects in standard order
   subjects.sort((a, b) => {
     const aIndex = EXACT_SUBJECT_ORDER.indexOf(a.name);
@@ -206,11 +273,14 @@ async function buildMarklistTemplateData(studentId, examId, mode = 'total') {
   let grandTeMax = 0;
 
   subjects.forEach(s => {
+    const isNonTe = isNonTeSubject(s);
     grandTotalMax += s.max;
-    grandTeMax += s.teMax;
     grandTotalObtained += (s.obtained || 0);
-    if (!s.isAbsent) {
-      grandTeObtained += s.teObtained;
+    if (!isNonTe) {
+      grandTeMax += s.teMax;
+      if (!s.isAbsent) {
+        grandTeObtained += s.teObtained;
+      }
     }
   });
 

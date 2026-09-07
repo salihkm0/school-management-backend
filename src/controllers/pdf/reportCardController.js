@@ -46,6 +46,69 @@ const getGrade = (percentage) => {
   return 'E';
 };
 
+// Helper to identify co-curricular subjects that do not have TE theory exams
+const isNonTeSubject = (subject) => {
+  if (!subject) return false;
+  const name = (
+    subject.displayName ||
+    subject.subjectName ||
+    subject.name ||
+    subject.title ||
+    ''
+  ).toLowerCase().trim();
+  const code = (
+    subject.subjectCode ||
+    subject.code ||
+    ''
+  ).toLowerCase().trim();
+
+  // Physical Education
+  if (
+    name.includes('physical education') ||
+    name.includes('phys educ') ||
+    name.includes('physical ed') ||
+    name === 'pe' ||
+    name === 'pet' ||
+    name === 'ped' ||
+    code === 'pet' ||
+    code === 'pe' ||
+    code === 'ped'
+  ) {
+    return true;
+  }
+
+  // Work Education / Work Experience
+  if (
+    name.includes('work education') ||
+    name.includes('work exp') ||
+    name.includes('work experience') ||
+    name === 'we' ||
+    name === 'wed' ||
+    code === 'we' ||
+    code === 'wed'
+  ) {
+    return true;
+  }
+
+  // Drawing / Art Education
+  if (
+    name.includes('drawing') ||
+    name.includes('art education') ||
+    name.includes('art & culture') ||
+    name.includes('art and culture') ||
+    name === 'art' ||
+    name === 'ae' ||
+    name === 'draw' ||
+    code === 'draw' ||
+    code === 'ae' ||
+    code === 'art'
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
 // Helper function to prepare student report data for a specific exam
 const prepareStudentReportData = async (student, examId, academicYear, options = {}) => {
   // Get marksheet for specific exam
@@ -164,11 +227,14 @@ const prepareStudentReportData = async (student, examId, academicYear, options =
             : (subject.totalScore !== undefined && subject.totalScore !== null ? Number(subject.totalScore) - ce : 0));
 
       const totalObtained = ce + te;
+      const isNonTe = isNonTeSubject(subject);
 
       totalCEMax += ceMax;
-      totalTEMax += teMax;
       totalCE += ce;
-      totalTE += te;
+      if (!isNonTe) {
+        totalTEMax += teMax;
+        totalTE += te;
+      }
 
       // TE Grade excluding CE marks & Warning check (< 30%)
       const tePercentage = teMax > 0 ? (te / teMax) * 100 : 0;
@@ -250,6 +316,10 @@ const prepareStudentReportData = async (student, examId, academicYear, options =
       filteredSubjects.splice(firstSciIndex >= 0 ? firstSciIndex : 0, 0, basicScienceSubject);
       subjects = filteredSubjects;
     }
+  }
+  
+  if (options?.mode === 'te') {
+    subjects = subjects.filter(s => !isNonTeSubject(s));
   }
   
   // Calculate overall percentage & overall TE and Total grades
@@ -454,6 +524,7 @@ exports.generateReportCardPDF = async (req, res) => {
     const academicYearString = academicYear?.year || academicYear?.name || new Date().getFullYear().toString();
 
     const options = {
+      mode: (req.query.mode || req.query.view || 'total').toLowerCase(),
       attendanceStartDate: req.query.attendanceStartDate,
       attendanceEndDate: req.query.attendanceEndDate
     };
@@ -522,6 +593,7 @@ exports.downloadReportCardPDF = async (req, res) => {
     const academicYearString = academicYear?.year || academicYear?.name || new Date().getFullYear().toString();
 
     const options = {
+      mode: (req.query.mode || req.query.view || 'total').toLowerCase(),
       attendanceStartDate: req.query.attendanceStartDate,
       attendanceEndDate: req.query.attendanceEndDate
     };
@@ -936,6 +1008,10 @@ exports.downloadClassMarksTablePDF = async (req, res) => {
       };
     });
 
+    if (mode === 'te') {
+      finalSubjects = finalSubjects.filter(s => !isNonTeSubject(s));
+    }
+
     const finalClassName = classDetails.displayName || `${classDetails.name} ${classDetails.section || ''}`.trim();
     
     let formattedStudents = (students || []).map(student => {
@@ -945,10 +1021,16 @@ exports.downloadClassMarksTablePDF = async (req, res) => {
       let grandTotalMax = 0;
 
       const studentSubjects = (student.subjects || student.subjectMarks || []).map(sm => {
-        const subjConfig = finalSubjects.find(s => 
+        const rawSubj = (subjects || []).find(s => 
           (sm.examSubjectId && s.examSubjectId && sm.examSubjectId.toString() === s.examSubjectId.toString()) ||
           (sm.subjectId && s.subjectId && sm.subjectId.toString() === s.subjectId.toString())
         );
+        const subjConfig = finalSubjects.find(s => 
+          (sm.examSubjectId && s.examSubjectId && sm.examSubjectId.toString() === s.examSubjectId.toString()) ||
+          (sm.subjectId && s.subjectId && sm.subjectId.toString() === s.subjectId.toString())
+        ) || rawSubj;
+
+        const isNonTe = isNonTeSubject(subjConfig || rawSubj || sm);
 
         const teMax = sm.termMaxMarks || sm.theoryMaxMarks || subjConfig?.teMax || 80;
         const totalMax = sm.maxMarks || subjConfig?.totalMax || 100;
@@ -979,8 +1061,10 @@ exports.downloadClassMarksTablePDF = async (req, res) => {
         );
 
         if (isEntered || (isAbsent && ceMarks > 0)) {
-          teTotalObtained += teMarks;
-          teTotalMax += teMax;
+          if (!isNonTe) {
+            teTotalObtained += teMarks;
+            teTotalMax += teMax;
+          }
           grandTotal += totalMarks;
           grandTotalMax += totalMax;
         }
@@ -1125,7 +1209,10 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
     }
 
     const mode = (req.query.mode || req.query.view || 'total').toLowerCase();
-    const { subjects, students, examName } = marksData.data;
+    let { subjects, students, examName } = marksData.data;
+    if (mode === 'te') {
+      subjects = (subjects || []).filter(s => !isNonTeSubject(s));
+    }
     let academicYear = await AcademicYear.findOne({ isCurrent: true });
     const academicYearString = academicYear?.year || academicYear?.name || new Date().getFullYear().toString();
     const finalClassName = classDetails.displayName || `${classDetails.name} ${classDetails.section || ''}`.trim();
@@ -1261,9 +1348,13 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
           (sm.ceMarks != null && Number(sm.ceMarks) > 0)
         );
 
+        const isNonTe = isNonTeSubject(subj || sm);
+
         if (isEntered || (isAbsent && ceMarks > 0)) {
-          teTotalObtained += teMarks;
-          teTotalMax += teMax;
+          if (!isNonTe) {
+            teTotalObtained += teMarks;
+            teTotalMax += teMax;
+          }
           grandTotal += totalMarks;
           grandTotalMax += totalMax;
         }

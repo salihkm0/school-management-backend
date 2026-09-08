@@ -1069,12 +1069,18 @@ exports.getAttendanceAnalytics = async (req, res) => {
             perfectCount: 0,
             perfectPercentage: 0
           },
-          distribution: [
-            { category: 'Excellent', range: '≥ 90%', min: 90, max: 100, count: 0, percentage: 0, color: '#10B981' },
-            { category: 'Good', range: '75% - 89%', min: 75, max: 89.9, count: 0, percentage: 0, color: '#059669' },
-            { category: 'Average', range: '60% - 74%', min: 60, max: 74.9, count: 0, percentage: 0, color: '#F59E0B' },
-            { category: 'Critical', range: '< 60%', min: 0, max: 59.9, count: 0, percentage: 0, color: '#EF4444' }
-          ],
+          distribution: {
+            excellent: { category: 'Excellent', range: '≥ 90%', min: 90, max: 100, count: 0, percentage: 0, color: '#10B981' },
+            good: { category: 'Good', range: '75% - 89%', min: 75, max: 89.9, count: 0, percentage: 0, color: '#059669' },
+            average: { category: 'Average', range: '60% - 74%', min: 60, max: 74.9, count: 0, percentage: 0, color: '#F59E0B' },
+            critical: { category: 'Critical', range: '< 60%', min: 0, max: 59.9, count: 0, percentage: 0, color: '#EF4444' },
+            list: [
+              { category: 'Excellent', range: '≥ 90%', min: 90, max: 100, count: 0, percentage: 0, color: '#10B981' },
+              { category: 'Good', range: '75% - 89%', min: 75, max: 89.9, count: 0, percentage: 0, color: '#059669' },
+              { category: 'Average', range: '60% - 74%', min: 60, max: 74.9, count: 0, percentage: 0, color: '#F59E0B' },
+              { category: 'Critical', range: '< 60%', min: 0, max: 59.9, count: 0, percentage: 0, color: '#EF4444' }
+            ]
+          },
           monthlyTrends: [],
           classWiseComparison: [],
           breakdown: {
@@ -1234,7 +1240,7 @@ exports.getAttendanceAnalytics = async (req, res) => {
       : 0;
 
     // 4. Category Distribution
-    const distribution = [
+    const distributionList = [
       {
         category: 'Excellent',
         label: 'Excellent (≥ 90%)',
@@ -1277,6 +1283,14 @@ exports.getAttendanceAnalytics = async (req, res) => {
       }
     ];
 
+    const distribution = {
+      excellent: distributionList[0],
+      good: distributionList[1],
+      average: distributionList[2],
+      critical: distributionList[3],
+      list: distributionList
+    };
+
     // 5. Monthly Trends (academic year order: Jun to Mar)
     const academicMonthOrder = [6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5];
     const monthlyTrends = Array.from(monthlyMap.values())
@@ -1288,6 +1302,7 @@ exports.getAttendanceAnalytics = async (req, res) => {
           monthName: m.monthName,
           monthFullName: m.monthFullName,
           workingDays: m.workingDays,
+          totalWorkingDays: m.workingDays,
           totalStudents: m.recordsCount,
           totalPresent: m.totalPresent,
           totalPossible: m.totalPossible,

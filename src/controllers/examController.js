@@ -360,11 +360,15 @@ exports.getExam = async (req, res) => {
             return (
               (sSubjId && (sSubjId === actualSubjIdStr || sSubjId === examSubjIdStr)) ||
               (sExamSubjId && (sExamSubjId === examSubjIdStr || sExamSubjId === actualSubjIdStr)) ||
-              (sub.subjectName === subj.subjectName)
+              (sub.subjectName === subj.subjectName) ||
+              (sub.subjectName && subj.subjectName && sub.subjectName.trim().toLowerCase() === subj.subjectName.trim().toLowerCase())
             );
           });
           return Boolean(
             s && (
+              s.status === "submitted" ||
+              s.status === "reviewed" ||
+              s.status === "published" ||
               s.isAbsent === true ||
               s.isEnteredExplicitly === true ||
               (s.isEntered === true && (

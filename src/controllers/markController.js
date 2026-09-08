@@ -1157,11 +1157,72 @@ exports.bulkUpdateMarks = async (req, res) => {
   }
 };
 
+// Helper to match target subject(s) flexibly across exam subdoc IDs, Subject IDs, and subject names
+function buildTargetSubjectMatcher(exam, targetSubjectIds, subjectName) {
+  let targetExamSubjIds = new Set();
+  let targetSubjectCollectionIds = new Set();
+  let targetSubjectNames = new Set();
+
+  const idList = Array.isArray(targetSubjectIds)
+    ? targetSubjectIds.map((id) => id?.toString()).filter(Boolean)
+    : targetSubjectIds
+    ? [targetSubjectIds.toString()]
+    : [];
+
+  const hasTargets = idList.length > 0 || Boolean(subjectName);
+
+  if (hasTargets) {
+    if (subjectName) {
+      targetSubjectNames.add(subjectName.trim().toLowerCase());
+    }
+    idList.forEach((id) => {
+      targetExamSubjIds.add(id);
+      targetSubjectCollectionIds.add(id);
+    });
+
+    (exam.subjects || []).forEach((es) => {
+      const esExamSubjId = es._id?.toString();
+      const esActualSubjId = (es.subjectId?._id || es.subjectId)?.toString();
+      const esName = es.subjectName?.trim().toLowerCase();
+
+      const matches =
+        (idList.length > 0 &&
+          (idList.includes(esExamSubjId) ||
+            idList.includes(esActualSubjId) ||
+            (esName && idList.some((id) => id.toLowerCase() === esName)))) ||
+        (subjectName && esName === subjectName.trim().toLowerCase());
+
+      if (matches) {
+        if (esExamSubjId) targetExamSubjIds.add(esExamSubjId);
+        if (esActualSubjId) targetSubjectCollectionIds.add(esActualSubjId);
+        if (esName) targetSubjectNames.add(esName);
+      }
+    });
+  }
+
+  return {
+    hasTargets,
+    matches: (s) => {
+      if (!hasTargets) return true;
+      const sId = s.subjectId?.toString();
+      const sExamId = s.examSubjectId?.toString();
+      const sDocId = s._id?.toString();
+      const sName = s.subjectName?.trim().toLowerCase();
+
+      return Boolean(
+        (sId && (targetSubjectCollectionIds.has(sId) || targetExamSubjIds.has(sId))) ||
+        (sExamId && (targetExamSubjIds.has(sExamId) || targetSubjectCollectionIds.has(sExamId))) ||
+        (sDocId && targetExamSubjIds.has(sDocId)) ||
+        (sName && targetSubjectNames.has(sName))
+      );
+    },
+  };
+}
 
 // Submit marks for review (subject level or class level)
 exports.submitMarksForReview = async (req, res) => {
   try {
-    const { examId, classId, subjectId, subjectIds } = req.body;
+    const { examId, classId, subjectId, subjectIds, subjectName } = req.body;
     const userId = req.user.id;
 
     const staffOrAdmin = await getStaffOrAdmin(userId);
@@ -1178,14 +1239,16 @@ exports.submitMarksForReview = async (req, res) => {
     const isAdmin = isSysAdmin || isStaffAdmin;
 
     let hasPermission = isAdmin;
+
     if (!hasPermission) {
-      const isCT = await hasClassTeacherPermission(userId, staffOrAdmin._id, classId);
-      if (isCT) {
+      const isClassTeacher = staffOrAdmin.classesAsClassTeacher?.some(
+        (c) => c.toString() === classId.toString(),
+      );
+      if (isClassTeacher) {
         hasPermission = true;
       } else {
-        const classObj = await Class.findById(classId);
-        const teachesInClass = classObj?.subjectTeachers?.some(
-          (st) => st.teacherId && st.teacherId.toString() === staffOrAdmin._id.toString()
+        const teachesInClass = staffOrAdmin.classesTeaching?.some(
+          (c) => c.toString() === classId.toString(),
         );
         if (teachesInClass) {
           hasPermission = true;
@@ -1227,11 +1290,7 @@ exports.submitMarksForReview = async (req, res) => {
       : userId.toString();
     const submittedByName = staffOrAdmin.name || "Teacher";
 
-    const targetSubjectIds = Array.isArray(subjectIds)
-      ? subjectIds
-      : subjectId
-      ? [subjectId]
-      : null;
+    const matcher = buildTargetSubjectMatcher(exam, subjectIds || subjectId, subjectName);
 
     let modifiedCount = 0;
     const activeStudents = await Student.find({ classId, status: "active" }).select("fullName name rollNumber");
@@ -1254,9 +1313,7 @@ exports.submitMarksForReview = async (req, res) => {
     // Check if any non-absent student has TE mark equal to 0 or missing
     for (const marksheet of marksheets) {
       for (const s of marksheet.subjects) {
-        const sId = s.subjectId?.toString() || s._id?.toString();
-        const matchesTarget = !targetSubjectIds || targetSubjectIds.some((id) => id.toString() === sId);
-        if (matchesTarget && (s.status === "draft" || !s.status)) {
+        if (matcher.matches(s) && (s.status === "draft" || !s.status)) {
           const isAbsent = s.isAbsent === true;
           const isEnteredExplicitly = s.isEnteredExplicitly === true;
           const score = s.theoryScore;
@@ -1264,11 +1321,7 @@ exports.submitMarksForReview = async (req, res) => {
           if (!isAbsent && !isEnteredExplicitly && (tNum === 0 || isNaN(tNum))) {
             const sName = marksheet.studentId?.fullName || marksheet.studentId?.name || "Student";
             const rollNo = marksheet.studentId?.rollNumber || "-";
-            const examSubj = (exam.subjects || []).find((sub) => {
-              const subId = sub.subjectId?._id?.toString() || sub.subjectId?.toString() || sub._id?.toString();
-              return subId === sId;
-            });
-            const subjName = examSubj?.subjectName || "Subject";
+            const subjName = s.subjectName || "Subject";
             return res.status(400).json({
               message: `Cannot submit marks for review: ${sName} (Roll ${rollNo}) has 0 TE marks for ${subjName}. If student was absent, please mark them as Absent.`,
             });
@@ -1281,10 +1334,7 @@ exports.submitMarksForReview = async (req, res) => {
       let markUpdated = false;
 
       marksheet.subjects.forEach((s) => {
-        const sId = s.subjectId?.toString() || s._id?.toString();
-        const matchesTarget = !targetSubjectIds || targetSubjectIds.some((id) => id.toString() === sId);
-
-        if (matchesTarget && (s.status === "draft" || !s.status)) {
+        if (matcher.matches(s) && (s.status === "draft" || !s.status)) {
           s.status = "submitted";
           s.submittedBy = submittedById;
           s.submittedByName = submittedByName;
@@ -1315,7 +1365,7 @@ exports.submitMarksForReview = async (req, res) => {
     const allClassSubjectsSubmitted =
       refreshedMarksheets.length > 0 &&
       refreshedMarksheets.every((m) =>
-        m.subjects.every(
+        (m.subjects || []).every(
           (s) => s.status === "submitted" || s.status === "reviewed" || s.status === "published"
         )
       );
@@ -1327,6 +1377,20 @@ exports.submitMarksForReview = async (req, res) => {
       classSubmission.submittedAt = new Date();
     } else {
       classSubmission.status = "draft";
+      const remainingSubmittedSubjects = refreshedMarksheets
+        .flatMap((m) => m.subjects || [])
+        .filter((s) => s.status === "submitted" || s.status === "reviewed" || s.status === "published");
+
+      const submittedTeachers = [...new Set(remainingSubmittedSubjects.map((s) => s.submittedByName).filter(Boolean))];
+      if (submittedTeachers.length > 0) {
+        classSubmission.submittedByName = submittedTeachers.join(", ");
+        const subDates = remainingSubmittedSubjects
+          .map((s) => (s.submittedAt ? new Date(s.submittedAt).getTime() : 0))
+          .filter((t) => t > 0);
+        if (subDates.length > 0) {
+          classSubmission.submittedAt = new Date(Math.max(...subDates));
+        }
+      }
     }
 
     await exam.save();
@@ -1431,10 +1495,10 @@ exports.reviewMarks = async (req, res) => {
   }
 };
 
-// Revert marks status to draft (admin) - Accepts optional subjectId or subjectIds
+// Revert marks status to draft (admin) - Accepts optional subjectId, subjectIds, or subjectName
 exports.revertMarksToDraft = async (req, res) => {
   try {
-    const { examId, classId, subjectId, subjectIds } = req.body;
+    const { examId, classId, subjectId, subjectIds, subjectName } = req.body;
     const userId = req.user.id;
 
     const staffOrAdmin = await getStaffOrAdmin(userId);
@@ -1467,11 +1531,7 @@ exports.revertMarksToDraft = async (req, res) => {
       return res.status(404).json({ message: "Class not found in exam" });
     }
 
-    const targetSubjectIds = Array.isArray(subjectIds)
-      ? subjectIds
-      : subjectId
-      ? [subjectId]
-      : null;
+    const matcher = buildTargetSubjectMatcher(exam, subjectIds || subjectId, subjectName);
 
     const marksheets = await Mark.find({ examId, classId });
     let updatedCount = 0;
@@ -1480,10 +1540,7 @@ exports.revertMarksToDraft = async (req, res) => {
       let markUpdated = false;
 
       marksheet.subjects.forEach((s) => {
-        const sId = s.subjectId?.toString() || s._id?.toString();
-        const matchesTarget = !targetSubjectIds || targetSubjectIds.some((id) => id.toString() === sId);
-
-        if (matchesTarget) {
+        if (matcher.matches(s)) {
           s.status = "draft";
           s.submittedBy = null;
           s.submittedByName = null;
@@ -1494,8 +1551,19 @@ exports.revertMarksToDraft = async (req, res) => {
         }
       });
 
-      marksheet.status = "draft";
-      marksheet.isFinalized = false;
+      const allStudentSubjectsSubmitted = marksheet.subjects.every(
+        (s) => s.status === "submitted" || s.status === "reviewed" || s.status === "published"
+      );
+
+      if (allStudentSubjectsSubmitted) {
+        marksheet.status = "submitted";
+        marksheet.isFinalized = true;
+      } else {
+        marksheet.status = "draft";
+        marksheet.isFinalized = false;
+        marksheet.finalizedAt = null;
+        marksheet.finalizedBy = null;
+      }
 
       if (markUpdated) {
         marksheet.lastUpdatedBy = userId.toString();
@@ -1505,11 +1573,51 @@ exports.revertMarksToDraft = async (req, res) => {
       }
     }
 
-    classSubmission.status = "draft";
-    classSubmission.submittedBy = null;
-    classSubmission.submittedByName = null;
-    classSubmission.submittedAt = null;
+    const refreshedMarksheets = await Mark.find({ examId, classId });
+    const allClassSubjectsSubmitted =
+      refreshedMarksheets.length > 0 &&
+      refreshedMarksheets.every((m) =>
+        (m.subjects || []).every(
+          (s) => s.status === "submitted" || s.status === "reviewed" || s.status === "published"
+        )
+      );
+
+    if (allClassSubjectsSubmitted) {
+      classSubmission.status = "submitted";
+    } else {
+      classSubmission.status = "draft";
+    }
+
+    if (!matcher.hasTargets) {
+      // Reverted all subjects in class
+      classSubmission.submittedBy = null;
+      classSubmission.submittedByName = null;
+      classSubmission.submittedAt = null;
+    } else {
+      // Reverted single or specific subjects - recalculate submittedBy / submittedByName from remaining submitted subjects
+      const remainingSubmittedSubjects = refreshedMarksheets
+        .flatMap((m) => m.subjects || [])
+        .filter((s) => s.status === "submitted" || s.status === "reviewed" || s.status === "published");
+
+      const submittedTeachers = [...new Set(remainingSubmittedSubjects.map((s) => s.submittedByName).filter(Boolean))];
+
+      if (submittedTeachers.length > 0) {
+        classSubmission.submittedByName = submittedTeachers.join(", ");
+        const subDates = remainingSubmittedSubjects
+          .map((s) => (s.submittedAt ? new Date(s.submittedAt).getTime() : 0))
+          .filter((t) => t > 0);
+        if (subDates.length > 0) {
+          classSubmission.submittedAt = new Date(Math.max(...subDates));
+        }
+      } else {
+        classSubmission.submittedBy = null;
+        classSubmission.submittedByName = null;
+        classSubmission.submittedAt = null;
+      }
+    }
+
     classSubmission.reviewedBy = null;
+    classSubmission.reviewedByName = null;
     classSubmission.reviewedAt = null;
 
     await exam.save();
@@ -1529,7 +1637,7 @@ exports.revertMarksToDraft = async (req, res) => {
 
     res.json({
       success: true,
-      message: targetSubjectIds
+      message: matcher.hasTargets
         ? `Subject marks status reverted to Draft. Teachers can edit marks again.`
         : `All class marks status reverted to Draft. Teachers can edit marks again.`,
       examStatus: exam.overallStatus,

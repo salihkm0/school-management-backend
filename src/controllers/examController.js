@@ -382,22 +382,41 @@ exports.getExam = async (req, res) => {
         const isAllMarksEntered = studentCount > 0 && enteredStudents >= studentCount;
         const markEntryPercentage = studentCount > 0 ? Math.round((enteredStudents / studentCount) * 100) : 0;
 
-        const sampleSubj = classMarksheets.flatMap((m) => m.subjects || []).find((s) => {
-          const sSubjId = s.subjectId?.toString();
-          const sExamSubjId = s.examSubjectId?.toString();
-          return (
-            (sSubjId && (sSubjId === actualSubjIdStr || sSubjId === examSubjIdStr)) ||
-            (sExamSubjId && (sExamSubjId === examSubjIdStr || sExamSubjId === actualSubjIdStr))
-          );
-        });
+        const matchingSubjects = classMarksheets
+          .flatMap((m) => m.subjects || [])
+          .filter((s) => {
+            const sSubjId = s.subjectId?.toString();
+            const sExamSubjId = s.examSubjectId?.toString();
+            return (
+              (sSubjId && (sSubjId === actualSubjIdStr || sSubjId === examSubjIdStr)) ||
+              (sExamSubjId && (sExamSubjId === examSubjIdStr || sExamSubjId === actualSubjIdStr)) ||
+              (s.subjectName && subj.subjectName && s.subjectName.trim().toLowerCase() === subj.subjectName.trim().toLowerCase())
+            );
+          });
+
+        const allSubmitted = matchingSubjects.length > 0 && matchingSubjects.every(
+          (s) => s.status === "submitted" || s.status === "reviewed" || s.status === "published"
+        );
+        const sampleSubmittedSubj = matchingSubjects.find(
+          (s) => s.status === "submitted" || s.status === "reviewed" || s.status === "published"
+        );
+
+        let subjectStatus = "draft";
+        if (allSubmitted) {
+          subjectStatus = matchingSubjects.every((s) => s.status === "reviewed")
+            ? "reviewed"
+            : matchingSubjects.every((s) => s.status === "published")
+            ? "published"
+            : "submitted";
+        }
 
         return {
           subjectId: examSubjIdStr || actualSubjIdStr,
           subjectName: subj.subjectName,
           subjectCode: subj.subjectCode,
-          status: sampleSubj?.status || "draft",
-          submittedByName: sampleSubj?.submittedByName || null,
-          submittedAt: sampleSubj?.submittedAt || null,
+          status: subjectStatus,
+          submittedByName: subjectStatus !== "draft" ? (sampleSubmittedSubj?.submittedByName || null) : null,
+          submittedAt: subjectStatus !== "draft" ? (sampleSubmittedSubj?.submittedAt || null) : null,
           enteredMarks: enteredStudents,
           expectedMarks: studentCount,
           isAllMarksEntered,

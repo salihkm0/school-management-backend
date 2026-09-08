@@ -35,6 +35,36 @@ function countAPlusGrades(subjectResults) {
   ).length;
 }
 
+// Class Teacher short form mapping for PPM HSS
+const CLASS_TEACHER_SHORT_MAP = {
+  '10 A': 'RK', '10 B': 'AA', '10 C': 'MK', '10 D': 'PA', '10 E': 'MC',
+  '10 F': 'JP', '10 G': 'CT', '10 H': 'AN', '10 I': 'PS', '10 J': 'AS',
+  '9 A': 'SBC', '9 B': 'JE', '9 C': 'ACK', '9 D': 'SB', '9 E': 'MSD',
+  '9 F': 'MPK', '9 G': 'PKS', '9 H': 'BS', '9 I': 'JCT', '9 J': 'MJN',
+  '8 A': 'FK', '8 B': 'KSG', '8 C': 'HST', '8 D': 'ANC', '8 E': 'NKV',
+  '8 F': 'SM', '8 G': 'JCK', '8 H': 'RE', '8 I': 'PSN'
+};
+
+function generateTeacherShortName(fullName) {
+  if (!fullName) return '-';
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].substring(0, 3).toUpperCase();
+  if (parts.length === 2) return (parts[0].charAt(0) + parts[1].substring(0, 2)).toUpperCase();
+  return parts.map(p => p.charAt(0)).join('').toUpperCase();
+}
+
+function resolveTeacherShortName(cls, staff) {
+  if (staff?.shortName && staff.shortName.trim()) return staff.shortName.trim().toUpperCase();
+  if (staff?.shortForm && staff.shortForm.trim()) return staff.shortForm.trim().toUpperCase();
+  
+  const rawName = (cls.displayName || `${cls.name || ''} ${cls.section || ''}`).replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase();
+  if (CLASS_TEACHER_SHORT_MAP[rawName]) return CLASS_TEACHER_SHORT_MAP[rawName];
+
+  if (cls.classTeacherName) return generateTeacherShortName(cls.classTeacherName);
+  if (staff?.name) return generateTeacherShortName(staff.name);
+  return '-';
+}
+
 async function createRecentActivity({
   title,
   description,
@@ -824,7 +854,153 @@ exports.getPerformanceAnalytics = async (req, res) => {
 
 // ==================== ATTENDANCE ANALYTICS ====================
 
-// ==================== ATTENDANCE ANALYTICS ====================
+async function getAttendanceEntryProgress(targetAcademicYear, classId = null) {
+  const academicMonths = [
+    { month: 6, name: 'Jun', fullName: 'June' },
+    { month: 7, name: 'Jul', fullName: 'July' },
+    { month: 8, name: 'Aug', fullName: 'August' },
+    { month: 9, name: 'Sep', fullName: 'September' },
+    { month: 10, name: 'Oct', fullName: 'October' },
+    { month: 11, name: 'Nov', fullName: 'November' },
+    { month: 12, name: 'Dec', fullName: 'December' },
+    { month: 1, name: 'Jan', fullName: 'January' },
+    { month: 2, name: 'Feb', fullName: 'February' },
+    { month: 3, name: 'Mar', fullName: 'March' }
+  ];
+
+  const classQuery = { isActive: { $ne: false } };
+  if (classId && classId.match(/^[0-9a-fA-F]{24}$/)) {
+    classQuery._id = classId;
+  }
+
+  const allClasses = await Class.find(classQuery)
+    .populate('classTeacherId', 'name shortName shortForm')
+    .lean();
+
+  const studentCounts = await Student.aggregate([
+    { $match: { status: 'active' } },
+    { $group: { _id: '$classId', count: { $sum: 1 } } }
+  ]);
+  const studentCountMap = new Map();
+  studentCounts.forEach(sc => {
+    if (sc._id) studentCountMap.set(sc._id.toString(), sc.count);
+  });
+
+  const attGroupAgg = await Attendance.aggregate([
+    {
+      $match: {
+        academicYearId: targetAcademicYear ? targetAcademicYear._id : { $exists: true }
+      }
+    },
+    {
+      $group: {
+        _id: {
+          classId: '$classId',
+          month: '$month'
+        },
+        count: { $sum: 1 },
+        totalWorkingDays: { $max: '$totalWorkingDays' }
+      }
+    }
+  ]);
+
+  const attCountMap = new Map();
+  attGroupAgg.forEach(item => {
+    if (item._id && item._id.classId) {
+      attCountMap.set(`${item._id.classId.toString()}_${item._id.month}`, {
+        count: item.count,
+        workingDays: item.totalWorkingDays || 0
+      });
+    }
+  });
+
+  const now = new Date();
+  const currentCalMonth = now.getMonth() + 1;
+  const isAcademicMonthElapsed = (m) => {
+    if (currentCalMonth >= 6) {
+      return m >= 6 && m <= currentCalMonth;
+    } else {
+      return m >= 6 || m <= currentCalMonth;
+    }
+  };
+
+  let totalClassesCount = 0;
+  let fullyCompletedClasses = 0;
+
+  const classEntryList = allClasses.map(cls => {
+    totalClassesCount++;
+    const clsIdStr = cls._id.toString();
+    const normName = (cls.displayName || `${cls.name || ''} ${cls.section || ''}`).trim();
+    const teacherShortName = resolveTeacherShortName(cls, cls.classTeacherId);
+    const teacherName = cls.classTeacherId?.name || cls.classTeacherName || '-';
+    const expectedStudents = studentCountMap.get(clsIdStr) || cls.capacity || 0;
+
+    let elapsedMonthsCount = 0;
+    let completedMonthsCount = 0;
+
+    const monthsProgress = academicMonths.map(m => {
+      const attInfo = attCountMap.get(`${clsIdStr}_${m.month}`) || { count: 0, workingDays: 0 };
+      const currentRecords = attInfo.count;
+      const isEntered = currentRecords > 0;
+      const pct = expectedStudents > 0
+        ? Math.min(100, Math.round((currentRecords / expectedStudents) * 100))
+        : (isEntered ? 100 : 0);
+
+      const isElapsed = isAcademicMonthElapsed(m.month);
+      if (isElapsed) {
+        elapsedMonthsCount++;
+        if (pct >= 80 || isEntered) {
+          completedMonthsCount++;
+        }
+      }
+
+      return {
+        month: m.month,
+        monthName: m.name,
+        monthFullName: m.fullName,
+        isEntered,
+        isElapsed,
+        currentRecords,
+        expectedRecords: expectedStudents,
+        percentage: pct,
+        workingDays: attInfo.workingDays,
+        teacherShortName
+      };
+    });
+
+    const completionPercentage = elapsedMonthsCount > 0
+      ? Math.round((completedMonthsCount / elapsedMonthsCount) * 100)
+      : (completedMonthsCount > 0 ? 100 : 0);
+
+    if (completionPercentage === 100) {
+      fullyCompletedClasses++;
+    }
+
+    return {
+      classId: clsIdStr,
+      className: normName,
+      section: cls.section || '',
+      classTeacherName: teacherName,
+      teacherShortName,
+      totalStudents: expectedStudents,
+      completionPercentage,
+      monthsProgress
+    };
+  });
+
+  classEntryList.sort((a, b) => {
+    return a.className.localeCompare(b.className, undefined, { numeric: true, sensitivity: 'base' });
+  });
+
+  return {
+    totalClasses: totalClassesCount,
+    completedClasses: fullyCompletedClasses,
+    remainingClasses: totalClassesCount - fullyCompletedClasses,
+    overallCompletionPercentage: totalClassesCount > 0 ? Math.round((fullyCompletedClasses / totalClassesCount) * 100) : 0,
+    months: academicMonths,
+    classes: classEntryList
+  };
+}
 
 exports.getAttendanceAnalytics = async (req, res) => {
   try {
@@ -906,7 +1082,8 @@ exports.getAttendanceAnalytics = async (req, res) => {
             perfectAttendance: [],
             topAttendance: [],
             allStudents: []
-          }
+          },
+          entryProgress: await getAttendanceEntryProgress(targetAcademicYear, classId)
         },
         monthlyAttendance: [],
         overallAttendance: 0
@@ -1125,13 +1302,25 @@ exports.getAttendanceAnalytics = async (req, res) => {
         return a.month - b.month;
       });
 
+    // 8. Attendance Entry Progress (like Mark Entry Progress table)
+    const entryProgress = await getAttendanceEntryProgress(targetAcademicYear, classId);
+    const entryClassMap = new Map();
+    if (entryProgress && entryProgress.classes) {
+      entryProgress.classes.forEach(cls => {
+        if (cls.classId) entryClassMap.set(cls.classId, cls);
+      });
+    }
+
     // 6. Class-wise Comparison
     const classWiseComparison = Array.from(classMap.values())
       .map(c => {
         const pct = c.totalPossible > 0 ? (c.totalPresent / c.totalPossible) * 100 : 0;
+        const entryCls = entryClassMap.get(c.classId?.toString());
         return {
           classId: c.classId,
           className: c.className,
+          teacherShortName: entryCls?.teacherShortName || '-',
+          classTeacherName: entryCls?.classTeacherName || '',
           totalStudents: c.studentSet.size,
           averagePercentage: parseFloat(pct.toFixed(1)),
           goodStandingCount: c.goodStandingCount,
@@ -1189,6 +1378,7 @@ exports.getAttendanceAnalytics = async (req, res) => {
         distribution,
         monthlyTrends,
         classWiseComparison,
+        entryProgress,
         breakdown: {
           needsAttention,
           perfectAttendance,

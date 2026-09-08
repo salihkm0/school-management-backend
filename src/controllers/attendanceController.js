@@ -851,3 +851,119 @@ exports.getAttendanceSummary = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// @desc    Notify class teachers to update/complete attendance
+// @route   POST /api/attendance/notify-pending
+// @access  Private (Admin / Principal)
+exports.notifyPendingAttendance = async (req, res) => {
+  try {
+    const { classId, className, month, allPending } = req.body;
+    const Staff = require('../models/Staff');
+
+    let targetClasses = [];
+    if (classId) {
+      const cls = await Class.findById(classId)
+        .populate('classTeacherId', 'name shortName staffCode userId email');
+      if (!cls) {
+        return res.status(404).json({ success: false, message: 'Class not found' });
+      }
+      targetClasses = [cls];
+    } else {
+      // Find all active classes
+      targetClasses = await Class.find({ status: 'active' })
+        .populate('classTeacherId', 'name shortName staffCode userId email');
+    }
+
+    const notifiedTeachers = [];
+    const notifiedUserIds = new Set();
+
+    for (const cls of targetClasses) {
+      if (!cls.classTeacherId) continue;
+
+      let targetUserId = cls.classTeacherId.userId?._id
+        ? cls.classTeacherId.userId._id.toString()
+        : (cls.classTeacherId.userId ? cls.classTeacherId.userId.toString() : null);
+
+      if (!targetUserId) {
+        const staffRec = await Staff.findById(cls.classTeacherId._id || cls.classTeacherId).select('userId');
+        if (staffRec?.userId) {
+          targetUserId = staffRec.userId.toString();
+        }
+      }
+
+      if (!targetUserId || notifiedUserIds.has(targetUserId)) continue;
+      notifiedUserIds.add(targetUserId);
+
+      const clsName = cls.displayName || `${cls.name}-${cls.section || ''}`.trim();
+      const title = `Attendance Reminder: ${clsName}`;
+      const monthText = month ? ` for ${month}` : '';
+      const message = `Dear ${cls.classTeacherId.name || 'Class Teacher'}, please ensure attendance records are marked and completed for ${clsName}${monthText}.`;
+
+      const notificationData = {
+        type: 'attendance_reminder',
+        classId: cls._id.toString(),
+        className: clsName,
+        month: month || null,
+        url: '/attendance'
+      };
+
+      const notif = await Notification.create({
+        senderId: req.user.id,
+        userId: targetUserId,
+        title,
+        message,
+        type: 'warning',
+        data: notificationData
+      });
+
+      broadcastToUser(targetUserId, 'notification', {
+        id: notif._id,
+        _id: notif._id,
+        userId: targetUserId,
+        title,
+        message,
+        type: 'warning',
+        data: notificationData,
+        timestamp: notif.createdAt,
+        createdAt: notif.createdAt,
+        read: false,
+        isRead: false
+      });
+
+      try {
+        const fcmService = require('../services/fcmService');
+        await fcmService.sendToUser(targetUserId, title, message, {
+          notificationId: notif._id.toString(),
+          type: 'attendance_reminder',
+          ...notificationData
+        });
+      } catch (fcmErr) {
+        console.warn('FCM send error (ignorable):', fcmErr.message);
+      }
+
+      notifiedTeachers.push({
+        teacherName: cls.classTeacherId.name,
+        className: clsName
+      });
+    }
+
+    if (notifiedTeachers.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No class teachers found or no pending reminders to send',
+        count: 0,
+        notifiedTeachers: []
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: `Successfully notified ${notifiedTeachers.length} class teacher(s)`,
+      count: notifiedTeachers.length,
+      notifiedTeachers
+    });
+  } catch (error) {
+    console.error('Error notifying teachers for attendance:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};

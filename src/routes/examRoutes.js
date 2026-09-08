@@ -20,7 +20,8 @@ const {
   getExamSubjects,
   getExamScheduleDetails,
   getStaffExams,
-  createStaffExam
+  createStaffExam,
+  notifyStaffForExamMarks
 } = require('../controllers/examController');
 
 router.use(protect);
@@ -43,6 +44,9 @@ router.get('/:id/subjects', authorize('admin', 'principal', 'staff'), cacheRoute
 router.get('/:id/schedule-details', authorize('admin', 'principal', 'staff'), cacheRoute(1800, 'exams'), getExamScheduleDetails);
 router.get('/:id/marks-summary', authorize('admin', 'principal'), getMarksEntrySummary); // Intentionally not cached as it changes frequently
 router.get('/:id/analytics', getExamAnalytics);
+
+// Notify staff to enter or submit marks
+router.post('/:id/notify-staff', authorize('admin', 'principal'), notifyStaffForExamMarks);
 
 // Generic exam CRUD - MUST COME LAST
 router.get('/', cacheRoute(1800, 'exams'), getExams);

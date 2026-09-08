@@ -2197,3 +2197,233 @@ exports.createStaffExam = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// @desc    Notify subject staff to enter or submit exam marks
+// @route   POST /api/exams/:id/notify-staff
+// @access  Private (Admin / Principal)
+exports.notifyStaffForExamMarks = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { classId, subjectId, subjectName, allPending } = req.body;
+
+    if (!classId) {
+      return res.status(400).json({ success: false, message: 'Class ID is required' });
+    }
+
+    const exam = await Exam.findById(id);
+    if (!exam) {
+      return res.status(404).json({ success: false, message: 'Exam not found' });
+    }
+
+    const classInfo = await Class.findById(classId)
+      .select('name section displayName subjectTeachers classTeacherId')
+      .populate('subjectTeachers.teacherId', 'name shortName staffCode userId email')
+      .populate('classTeacherId', 'name shortName staffCode userId email');
+
+    if (!classInfo) {
+      return res.status(404).json({ success: false, message: 'Class not found' });
+    }
+
+    const className = classInfo.displayName || `${classInfo.name}-${classInfo.section || ''}`.trim();
+    const staffAssignments = await StaffAssignment.find({
+      academicYearId: exam.academicYearId,
+      'subjectsTaught.classId': classId
+    }).populate('staffId', 'name shortName staffCode userId email');
+
+    const students = await Student.find({ classId, status: 'active' });
+    const totalExpected = students.length;
+
+    const classAllMarks = await Mark.find({
+      examId: exam._id,
+      classId
+    });
+
+    const classStatusObj = (exam.classSubmissionStatus || []).find(
+      cs => cs.classId && cs.classId.toString() === classId.toString()
+    );
+
+    // Identify which subjects to process
+    let targetSubjects = [];
+    if (subjectId || subjectName) {
+      const targetSubjIdStr = subjectId ? subjectId.toString() : '';
+      const matched = (exam.subjects || []).filter(s =>
+        (s.subjectId && s.subjectId.toString() === targetSubjIdStr) ||
+        (s._id && s._id.toString() === targetSubjIdStr) ||
+        (subjectName && s.subjectName && s.subjectName.toLowerCase() === subjectName.toLowerCase())
+      );
+      targetSubjects = matched.length > 0 ? matched : [{ subjectId, subjectName }];
+    } else {
+      // All pending or draft subjects in the class
+      targetSubjects = (exam.subjects || []).filter(s => {
+        const sSub = classStatusObj?.subjectSubmissions?.find(sub =>
+          (sub.subjectId && s.subjectId && sub.subjectId.toString() === s.subjectId.toString()) ||
+          (sub.subjectName && s.subjectName && sub.subjectName.toLowerCase() === s.subjectName.toLowerCase())
+        );
+        return !sSub || sSub.status === 'draft' || sSub.status === null;
+      });
+    }
+
+    const notifiedTeachers = [];
+    const notifiedUserIds = new Set();
+
+    for (const subj of targetSubjects) {
+      const subjIdStr = subj.subjectId ? subj.subjectId.toString() : (subj._id ? subj._id.toString() : '');
+      const sName = subj.subjectName || 'Subject';
+
+      // Count marks entered for this subject
+      const enteredMarksCount = classAllMarks.filter(m => {
+        if (!m.subjects || !Array.isArray(m.subjects)) return false;
+        const s = m.subjects.find(sub =>
+          (sub.subjectId && sub.subjectId.toString() === subjIdStr) ||
+          (sub.examSubjectId && sub.examSubjectId.toString() === subjIdStr) ||
+          (sub.subjectName === sName)
+        );
+        return Boolean(
+          s && (
+            s.isAbsent === true ||
+            s.isEnteredExplicitly === true ||
+            (s.isEntered === true && (
+              (s.theoryScore != null && Number(s.theoryScore) > 0) ||
+              (s.ceScore != null && Number(s.ceScore) > 0)
+            )) ||
+            (s.theoryScore != null && Number(s.theoryScore) > 0) ||
+            (s.ceScore != null && Number(s.ceScore) > 0)
+          )
+        );
+      }).length;
+
+      const is100Percent = totalExpected > 0 && enteredMarksCount >= totalExpected;
+      const pct = totalExpected > 0 ? Math.round((enteredMarksCount / totalExpected) * 100) : 0;
+
+      // Find teacher(s) for this subject in this class
+      const teacherCandidates = [];
+      const stMatches = classInfo?.subjectTeachers?.filter(st =>
+        (st.subjectId && st.subjectId.toString() === subjIdStr) ||
+        (st.subjectId?._id && st.subjectId._id.toString() === subjIdStr)
+      ) || [];
+
+      for (const st of stMatches) {
+        if (st.teacherId) {
+          teacherCandidates.push(st.teacherId);
+        }
+      }
+
+      if (staffAssignments?.length > 0) {
+        const saMatches = staffAssignments.filter(sa =>
+          sa.subjectsTaught?.some(st =>
+            st.classId?.toString() === classId.toString() &&
+            (st.subjectId?.toString() === subjIdStr || st.subjectId?._id?.toString() === subjIdStr)
+          )
+        );
+        for (const sa of saMatches) {
+          if (sa.staffId) {
+            teacherCandidates.push(sa.staffId);
+          }
+        }
+      }
+
+      // If no subject-specific teacher found, we can notify the class teacher
+      if (teacherCandidates.length === 0 && classInfo.classTeacherId) {
+        teacherCandidates.push(classInfo.classTeacherId);
+      }
+
+      for (const teacher of teacherCandidates) {
+        // Find User ID for this teacher
+        let targetUserId = teacher.userId?._id ? teacher.userId._id.toString() : (teacher.userId ? teacher.userId.toString() : null);
+        
+        if (!targetUserId) {
+          const staffRec = await Staff.findById(teacher._id || teacher).select('userId');
+          if (staffRec?.userId) {
+            targetUserId = staffRec.userId.toString();
+          }
+        }
+
+        if (!targetUserId) continue;
+
+        const dedupeKey = `${targetUserId}_${subjIdStr}`;
+        if (notifiedUserIds.has(dedupeKey)) continue;
+        notifiedUserIds.add(dedupeKey);
+
+        const isSubmitAction = is100Percent;
+        const title = isSubmitAction
+          ? `Submit Marks Reminder: ${sName} (${className})`
+          : `Mark Entry Reminder: ${sName} (${className})`;
+
+        const message = isSubmitAction
+          ? `Dear ${teacher.name || 'Teacher'}, all ${totalExpected} marks for ${sName} in ${className} (${exam.name}) have been entered (100%). Please review and submit marks for final verification.`
+          : `Dear ${teacher.name || 'Teacher'}, please complete mark entry for ${sName} in ${className} (${exam.name}). Currently ${enteredMarksCount}/${totalExpected} marks entered (${pct}%).`;
+
+        const notificationData = {
+          type: 'exam_mark_reminder',
+          examId: exam._id.toString(),
+          examName: exam.name,
+          classId: classId.toString(),
+          className,
+          subjectId: subjIdStr,
+          subjectName: sName,
+          action: isSubmitAction ? 'submit' : 'complete',
+          url: `/staff/marks-entry/${exam._id}/classes/${classId}`
+        };
+
+        const notif = await Notification.create({
+          senderId: req.user.id,
+          userId: targetUserId,
+          title,
+          message,
+          type: 'warning',
+          data: notificationData
+        });
+
+        broadcastToUser(targetUserId, 'notification', {
+          id: notif._id,
+          _id: notif._id,
+          userId: targetUserId,
+          title,
+          message,
+          type: 'warning',
+          data: notificationData,
+          timestamp: notif.createdAt,
+          createdAt: notif.createdAt,
+          read: false,
+          isRead: false
+        });
+
+        try {
+          const fcmService = require('../services/fcmService');
+          await fcmService.sendToUser(targetUserId, title, message, {
+            notificationId: notif._id.toString(),
+            type: 'exam_mark_reminder',
+            ...notificationData
+          });
+        } catch (fcmErr) {
+          console.warn('FCM send error (ignorable):', fcmErr.message);
+        }
+
+        notifiedTeachers.push({
+          teacherName: teacher.name,
+          subjectName: sName,
+          action: isSubmitAction ? 'submit' : 'complete'
+        });
+      }
+    }
+
+    if (notifiedTeachers.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No pending teachers found or teachers are already submitted',
+        count: 0,
+        notifiedTeachers: []
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: `Successfully notified ${notifiedTeachers.length} teacher(s)`,
+      count: notifiedTeachers.length,
+      notifiedTeachers
+    });
+  } catch (error) {
+    console.error('Error notifying staff for exam marks:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};

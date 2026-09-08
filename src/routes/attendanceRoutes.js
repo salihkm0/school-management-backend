@@ -17,7 +17,8 @@ const {
   updateAttendanceTemplate,
   deleteAttendanceTemplate,
   applyTemplateToMonth,
-  getTemplateByClassAndMonth
+  getTemplateByClassAndMonth,
+  notifyPendingAttendance
 } = require('../controllers/attendanceController');
 
 router.use(protect);
@@ -30,6 +31,9 @@ router.put('/templates/:id', authorize('admin'), validate([idParam]), updateAtte
 router.delete('/templates/:id', authorize('admin'), validate([idParam]), deleteAttendanceTemplate);
 router.post('/templates/apply', authorize('admin'), applyTemplateToMonth);
 router.get('/templates/class/:classId/:year/:month', authorize('admin', 'staff'), getTemplateByClassAndMonth);
+
+// Reminders & Notifications
+router.post('/notify-pending', authorize('admin', 'principal'), notifyPendingAttendance);
 
 // Attendance routes
 router.get('/', getAttendance);

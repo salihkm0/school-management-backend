@@ -1115,11 +1115,14 @@ exports.getAttendanceAnalytics = async (req, res) => {
         const classInfo = rec.classId && typeof rec.classId === 'object' ? rec.classId : {};
         const className = classInfo.displayName || `${classInfo.name || ''} ${classInfo.section || ''}`.trim() || 'Class';
 
+        const sName = studentInfo.fullName || studentInfo.name || rec.studentName || 'Student';
         studentMap.set(sId, {
           studentId: sId,
-          name: studentInfo.fullName || rec.studentName || 'Student',
+          studentName: sName,
+          name: sName,
+          fullName: sName,
           admissionNo: studentInfo.admissionNo || studentInfo.studentCode || '-',
-          rollNumber: studentInfo.rollNumber || '-',
+          rollNumber: studentInfo.rollNumber || rec.rollNumber || '-',
           gender: studentInfo.gender || '-',
           classId: classInfo._id?.toString() || rec.classId?.toString(),
           className,

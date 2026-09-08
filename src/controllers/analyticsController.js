@@ -1160,6 +1160,22 @@ exports.getAttendanceAnalytics = async (req, res) => {
       return a.name.localeCompare(b.name);
     });
 
+    const summary = {
+      totalStudents,
+      totalWorkingDays: avgWorkingDays,
+      totalPresentDays: totalPresentDaysSum,
+      totalAbsentDays: totalWorkingDaysSum - totalPresentDaysSum,
+      averagePercentage,
+      goodStandingCount,
+      goodStandingPercentage: totalStudents > 0 ? parseFloat(((goodStandingCount / totalStudents) * 100).toFixed(1)) : 0,
+      needsAttentionCount,
+      needsAttentionPercentage: totalStudents > 0 ? parseFloat(((needsAttentionCount / totalStudents) * 100).toFixed(1)) : 0,
+      criticalCount,
+      criticalPercentage: totalStudents > 0 ? parseFloat(((criticalCount / totalStudents) * 100).toFixed(1)) : 0,
+      perfectCount,
+      perfectPercentage: totalStudents > 0 ? parseFloat(((perfectCount / totalStudents) * 100).toFixed(1)) : 0
+    };
+
     res.json({
       success: true,
       data: {
@@ -1169,21 +1185,7 @@ exports.getAttendanceAnalytics = async (req, res) => {
           year: targetAcademicYear.year
         } : null,
         selectedMonth: targetMonth,
-        summary: {
-          totalStudents,
-          totalWorkingDays: avgWorkingDays,
-          totalPresentDays: totalPresentDaysSum,
-          totalAbsentDays: totalWorkingDaysSum - totalPresentDaysSum,
-          averagePercentage,
-          goodStandingCount,
-          goodStandingPercentage: totalStudents > 0 ? parseFloat(((goodStandingCount / totalStudents) * 100).toFixed(1)) : 0,
-          needsAttentionCount,
-          needsAttentionPercentage: totalStudents > 0 ? parseFloat(((needsAttentionCount / totalStudents) * 100).toFixed(1)) : 0,
-          criticalCount,
-          criticalPercentage: totalStudents > 0 ? parseFloat(((criticalCount / totalStudents) * 100).toFixed(1)) : 0,
-          perfectCount,
-          perfectPercentage: totalStudents > 0 ? parseFloat(((perfectCount / totalStudents) * 100).toFixed(1)) : 0
-        },
+        summary,
         distribution,
         monthlyTrends,
         classWiseComparison,

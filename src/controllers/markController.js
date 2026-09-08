@@ -1234,7 +1234,22 @@ exports.submitMarksForReview = async (req, res) => {
       : null;
 
     let modifiedCount = 0;
-    const marksheets = await Mark.find({ examId, classId }).populate("studentId", "name rollNumber");
+    const activeStudents = await Student.find({ classId, status: "active" }).select("fullName name rollNumber");
+    if (activeStudents.length === 0) {
+      return res.status(400).json({ message: "No active students found in this class." });
+    }
+
+    const marksheets = await Mark.find({ examId, classId }).populate("studentId", "fullName name rollNumber");
+
+    if (marksheets.length < activeStudents.length) {
+      const marksheetStudentIds = new Set(marksheets.map(m => m.studentId?._id?.toString() || m.studentId?.toString()));
+      const missingStudent = activeStudents.find(st => !marksheetStudentIds.has(st._id.toString()));
+      const sName = missingStudent?.fullName || missingStudent?.name || "Student";
+      const rollNo = missingStudent?.rollNumber || "-";
+      return res.status(400).json({
+        message: `Cannot submit marks: Staff has not entered marks for all students in this class. ${sName} (Roll ${rollNo}) is missing marks.`
+      });
+    }
 
     // Check if any non-absent student has TE mark equal to 0 or missing
     for (const marksheet of marksheets) {
@@ -1243,10 +1258,11 @@ exports.submitMarksForReview = async (req, res) => {
         const matchesTarget = !targetSubjectIds || targetSubjectIds.some((id) => id.toString() === sId);
         if (matchesTarget && (s.status === "draft" || !s.status)) {
           const isAbsent = s.isAbsent === true;
+          const isEnteredExplicitly = s.isEnteredExplicitly === true;
           const score = s.theoryScore;
           const tNum = score === "" || score === null || score === undefined ? 0 : Number(score);
-          if (!isAbsent && (tNum === 0 || isNaN(tNum))) {
-            const sName = marksheet.studentId?.name || "Student";
+          if (!isAbsent && !isEnteredExplicitly && (tNum === 0 || isNaN(tNum))) {
+            const sName = marksheet.studentId?.fullName || marksheet.studentId?.name || "Student";
             const rollNo = marksheet.studentId?.rollNumber || "-";
             const examSubj = (exam.subjects || []).find((sub) => {
               const subId = sub.subjectId?._id?.toString() || sub.subjectId?.toString() || sub._id?.toString();

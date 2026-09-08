@@ -333,14 +333,54 @@ exports.getExam = async (req, res) => {
       marksheetsByClassMap.get(cId).push(m);
     });
 
+    // Fetch active student count per class for mark entry verification
+    const activeStudentCounts = await Student.aggregate([
+      { $match: { classId: { $in: exam.classIds }, status: 'active' } },
+      { $group: { _id: '$classId', count: { $sum: 1 } } }
+    ]);
+    const studentCountMap = new Map();
+    activeStudentCounts.forEach(sc => {
+      if (sc._id) studentCountMap.set(sc._id.toString(), sc.count);
+    });
+
     const enhancedClassSubmissionStatus = (exam.classSubmissionStatus || []).map((cs) => {
       const csObj = cs.toObject ? cs.toObject() : cs;
       const cId = (cs.classId?._id || cs.classId || "").toString();
       const classMarksheets = marksheetsByClassMap.get(cId) || [];
+      const studentCount = studentCountMap.get(cId) || cs.totalStudents || 0;
 
       const subjectSubmissions = (exam.subjects || []).map((subj) => {
         const examSubjIdStr = subj._id?.toString();
         const actualSubjIdStr = (subj.subjectId?._id || subj.subjectId)?.toString();
+
+        const enteredStudents = classMarksheets.filter((m) => {
+          const s = (m.subjects || []).find((sub) => {
+            const sSubjId = sub.subjectId?.toString();
+            const sExamSubjId = sub.examSubjectId?.toString();
+            return (
+              (sSubjId && (sSubjId === actualSubjIdStr || sSubjId === examSubjIdStr)) ||
+              (sExamSubjId && (sExamSubjId === examSubjIdStr || sExamSubjId === actualSubjIdStr)) ||
+              (sub.subjectName === subj.subjectName)
+            );
+          });
+          return Boolean(
+            s && (
+              s.isAbsent === true ||
+              s.isEnteredExplicitly === true ||
+              (s.isEntered === true && (
+                (s.theoryScore != null && Number(s.theoryScore) > 0) ||
+                (s.ceScore != null && Number(s.ceScore) > 0) ||
+                s.isAbsent === true ||
+                s.isEnteredExplicitly === true
+              )) ||
+              (s.theoryScore != null && Number(s.theoryScore) > 0) ||
+              (s.ceScore != null && Number(s.ceScore) > 0)
+            )
+          );
+        }).length;
+
+        const isAllMarksEntered = studentCount > 0 && enteredStudents >= studentCount;
+        const markEntryPercentage = studentCount > 0 ? Math.round((enteredStudents / studentCount) * 100) : 0;
 
         const sampleSubj = classMarksheets.flatMap((m) => m.subjects || []).find((s) => {
           const sSubjId = s.subjectId?.toString();
@@ -358,12 +398,26 @@ exports.getExam = async (req, res) => {
           status: sampleSubj?.status || "draft",
           submittedByName: sampleSubj?.submittedByName || null,
           submittedAt: sampleSubj?.submittedAt || null,
+          enteredMarks: enteredStudents,
+          expectedMarks: studentCount,
+          isAllMarksEntered,
+          markEntryPercentage
         };
       });
 
+      const totalClassExpected = subjectSubmissions.reduce((sum, s) => sum + s.expectedMarks, 0);
+      const totalClassEntered = subjectSubmissions.reduce((sum, s) => sum + s.enteredMarks, 0);
+      const isClassAllMarksEntered = subjectSubmissions.length > 0 && subjectSubmissions.every(s => s.isAllMarksEntered);
+      const classMarkEntryPercentage = totalClassExpected > 0 ? Math.round((totalClassEntered / totalClassExpected) * 100) : 0;
+
       return {
         ...csObj,
+        totalStudents: studentCount,
         subjectSubmissions,
+        enteredMarks: totalClassEntered,
+        expectedMarks: totalClassExpected,
+        isAllMarksEntered: isClassAllMarksEntered,
+        markEntryPercentage: classMarkEntryPercentage
       };
     });
 

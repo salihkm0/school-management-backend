@@ -332,6 +332,7 @@ exports.getGradeAnalysis = async (req, res) => {
         subjectWiseAPlus: {},
         subjectWisePerformance: {},
         totalStudents: 0,
+        studentResults: [],
         summary: {
           fullAPlus: 0,
           nineAPlus: 0,
@@ -358,26 +359,52 @@ exports.getGradeAnalysis = async (req, res) => {
 
     for (const mark of marks) {
       const subjects = mark.subjects || [];
-      const subjectResults = subjects.map(subject => ({
-        subjectName: subject.subjectName,
-        subjectCode: subject.subjectCode,
-        grade: subject.grade,
-        percentage: subject.percentage || 0,
-        obtainedMarks: subject.totalScore || 0,
-        maxMarks: subject.maxMarks || 0,
-      }));
+      let totalTheoryMarks = 0;
+      let totalCeMarks = 0;
+      let totalCalculatedMarks = 0;
+
+      const subjectResults = subjects.map(subject => {
+        const theory = Number(subject.theoryScore) || 0;
+        const ce = Number(subject.ceScore) || 0;
+        const practical = Number(subject.practicalScore) || 0;
+        const totalScore = Number(subject.totalScore) || (theory + ce + practical);
+
+        totalTheoryMarks += theory;
+        totalCeMarks += (ce + practical);
+        totalCalculatedMarks += totalScore;
+
+        return {
+          subjectName: subject.subjectName,
+          subjectCode: subject.subjectCode,
+          theoryScore: theory,
+          ceScore: ce,
+          practicalScore: practical,
+          grade: subject.grade,
+          percentage: subject.percentage || 0,
+          obtainedMarks: totalScore,
+          maxMarks: subject.maxMarks || 0,
+          isAbsent: subject.isAbsent || false,
+        };
+      });
+
+      const finalTotalMarks = mark.totalMarks || totalCalculatedMarks || (totalTheoryMarks + totalCeMarks);
+      const totalMaxMarks = mark.totalMaxMarks || 0;
+      const finalPercentage = mark.percentage || (totalMaxMarks > 0 ? (finalTotalMarks / totalMaxMarks) * 100 : 0);
 
       const studentInfo = {
         studentId: mark.studentId?._id || mark.studentId,
-        studentName: mark.studentName,
-        studentCode: mark.studentCode,
-        rollNumber: mark.rollNumber,
-        admissionNumber: mark.admissionNo,
+        studentName: mark.studentName || mark.studentId?.fullName || "Unknown",
+        studentCode: mark.studentCode || mark.studentId?.studentCode || "",
+        rollNumber: mark.rollNumber || mark.studentId?.rollNumber || "",
+        admissionNumber: mark.admissionNo || mark.studentId?.admissionNo || "",
         className: getClassDisplayName(mark),
-        totalMarks: mark.totalMarks || 0,
-        totalMaxMarks: mark.totalMaxMarks || 0,
-        percentage: mark.percentage || 0,
-        grade: mark.grade,
+        totalTheoryMarks,
+        totalCeMarks,
+        totalMarks: finalTotalMarks,
+        totalMaxMarks,
+        percentage: Math.round(finalPercentage * 10) / 10,
+        grade: mark.grade || getGradeFromPercentage(finalPercentage),
+        status: finalPercentage >= 40 ? "Passed" : "Failed",
         rank: mark.rank,
         subjectResults: subjectResults,
         aplusCount: countAPlusGrades(subjectResults),
@@ -386,11 +413,11 @@ exports.getGradeAnalysis = async (req, res) => {
 
       studentResults.push(studentInfo);
 
-      if (gradeDistribution[mark.grade] !== undefined) {
-        gradeDistribution[mark.grade]++;
+      if (gradeDistribution[studentInfo.grade] !== undefined) {
+        gradeDistribution[studentInfo.grade]++;
       }
 
-      if ((mark.percentage || 0) >= 40) totalPassed++;
+      if (finalPercentage >= 40) totalPassed++;
 
       for (const subject of subjects) {
         const subjectName = subject.subjectName || "Unknown";
@@ -543,6 +570,54 @@ exports.getGradeAnalysis = async (req, res) => {
       }
     }
 
+    // 1. Calculate TE Only Rank (Default)
+    // Sort descending by totalTheoryMarks, tiebreaker percentage, then totalMarks
+    const sortedByTe = [...studentResults].sort((a, b) => {
+      if ((b.totalTheoryMarks || 0) !== (a.totalTheoryMarks || 0)) {
+        return (b.totalTheoryMarks || 0) - (a.totalTheoryMarks || 0);
+      }
+      if ((b.percentage || 0) !== (a.percentage || 0)) {
+        return (b.percentage || 0) - (a.percentage || 0);
+      }
+      return (b.totalMarks || 0) - (a.totalMarks || 0);
+    });
+
+    let currentTeRank = 1;
+    for (let i = 0; i < sortedByTe.length; i++) {
+      if (i > 0 && (sortedByTe[i].totalTheoryMarks || 0) < (sortedByTe[i - 1].totalTheoryMarks || 0)) {
+        currentTeRank = i + 1;
+      }
+      sortedByTe[i].teRank = currentTeRank;
+    }
+
+    // 2. Calculate TE + CE Combined Rank
+    // Sort descending by totalMarks, tiebreaker percentage, then totalTheoryMarks
+    const sortedByTeCe = [...studentResults].sort((a, b) => {
+      if ((b.totalMarks || 0) !== (a.totalMarks || 0)) {
+        return (b.totalMarks || 0) - (a.totalMarks || 0);
+      }
+      if ((b.percentage || 0) !== (a.percentage || 0)) {
+        return (b.percentage || 0) - (a.percentage || 0);
+      }
+      return (b.totalTheoryMarks || 0) - (a.totalTheoryMarks || 0);
+    });
+
+    let currentTeCeRank = 1;
+    for (let i = 0; i < sortedByTeCe.length; i++) {
+      if (i > 0 && (sortedByTeCe[i].totalMarks || 0) < (sortedByTeCe[i - 1].totalMarks || 0)) {
+        currentTeCeRank = i + 1;
+      }
+      sortedByTeCe[i].teCeRank = currentTeCeRank;
+    }
+
+    // Default order of studentResults is TE Rank (Default)
+    studentResults.sort((a, b) => {
+      if (a.teRank !== b.teRank) {
+        return (a.teRank || 999999) - (b.teRank || 999999);
+      }
+      return (b.percentage || 0) - (a.percentage || 0);
+    });
+
     const totalStudents = studentResults.length;
     const fullAPlusCount = analysis.statistics.fullAPlusCount;
     const passPercentage = totalStudents > 0 ? (totalPassed / totalStudents) * 100 : 0;
@@ -556,6 +631,7 @@ exports.getGradeAnalysis = async (req, res) => {
         subjectWisePerformance,
         subjectWiseGradeDistribution,
         totalStudents,
+        studentResults,
         summary: {
           fullAPlus: fullAPlusCount,
           nineAPlus: analysis.statistics.nineAPlusCount,

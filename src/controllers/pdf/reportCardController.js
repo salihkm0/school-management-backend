@@ -706,7 +706,19 @@ exports.generateClassReportCardsPDF = async (req, res) => {
           incomplete.push(student.fullName);
           continue;
         }
-        const hasUnEntered = ms.subjects.some(s => !s.isEntered);
+        // Check if marks are actually entered (not just the isEntered flag)
+        const hasUnEntered = ms.subjects.some(s => {
+          // If explicitly marked as entered, it's fine
+          if (s.isEntered === true) return false;
+          // If absent, it counts as entered
+          if (s.isAbsent === true) return false;
+          // If any score exists, consider it entered
+          const hasTheory = s.theoryScore !== undefined && s.theoryScore !== null;
+          const hasCE = (s.ceScore !== undefined && s.ceScore !== null) || 
+                        (s.ceMarks !== undefined && s.ceMarks !== null);
+          const hasTotal = s.totalScore !== undefined && s.totalScore !== null;
+          return !(hasTheory || hasCE || hasTotal);
+        });
         if (hasUnEntered) incomplete.push(student.fullName);
       }
 

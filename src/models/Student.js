@@ -613,5 +613,7 @@ StudentSchema.index({ admissionNo: 1 }, { sparse: true });
 StudentSchema.index({ studentCode: 1 });
 // academic year queries
 StudentSchema.index({ academicYearId: 1, status: 1 });
+// demographics aggregation query
+StudentSchema.index({ status: 1, className: 1, category: 1, gender: 1 });
 
 module.exports = mongoose.models.Student || mongoose.model('Student', StudentSchema);

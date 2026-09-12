@@ -223,5 +223,8 @@ MarkSchema.index({ examId: 1, classId: 1, status: 1 });
 MarkSchema.index({ academicYearId: 1 });
 MarkSchema.index({ status: 1 });
 MarkSchema.index({ percentage: -1 });
+MarkSchema.index({ examId: 1, percentage: -1 });
+MarkSchema.index({ academicYearId: 1, isFinalized: 1 });
+MarkSchema.index({ "subjects.subjectId": 1, isFinalized: 1 });
 
 module.exports = mongoose.models.Mark || mongoose.model("Mark", MarkSchema);

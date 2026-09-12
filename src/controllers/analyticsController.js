@@ -8,8 +8,10 @@ const ExamResult = require("../models/ExamResult");
 const { Attendance } = require("../models/Attendance");
 const AcademicYear = require("../models/AcademicYear");
 const StaffDuty = require("../models/StaffDuty");
+const mongoose = require("mongoose");
 const { RecentActivity, ACTIVITY_TYPES, ENTITY_TYPES, SEVERITY } = require("../models/RecentActivity");
 const { broadcastToRole, broadcastToUser } = require("../config/socket");
+const { getCache, setCache } = require("../config/redis");
 
 // ==================== HELPER FUNCTIONS ====================
 
@@ -33,6 +35,50 @@ function countAPlusGrades(subjectResults) {
     (s.maxMarks > 0 && ((s.obtainedMarks || 0) / s.maxMarks) >= 0.90) ||
     (s.percentage >= 90)
   ).length;
+}
+
+// Helper to identify co-curricular subjects that do not have TE theory exams
+function isNonTeSubject(subject) {
+  if (!subject) return false;
+  const name = (
+    subject.displayName ||
+    subject.subjectName ||
+    subject.name ||
+    subject.title ||
+    ''
+  ).toLowerCase().trim();
+  const code = (
+    subject.subjectCode ||
+    subject.code ||
+    ''
+  ).toLowerCase().trim();
+
+  if (
+    name.includes('physical education') ||
+    name.includes('phys educ') ||
+    name.includes('physical ed') ||
+    name === 'pe' || name === 'pet' || name === 'ped' ||
+    code === 'pet' || code === 'pe' || code === 'ped'
+  ) return true;
+
+  if (
+    name.includes('work education') ||
+    name.includes('work exp') ||
+    name.includes('work experience') ||
+    name === 'we' || name === 'wed' ||
+    code === 'we' || code === 'wed'
+  ) return true;
+
+  if (
+    name.includes('drawing') ||
+    name.includes('art education') ||
+    name.includes('art & culture') ||
+    name.includes('art and culture') ||
+    name === 'art' || name === 'ae' || name === 'draw' ||
+    code === 'draw' || code === 'ae' || code === 'art'
+  ) return true;
+
+  return false;
 }
 
 // Class Teacher short form mapping for PPM HSS
@@ -144,7 +190,6 @@ exports.getDashboardAnalytics = async (req, res) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Run all independent queries in parallel
     const [
       totalStudents,
       totalStaff,
@@ -186,7 +231,6 @@ exports.getDashboardAnalytics = async (req, res) => {
       Attendance.countDocuments({ createdAt: { $gte: today }, status: 'present' }),
     ]);
 
-    // currentExams depends on currentYear, but it's fast so we do it after
     const currentExams = currentYear
       ? await Exam.countDocuments({ academicYearId: currentYear._id, isActive: true })
       : 0;
@@ -290,40 +334,26 @@ exports.getGradeAnalysis = async (req, res) => {
         populate: { path: "classId", select: "name section displayName" },
       })
       .populate("classId", "name section displayName")
-      .sort({ percentage: -1 });
+      .sort({ percentage: -1 })
+      .lean();
 
     // Default empty response
     const emptyResponse = {
       success: true,
       data: {
         analysis: {
-          fullAPlus: [],
-          nineAPlus: [],
-          eightAPlus: [],
-          sevenAPlus: [],
-          sixAPlus: [],
-          fiveAPlus: [],
-          fullAPlusWithoutMaths: [],
-          fullAPlusWithoutEnglish: [],
-          fullAPlusWithoutMalayalam: [],
-          fullAPlusWithoutMalayalamII: [],
-          fullAPlusWithoutHindi: [],
-          fullAPlusWithoutArabic: [],
-          fullAPlusWithoutSocialScience: [],
-          fullAPlusWithoutIT: [],
-          fullAPlusWithoutPhysics: [],
-          fullAPlusWithoutChemistry: [],
-          fullAPlusWithoutBiology: [],
-          fullAPlusWithoutFirstLanguage: [],
+          fullAPlus: [], nineAPlus: [], eightAPlus: [], sevenAPlus: [],
+          sixAPlus: [], fiveAPlus: [],
+          fullAPlusWithoutMaths: [], fullAPlusWithoutEnglish: [],
+          fullAPlusWithoutMalayalam: [], fullAPlusWithoutMalayalamII: [],
+          fullAPlusWithoutHindi: [], fullAPlusWithoutArabic: [],
+          fullAPlusWithoutSocialScience: [], fullAPlusWithoutIT: [],
+          fullAPlusWithoutPhysics: [], fullAPlusWithoutChemistry: [],
+          fullAPlusWithoutBiology: [], fullAPlusWithoutFirstLanguage: [],
           fullAPlusWithoutOther: [],
           statistics: {
-            totalStudents: 0,
-            fullAPlusCount: 0,
-            nineAPlusCount: 0,
-            eightAPlusCount: 0,
-            sevenAPlusCount: 0,
-            sixAPlusCount: 0,
-            fiveAPlusCount: 0,
+            totalStudents: 0, fullAPlusCount: 0, nineAPlusCount: 0,
+            eightAPlusCount: 0, sevenAPlusCount: 0, sixAPlusCount: 0, fiveAPlusCount: 0,
           },
         },
         gradeDistribution: {
@@ -334,18 +364,49 @@ exports.getGradeAnalysis = async (req, res) => {
         totalStudents: 0,
         studentResults: [],
         summary: {
-          fullAPlus: 0,
-          nineAPlus: 0,
-          eightAPlus: 0,
-          sevenAPlus: 0,
-          fullAPlusPercentage: 0,
-          passPercentage: 0,
+          fullAPlus: 0, nineAPlus: 0, eightAPlus: 0, sevenAPlus: 0,
+          fullAPlusPercentage: 0, passPercentage: 0,
         },
       },
     };
 
     if (marks.length === 0) {
       return res.json(emptyResponse);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // IMPORTANT: Fetch ALL relevant Exam docs in one query so we can
+    // look up the CORRECT TE-only max per subject from exam config.
+    // (The Mark.subjects[].teMaxMarks field is unreliable.)
+    // ═══════════════════════════════════════════════════════════════
+    const examIds = [
+      ...new Set(
+        marks
+          .map(m => m.examId && m.examId.toString())
+          .filter(Boolean)
+      )
+    ];
+
+    const examDocs = await Exam.find({ _id: { $in: examIds } })
+      .select('_id subjects subjectSchedules')
+      .lean();
+
+    const examDocMap = new Map(
+      examDocs.map(e => [e._id.toString(), e])
+    );
+
+    // Pre-build a per-exam subject-config lookup so we don't rebuild it per student
+    const examSubjectConfigLookup = new Map();
+    for (const [eid, examDoc] of examDocMap.entries()) {
+      const list = examDoc.subjects || examDoc.subjectSchedules || [];
+      const lookup = new Map();
+      for (const es of list) {
+        const nameKey = (es.subjectName || '').toLowerCase().trim();
+        const codeKey = (es.subjectCode || '').toLowerCase().trim();
+        if (nameKey) lookup.set(nameKey, es);
+        if (codeKey) lookup.set(codeKey, es);
+      }
+      examSubjectConfigLookup.set(eid, lookup);
     }
 
     const studentResults = [];
@@ -363,15 +424,77 @@ exports.getGradeAnalysis = async (req, res) => {
       let totalCeMarks = 0;
       let totalCalculatedMarks = 0;
 
+      // Rank-specific totals (exclude non-TE subjects like PE / WE / Drawing)
+      let rankTeTotal = 0;
+      let rankTeMax = 0;
+      let rankTotalObtained = 0;
+      let rankTotalMax = 0;
+
+      // Look up exam subject config map for THIS student's exam
+      const examIdStr = mark.examId && mark.examId.toString();
+      const configMap = examSubjectConfigLookup.get(examIdStr) || new Map();
+
       const subjectResults = subjects.map(subject => {
         const theory = Number(subject.theoryScore) || 0;
         const ce = Number(subject.ceScore) || 0;
         const practical = Number(subject.practicalScore) || 0;
         const totalScore = Number(subject.totalScore) || (theory + ce + practical);
 
+        // Look up the exam-level subject config for the CORRECT maxes
+        const nameKey = (subject.subjectName || '').toLowerCase().trim();
+        const codeKey = (subject.subjectCode || '').toLowerCase().trim();
+        const examSubConfig = configMap.get(nameKey) || configMap.get(codeKey);
+
+        // Total max: prefer the mark's own maxMarks; else exam config; else 100
+        const totalMax =
+          Number(subject.maxMarks) ||
+          Number(examSubConfig?.maxMarks) ||
+          0;
+
+        // ── Compute TE max (TE-only portion, excluding CE) ──
+        let teMax;
+        let ceMax;
+
+        if (examSubConfig) {
+          const ceMaxFromConfig = Number(examSubConfig.ceMaxMarks) || 0;
+          const ceEnabled =
+            Boolean(examSubConfig.ceEnabled) && ceMaxFromConfig > 0;
+
+          if (ceEnabled) {
+            // TE = theoryMarks if explicitly set, else (totalMax - ceMax)
+            const explicitTheory = Number(examSubConfig.theoryMarks) || 0;
+            teMax = explicitTheory > 0
+              ? explicitTheory
+              : Math.max(0, totalMax - ceMaxFromConfig);
+            ceMax = ceMaxFromConfig;
+          } else {
+            teMax = totalMax;
+            ceMax = 0;
+          }
+        } else {
+          // Fallback: check the subject's own ceMaxMarks; else assume no CE
+          const ceFromSubject = Number(subject.ceMaxMarks) || 0;
+          if (ceFromSubject > 0 && ceFromSubject < totalMax) {
+            teMax = totalMax - ceFromSubject;
+            ceMax = ceFromSubject;
+          } else {
+            teMax = totalMax;
+            ceMax = 0;
+          }
+        }
+
         totalTheoryMarks += theory;
         totalCeMarks += (ce + practical);
         totalCalculatedMarks += totalScore;
+
+        const isNonTe = isNonTeSubject(subject);
+
+        if (!isNonTe) {
+          rankTeTotal += theory;
+          rankTeMax += teMax;
+          rankTotalObtained += totalScore;
+          rankTotalMax += totalMax;
+        }
 
         return {
           subjectName: subject.subjectName,
@@ -382,8 +505,11 @@ exports.getGradeAnalysis = async (req, res) => {
           grade: subject.grade,
           percentage: subject.percentage || 0,
           obtainedMarks: totalScore,
-          maxMarks: subject.maxMarks || 0,
+          maxMarks: totalMax,
+          teMaxMarks: teMax,
+          ceMaxMarks: ceMax,
           isAbsent: subject.isAbsent || false,
+          isNonTe: isNonTe,
         };
       });
 
@@ -409,6 +535,12 @@ exports.getGradeAnalysis = async (req, res) => {
         subjectResults: subjectResults,
         aplusCount: countAPlusGrades(subjectResults),
         totalSubjects: subjects.length,
+        rankTeTotal,
+        rankTeMax,
+        rankTotalObtained,
+        rankTotalMax,
+        rankTePercentage: rankTeMax > 0 ? (rankTeTotal / rankTeMax) * 100 : 0,
+        rankTotalPercentage: rankTotalMax > 0 ? (rankTotalObtained / rankTotalMax) * 100 : 0,
       };
 
       studentResults.push(studentInfo);
@@ -458,34 +590,20 @@ exports.getGradeAnalysis = async (req, res) => {
     });
 
     const analysis = {
-      fullAPlus: [],
-      nineAPlus: [],
-      eightAPlus: [],
-      sevenAPlus: [],
-      sixAPlus: [],
-      fiveAPlus: [],
-      fullAPlusWithoutMaths: [],
-      fullAPlusWithoutEnglish: [],
-      fullAPlusWithoutMalayalam: [],
-      fullAPlusWithoutMalayalamII: [],
-      fullAPlusWithoutHindi: [],
-      fullAPlusWithoutArabic: [],
-      fullAPlusWithoutSocialScience: [],
-      fullAPlusWithoutIT: [],
-      fullAPlusWithoutPhysics: [],
-      fullAPlusWithoutChemistry: [],
-      fullAPlusWithoutBiology: [],
-      fullAPlusWithoutFirstLanguage: [],
+      fullAPlus: [], nineAPlus: [], eightAPlus: [], sevenAPlus: [],
+      sixAPlus: [], fiveAPlus: [],
+      fullAPlusWithoutMaths: [], fullAPlusWithoutEnglish: [],
+      fullAPlusWithoutMalayalam: [], fullAPlusWithoutMalayalamII: [],
+      fullAPlusWithoutHindi: [], fullAPlusWithoutArabic: [],
+      fullAPlusWithoutSocialScience: [], fullAPlusWithoutIT: [],
+      fullAPlusWithoutPhysics: [], fullAPlusWithoutChemistry: [],
+      fullAPlusWithoutBiology: [], fullAPlusWithoutFirstLanguage: [],
       fullAPlusWithoutOther: [],
       missingAPlusBySubject: {},
       statistics: {
         totalStudents: studentResults.length,
-        fullAPlusCount: 0,
-        nineAPlusCount: 0,
-        eightAPlusCount: 0,
-        sevenAPlusCount: 0,
-        sixAPlusCount: 0,
-        fiveAPlusCount: 0,
+        fullAPlusCount: 0, nineAPlusCount: 0, eightAPlusCount: 0,
+        sevenAPlusCount: 0, sixAPlusCount: 0, fiveAPlusCount: 0,
       },
     };
 
@@ -570,52 +688,49 @@ exports.getGradeAnalysis = async (req, res) => {
       }
     }
 
-    // 1. Calculate TE Only Rank (Default)
-    // Sort descending by totalTheoryMarks, tiebreaker percentage, then totalMarks
+    // 1. TE Only Rank (Default) — EXCLUDES non-TE subjects
     const sortedByTe = [...studentResults].sort((a, b) => {
-      if ((b.totalTheoryMarks || 0) !== (a.totalTheoryMarks || 0)) {
-        return (b.totalTheoryMarks || 0) - (a.totalTheoryMarks || 0);
+      if ((b.rankTeTotal || 0) !== (a.rankTeTotal || 0)) {
+        return (b.rankTeTotal || 0) - (a.rankTeTotal || 0);
       }
-      if ((b.percentage || 0) !== (a.percentage || 0)) {
-        return (b.percentage || 0) - (a.percentage || 0);
+      if ((b.rankTePercentage || 0) !== (a.rankTePercentage || 0)) {
+        return (b.rankTePercentage || 0) - (a.rankTePercentage || 0);
       }
-      return (b.totalMarks || 0) - (a.totalMarks || 0);
+      return (b.rankTotalObtained || 0) - (a.rankTotalObtained || 0);
     });
 
     let currentTeRank = 1;
     for (let i = 0; i < sortedByTe.length; i++) {
-      if (i > 0 && (sortedByTe[i].totalTheoryMarks || 0) < (sortedByTe[i - 1].totalTheoryMarks || 0)) {
+      if (i > 0 && (sortedByTe[i].rankTeTotal || 0) < (sortedByTe[i - 1].rankTeTotal || 0)) {
         currentTeRank = i + 1;
       }
       sortedByTe[i].teRank = currentTeRank;
     }
 
-    // 2. Calculate TE + CE Combined Rank
-    // Sort descending by totalMarks, tiebreaker percentage, then totalTheoryMarks
+    // 2. TE + CE Combined Rank — EXCLUDES non-TE subjects
     const sortedByTeCe = [...studentResults].sort((a, b) => {
-      if ((b.totalMarks || 0) !== (a.totalMarks || 0)) {
-        return (b.totalMarks || 0) - (a.totalMarks || 0);
+      if ((b.rankTotalObtained || 0) !== (a.rankTotalObtained || 0)) {
+        return (b.rankTotalObtained || 0) - (a.rankTotalObtained || 0);
       }
-      if ((b.percentage || 0) !== (a.percentage || 0)) {
-        return (b.percentage || 0) - (a.percentage || 0);
+      if ((b.rankTotalPercentage || 0) !== (a.rankTotalPercentage || 0)) {
+        return (b.rankTotalPercentage || 0) - (a.rankTotalPercentage || 0);
       }
-      return (b.totalTheoryMarks || 0) - (a.totalTheoryMarks || 0);
+      return (b.rankTeTotal || 0) - (a.rankTeTotal || 0);
     });
 
     let currentTeCeRank = 1;
     for (let i = 0; i < sortedByTeCe.length; i++) {
-      if (i > 0 && (sortedByTeCe[i].totalMarks || 0) < (sortedByTeCe[i - 1].totalMarks || 0)) {
+      if (i > 0 && (sortedByTeCe[i].rankTotalObtained || 0) < (sortedByTeCe[i - 1].rankTotalObtained || 0)) {
         currentTeCeRank = i + 1;
       }
       sortedByTeCe[i].teCeRank = currentTeCeRank;
     }
 
-    // Default order of studentResults is TE Rank (Default)
     studentResults.sort((a, b) => {
       if (a.teRank !== b.teRank) {
         return (a.teRank || 999999) - (b.teRank || 999999);
       }
-      return (b.percentage || 0) - (a.percentage || 0);
+      return (b.rankTotalPercentage || 0) - (a.rankTotalPercentage || 0);
     });
 
     const totalStudents = studentResults.length;
@@ -654,42 +769,123 @@ exports.getFullAPlusStudents = async (req, res) => {
   try {
     const { examId, classId, academicYearId } = req.query;
 
-    const query = {};
-    if (examId) query.examId = examId;
-    if (classId) query.classId = classId;
-    if (academicYearId) query.academicYearId = academicYearId;
+    const cacheKey = `analytics:full-aplus:${examId || 'all'}:${classId || 'all'}:${academicYearId || 'all'}`;
+    const cached = await getCache(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
 
-    const marks = await Mark.find(query)
-      .populate({
-        path: "studentId",
-        select: "fullName admissionNo rollNumber photoUrl classId",
-        populate: { path: "classId", select: "name section displayName" },
-      })
-      .populate("classId", "name section displayName")
-      .sort({ percentage: -1 });
+    const matchStage = {};
+    if (examId && mongoose.Types.ObjectId.isValid(examId)) matchStage.examId = new mongoose.Types.ObjectId(examId);
+    else if (examId) matchStage.examId = examId;
 
-    const fullAPlusStudents = marks.filter((mark) => {
-      const subjects = mark.subjects || [];
-      if (subjects.length === 0) return false;
-      return subjects.every((s) => s.grade === "A+");
-    });
+    if (classId && mongoose.Types.ObjectId.isValid(classId)) matchStage.classId = new mongoose.Types.ObjectId(classId);
+    else if (classId) matchStage.classId = classId;
 
-    res.json({
+    if (academicYearId && mongoose.Types.ObjectId.isValid(academicYearId)) matchStage.academicYearId = new mongoose.Types.ObjectId(academicYearId);
+    else if (academicYearId) matchStage.academicYearId = academicYearId;
+
+    const pipeline = [
+      { $match: matchStage },
+      {
+        $project: {
+          studentId: 1,
+          studentName: 1,
+          rollNumber: 1,
+          admissionNo: 1,
+          className: 1,
+          section: 1,
+          classId: 1,
+          totalMarks: 1,
+          totalMaxMarks: 1,
+          percentage: 1,
+          rank: 1,
+          subjects: 1,
+          totalSubjects: { $size: { $ifNull: ["$subjects", []] } },
+          aplusCount: {
+            $size: {
+              $filter: {
+                input: { $ifNull: ["$subjects", []] },
+                as: "sub",
+                cond: { $eq: ["$$sub.grade", "A+"] }
+              }
+            }
+          }
+        }
+      },
+      {
+        $match: {
+          totalSubjects: { $gt: 0 },
+          $expr: { $eq: ["$aplusCount", "$totalSubjects"] }
+        }
+      },
+      { $sort: { percentage: -1 } },
+      {
+        $lookup: {
+          from: "students",
+          localField: "studentId",
+          foreignField: "_id",
+          as: "studentDoc"
+        }
+      },
+      {
+        $lookup: {
+          from: "classes",
+          localField: "classId",
+          foreignField: "_id",
+          as: "classDoc"
+        }
+      },
+      {
+        $addFields: {
+          studentInfo: { $arrayElemAt: ["$studentDoc", 0] },
+          classInfo: { $arrayElemAt: ["$classDoc", 0] }
+        }
+      }
+    ];
+
+    const fullAPlusStudents = await Mark.aggregate(pipeline);
+
+    const getDisplayName = (s) => {
+      const cls = s.classInfo;
+      if (cls && typeof cls === "object") {
+        if (cls.name && cls.section) return `${cls.name}-${cls.section}`;
+        if (cls.displayName) return cls.displayName;
+        if (cls.name) return cls.name;
+      }
+      const stCls = s.studentInfo?.classId;
+      if (stCls && typeof stCls === "object") {
+        if (stCls.name && stCls.section) return `${stCls.name}-${stCls.section}`;
+        if (stCls.displayName) return stCls.displayName;
+        if (stCls.name) return stCls.name;
+      }
+      if (s.className) {
+        if (s.section) return `${s.className}-${s.section}`;
+        return s.className;
+      }
+      return "-";
+    };
+
+    const response = {
       success: true,
       data: fullAPlusStudents.map((s) => ({
-        studentId: s.studentId?._id,
+        studentId: s.studentId,
         studentName: s.studentName,
         rollNumber: s.rollNumber,
         admissionNumber: s.admissionNo,
-        className: getClassDisplayName(s),
+        className: getDisplayName(s),
         totalMarks: s.totalMarks,
         totalMaxMarks: s.totalMaxMarks,
         percentage: s.percentage,
         rank: s.rank,
-        photoUrl: s.studentId?.photoUrl,
+        photoUrl: s.studentInfo?.photoUrl,
       })),
       total: fullAPlusStudents.length,
-    });
+    };
+
+    await setCache(cacheKey, response, 60);
+
+    res.json(response);
   } catch (error) {
     console.error("Error in getFullAPlusStudents:", error);
     res.status(500).json({ message: error.message });
@@ -702,49 +898,108 @@ exports.getNearFullAPlusStudents = async (req, res) => {
   try {
     const { examId, classId, academicYearId, missingSubject } = req.query;
 
-    const query = {};
-    if (examId) query.examId = examId;
-    if (classId) query.classId = classId;
-    if (academicYearId) query.academicYearId = academicYearId;
+    const cacheKey = `analytics:near-full-aplus:${examId || 'all'}:${classId || 'all'}:${academicYearId || 'all'}:${missingSubject || 'none'}`;
+    const cached = await getCache(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
 
-    const marks = await Mark.find(query)
-      .populate({
-        path: "studentId",
-        select: "fullName admissionNo rollNumber classId",
-        populate: { path: "classId", select: "name section displayName" },
-      })
-      .populate("classId", "name section displayName")
-      .sort({ percentage: -1 });
+    const matchStage = {};
+    if (examId && mongoose.Types.ObjectId.isValid(examId)) matchStage.examId = new mongoose.Types.ObjectId(examId);
+    else if (examId) matchStage.examId = examId;
 
-    const nearFullAPlus = marks.filter((mark) => {
-      const subjects = mark.subjects || [];
-      const totalSubjects = subjects.length;
-      if (totalSubjects === 0) return false;
-      
-      const aplusCount = subjects.filter((s) => s.grade === "A+").length;
-      
-      if (aplusCount !== totalSubjects - 1) return false;
+    if (classId && mongoose.Types.ObjectId.isValid(classId)) matchStage.classId = new mongoose.Types.ObjectId(classId);
+    else if (classId) matchStage.classId = classId;
 
-      if (missingSubject) {
-        const nonAPlusSubject = subjects.find((s) => s.grade !== "A+");
-        return nonAPlusSubject?.subjectName?.toLowerCase().includes(missingSubject.toLowerCase());
+    if (academicYearId && mongoose.Types.ObjectId.isValid(academicYearId)) matchStage.academicYearId = new mongoose.Types.ObjectId(academicYearId);
+    else if (academicYearId) matchStage.academicYearId = academicYearId;
+
+    const pipeline = [
+      { $match: matchStage },
+      {
+        $project: {
+          studentId: 1,
+          studentName: 1,
+          rollNumber: 1,
+          admissionNo: 1,
+          className: 1,
+          section: 1,
+          classId: 1,
+          totalMarks: 1,
+          totalMaxMarks: 1,
+          percentage: 1,
+          rank: 1,
+          subjects: 1,
+          totalSubjects: { $size: { $ifNull: ["$subjects", []] } },
+          aplusCount: {
+            $size: {
+              $filter: {
+                input: { $ifNull: ["$subjects", []] },
+                as: "sub",
+                cond: { $eq: ["$$sub.grade", "A+"] }
+              }
+            }
+          }
+        }
+      },
+      {
+        $match: {
+          totalSubjects: { $gt: 0 },
+          $expr: { $eq: ["$aplusCount", { $subtract: ["$totalSubjects", 1] }] }
+        }
+      },
+      { $sort: { percentage: -1 } },
+      {
+        $lookup: {
+          from: "classes",
+          localField: "classId",
+          foreignField: "_id",
+          as: "classDoc"
+        }
+      },
+      {
+        $addFields: {
+          classInfo: { $arrayElemAt: ["$classDoc", 0] }
+        }
       }
+    ];
 
-      return true;
-    });
+    const nearFullAPlus = await Mark.aggregate(pipeline);
 
-    res.json({
+    const getDisplayName = (s) => {
+      const cls = s.classInfo;
+      if (cls && typeof cls === "object") {
+        if (cls.name && cls.section) return `${cls.name}-${cls.section}`;
+        if (cls.displayName) return cls.displayName;
+        if (cls.name) return cls.name;
+      }
+      if (s.className) {
+        if (s.section) return `${s.className}-${s.section}`;
+        return s.className;
+      }
+      return "-";
+    };
+
+    let filtered = nearFullAPlus;
+    if (missingSubject) {
+      filtered = filtered.filter((s) => {
+        const nonAPlusSubject = (s.subjects || []).find((sub) => sub.grade !== "A+");
+        return nonAPlusSubject?.subjectName?.toLowerCase().includes(missingSubject.toLowerCase());
+      });
+    }
+
+    const response = {
       success: true,
-      data: nearFullAPlus.map((s) => {
+      data: filtered.map((s) => {
         const subjects = s.subjects || [];
         const nonAPlusSubject = subjects.find((sub) => sub.grade !== "A+");
-        const aplusCount = subjects.filter((sub) => sub.grade === "A+").length;
+        const aplusCount = s.aplusCount;
         
         return {
-          studentId: s.studentId?._id,
+          studentId: s.studentId,
           studentName: s.studentName,
           rollNumber: s.rollNumber,
-          className: getClassDisplayName(s),
+          className: getDisplayName(s),
           totalMarks: s.totalMarks,
           totalMaxMarks: s.totalMaxMarks,
           percentage: s.percentage,
@@ -756,8 +1011,12 @@ exports.getNearFullAPlusStudents = async (req, res) => {
           missingSubjectMarks: nonAPlusSubject?.totalScore,
         };
       }),
-      total: nearFullAPlus.length,
-    });
+      total: filtered.length,
+    };
+
+    await setCache(cacheKey, response, 60);
+
+    res.json(response);
   } catch (error) {
     console.error("Error in getNearFullAPlusStudents:", error);
     res.status(500).json({ message: error.message });
@@ -770,12 +1029,10 @@ exports.getTopPerformingClasses = async (req, res) => {
   try {
     const { examId, academicYearId, limit = 10 } = req.query;
 
-    // Build match stage
     const matchStage = {};
     if (examId) matchStage.examId = require('mongoose').Types.ObjectId.createFromHexString(examId);
     if (academicYearId) matchStage.academicYearId = require('mongoose').Types.ObjectId.createFromHexString(academicYearId);
 
-    // Single aggregate instead of N Mark.find() calls in a loop
     const [classStats, classes] = await Promise.all([
       Mark.aggregate([
         { $match: matchStage },
@@ -835,12 +1092,7 @@ exports.getPerformanceAnalytics = async (req, res) => {
       return res.json({
         success: true,
         data: {
-          overall: {
-            totalMarks: 0,
-            totalMaxMarks: 0,
-            overallPercentage: 0,
-            totalStudents: 0,
-          },
+          overall: { totalMarks: 0, totalMaxMarks: 0, overallPercentage: 0, totalStudents: 0 },
           subjectPerformance: {},
           gradeDistribution: {},
           topPerformers: [],
@@ -970,10 +1222,7 @@ async function getAttendanceEntryProgress(targetAcademicYear, classId = null) {
     },
     {
       $group: {
-        _id: {
-          classId: '$classId',
-          month: '$month'
-        },
+        _id: { classId: '$classId', month: '$month' },
         count: { $sum: 1 },
         totalWorkingDays: { $max: '$totalWorkingDays' }
       }
@@ -1109,7 +1358,6 @@ exports.getAttendanceAnalytics = async (req, res) => {
       query.month = targetMonth;
     }
 
-    // Fetch all matching attendance records
     const records = await Attendance.find(query)
       .populate({
         path: "studentId",
@@ -1121,29 +1369,18 @@ exports.getAttendanceAnalytics = async (req, res) => {
     const monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const monthFullNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-    // If no records found, return clean empty response
     if (!records || records.length === 0) {
       return res.json({
         success: true,
         data: {
           academicYear: targetAcademicYear ? {
-            id: targetAcademicYear._id,
-            name: targetAcademicYear.name,
-            year: targetAcademicYear.year
+            id: targetAcademicYear._id, name: targetAcademicYear.name, year: targetAcademicYear.year
           } : null,
           selectedMonth: targetMonth,
           summary: {
-            totalStudents: 0,
-            totalWorkingDays: 0,
-            totalPresentDays: 0,
-            totalAbsentDays: 0,
-            averagePercentage: 0,
-            goodStandingCount: 0,
-            goodStandingPercentage: 0,
-            needsAttentionCount: 0,
-            criticalCount: 0,
-            perfectCount: 0,
-            perfectPercentage: 0
+            totalStudents: 0, totalWorkingDays: 0, totalPresentDays: 0, totalAbsentDays: 0,
+            averagePercentage: 0, goodStandingCount: 0, goodStandingPercentage: 0,
+            needsAttentionCount: 0, criticalCount: 0, perfectCount: 0, perfectPercentage: 0
           },
           distribution: {
             excellent: { category: 'Excellent', range: '≥ 90%', min: 90, max: 100, count: 0, percentage: 0, color: '#10B981' },
@@ -1159,12 +1396,7 @@ exports.getAttendanceAnalytics = async (req, res) => {
           },
           monthlyTrends: [],
           classWiseComparison: [],
-          breakdown: {
-            needsAttention: [],
-            perfectAttendance: [],
-            topAttendance: [],
-            allStudents: []
-          },
+          breakdown: { needsAttention: [], perfectAttendance: [], topAttendance: [], allStudents: [] },
           entryProgress: await getAttendanceEntryProgress(targetAcademicYear, classId)
         },
         monthlyAttendance: [],
@@ -1172,7 +1404,6 @@ exports.getAttendanceAnalytics = async (req, res) => {
       });
     }
 
-    // 1. Group records by student to compute per-student cumulative stats (or month-specific stats)
     const studentMap = new Map();
     const monthlyMap = new Map();
     const classMap = new Map();
@@ -1185,7 +1416,6 @@ exports.getAttendanceAnalytics = async (req, res) => {
       const presentDays = rec.presentDays || 0;
       const absentDays = rec.absentDays || 0;
 
-      // Student aggregation
       if (!studentMap.has(sId)) {
         const studentInfo = rec.studentId && typeof rec.studentId === 'object' ? rec.studentId : {};
         const classInfo = rec.classId && typeof rec.classId === 'object' ? rec.classId : {};
@@ -1215,42 +1445,29 @@ exports.getAttendanceAnalytics = async (req, res) => {
       st.absentDays += absentDays;
       st.monthsCount += 1;
 
-      // Monthly aggregation
       const mKey = `${rec.year || 0}-${rec.month || 0}`;
       if (!monthlyMap.has(mKey)) {
         monthlyMap.set(mKey, {
-          year: rec.year,
-          month: rec.month,
+          year: rec.year, month: rec.month,
           monthName: monthNames[rec.month] || `M${rec.month}`,
           monthFullName: monthFullNames[rec.month] || `Month ${rec.month}`,
-          workingDays: workingDays,
-          totalPresent: 0,
-          totalPossible: 0,
-          recordsCount: 0
+          workingDays: workingDays, totalPresent: 0, totalPossible: 0, recordsCount: 0
         });
       }
       const mData = monthlyMap.get(mKey);
       mData.totalPresent += presentDays;
       mData.totalPossible += workingDays;
       mData.recordsCount += 1;
-      if (workingDays > mData.workingDays) {
-        mData.workingDays = workingDays;
-      }
+      if (workingDays > mData.workingDays) mData.workingDays = workingDays;
 
-      // Class aggregation
       const cId = (rec.classId && typeof rec.classId === 'object' ? rec.classId._id : rec.classId)?.toString();
       if (cId) {
         if (!classMap.has(cId)) {
           const classInfo = rec.classId && typeof rec.classId === 'object' ? rec.classId : {};
           const cName = classInfo.displayName || `${classInfo.name || ''} ${classInfo.section || ''}`.trim() || 'Class';
           classMap.set(cId, {
-            classId: cId,
-            className: cName,
-            studentSet: new Set(),
-            totalPresent: 0,
-            totalPossible: 0,
-            goodStandingCount: 0,
-            criticalCount: 0
+            classId: cId, className: cName, studentSet: new Set(),
+            totalPresent: 0, totalPossible: 0, goodStandingCount: 0, criticalCount: 0
           });
         }
         const cData = classMap.get(cId);
@@ -1260,7 +1477,6 @@ exports.getAttendanceAnalytics = async (req, res) => {
       }
     });
 
-    // 2. Finalize per-student percentages
     const studentList = Array.from(studentMap.values()).map(st => {
       const pct = st.totalWorkingDays > 0 ? (st.presentDays / st.totalWorkingDays) * 100 : 0;
       let status = 'Good';
@@ -1269,16 +1485,11 @@ exports.getAttendanceAnalytics = async (req, res) => {
       else if (pct >= 60) status = 'Average';
       else status = 'Critical';
 
-      return {
-        ...st,
-        percentage: parseFloat(pct.toFixed(1)),
-        status
-      };
+      return { ...st, percentage: parseFloat(pct.toFixed(1)), status };
     });
 
     const totalStudents = studentList.length;
 
-    // 3. Overall Summary
     let totalWorkingDaysSum = 0;
     let totalPresentDaysSum = 0;
     let goodStandingCount = 0;
@@ -1302,7 +1513,6 @@ exports.getAttendanceAnalytics = async (req, res) => {
       else if (st.percentage >= 60) averageCount++;
       else criticalCount++;
 
-      // Update class good/critical
       if (st.classId && classMap.has(st.classId)) {
         const cData = classMap.get(st.classId);
         if (st.percentage >= 75) cData.goodStandingCount++;
@@ -1318,48 +1528,11 @@ exports.getAttendanceAnalytics = async (req, res) => {
       ? Math.round(totalWorkingDaysSum / totalStudents)
       : 0;
 
-    // 4. Category Distribution
     const distributionList = [
-      {
-        category: 'Excellent',
-        label: 'Excellent (≥ 90%)',
-        range: '≥ 90%',
-        min: 90,
-        max: 100,
-        count: excellentCount,
-        percentage: totalStudents > 0 ? parseFloat(((excellentCount / totalStudents) * 100).toFixed(1)) : 0,
-        color: '#10B981'
-      },
-      {
-        category: 'Good',
-        label: 'Good (75% - 89%)',
-        range: '75% - 89%',
-        min: 75,
-        max: 89.9,
-        count: goodCount,
-        percentage: totalStudents > 0 ? parseFloat(((goodCount / totalStudents) * 100).toFixed(1)) : 0,
-        color: '#059669'
-      },
-      {
-        category: 'Average',
-        label: 'Average (60% - 74%)',
-        range: '60% - 74%',
-        min: 60,
-        max: 74.9,
-        count: averageCount,
-        percentage: totalStudents > 0 ? parseFloat(((averageCount / totalStudents) * 100).toFixed(1)) : 0,
-        color: '#F59E0B'
-      },
-      {
-        category: 'Critical',
-        label: 'Needs Attention (< 60%)',
-        range: '< 60%',
-        min: 0,
-        max: 59.9,
-        count: criticalCount,
-        percentage: totalStudents > 0 ? parseFloat(((criticalCount / totalStudents) * 100).toFixed(1)) : 0,
-        color: '#EF4444'
-      }
+      { category: 'Excellent', label: 'Excellent (≥ 90%)', range: '≥ 90%', min: 90, max: 100, count: excellentCount, percentage: totalStudents > 0 ? parseFloat(((excellentCount / totalStudents) * 100).toFixed(1)) : 0, color: '#10B981' },
+      { category: 'Good', label: 'Good (75% - 89%)', range: '75% - 89%', min: 75, max: 89.9, count: goodCount, percentage: totalStudents > 0 ? parseFloat(((goodCount / totalStudents) * 100).toFixed(1)) : 0, color: '#059669' },
+      { category: 'Average', label: 'Average (60% - 74%)', range: '60% - 74%', min: 60, max: 74.9, count: averageCount, percentage: totalStudents > 0 ? parseFloat(((averageCount / totalStudents) * 100).toFixed(1)) : 0, color: '#F59E0B' },
+      { category: 'Critical', label: 'Needs Attention (< 60%)', range: '< 60%', min: 0, max: 59.9, count: criticalCount, percentage: totalStudents > 0 ? parseFloat(((criticalCount / totalStudents) * 100).toFixed(1)) : 0, color: '#EF4444' }
     ];
 
     const distribution = {
@@ -1370,21 +1543,14 @@ exports.getAttendanceAnalytics = async (req, res) => {
       list: distributionList
     };
 
-    // 5. Monthly Trends (academic year order: Jun to Mar)
     const academicMonthOrder = [6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5];
     const monthlyTrends = Array.from(monthlyMap.values())
       .map(m => {
         const pct = m.totalPossible > 0 ? (m.totalPresent / m.totalPossible) * 100 : 0;
         return {
-          year: m.year,
-          month: m.month,
-          monthName: m.monthName,
-          monthFullName: m.monthFullName,
-          workingDays: m.workingDays,
-          totalWorkingDays: m.workingDays,
-          totalStudents: m.recordsCount,
-          totalPresent: m.totalPresent,
-          totalPossible: m.totalPossible,
+          year: m.year, month: m.month, monthName: m.monthName, monthFullName: m.monthFullName,
+          workingDays: m.workingDays, totalWorkingDays: m.workingDays,
+          totalStudents: m.recordsCount, totalPresent: m.totalPresent, totalPossible: m.totalPossible,
           averagePercentage: parseFloat(pct.toFixed(1))
         };
       })
@@ -1396,7 +1562,6 @@ exports.getAttendanceAnalytics = async (req, res) => {
         return a.month - b.month;
       });
 
-    // 8. Attendance Entry Progress (like Mark Entry Progress table)
     const entryProgress = await getAttendanceEntryProgress(targetAcademicYear, classId);
     const entryClassMap = new Map();
     if (entryProgress && entryProgress.classes) {
@@ -1405,14 +1570,12 @@ exports.getAttendanceAnalytics = async (req, res) => {
       });
     }
 
-    // 6. Class-wise Comparison
     const classWiseComparison = Array.from(classMap.values())
       .map(c => {
         const pct = c.totalPossible > 0 ? (c.totalPresent / c.totalPossible) * 100 : 0;
         const entryCls = entryClassMap.get(c.classId?.toString());
         return {
-          classId: c.classId,
-          className: c.className,
+          classId: c.classId, className: c.className,
           teacherShortName: entryCls?.teacherShortName || '-',
           classTeacherName: entryCls?.classTeacherName || '',
           totalStudents: c.studentSet.size,
@@ -1423,7 +1586,6 @@ exports.getAttendanceAnalytics = async (req, res) => {
       })
       .sort((a, b) => b.averagePercentage - a.averagePercentage);
 
-    // 7. Student Breakdown lists
     const needsAttention = studentList
       .filter(st => st.percentage < 75)
       .sort((a, b) => a.percentage - b.percentage);
@@ -1463,9 +1625,7 @@ exports.getAttendanceAnalytics = async (req, res) => {
       success: true,
       data: {
         academicYear: targetAcademicYear ? {
-          id: targetAcademicYear._id,
-          name: targetAcademicYear.name,
-          year: targetAcademicYear.year
+          id: targetAcademicYear._id, name: targetAcademicYear.name, year: targetAcademicYear.year
         } : null,
         selectedMonth: targetMonth,
         summary,
@@ -1473,14 +1633,8 @@ exports.getAttendanceAnalytics = async (req, res) => {
         monthlyTrends,
         classWiseComparison,
         entryProgress,
-        breakdown: {
-          needsAttention,
-          perfectAttendance,
-          topAttendance,
-          allStudents
-        }
+        breakdown: { needsAttention, perfectAttendance, topAttendance, allStudents }
       },
-      // Backward compatibility for legacy dashboard charts
       monthlyAttendance: monthlyTrends.map(t => ({
         month: t.monthName,
         attendancePercentage: t.averagePercentage,
@@ -1512,7 +1666,6 @@ exports.getStudentProgressTrend = async (req, res) => {
 
     const progressTrend = marks.map((mark) => {
       let percentage = mark.percentage || 0;
-      
       return {
         examId: mark.examId?._id,
         examName: mark.examId?.name,
@@ -1539,8 +1692,7 @@ exports.getStudentProgressTrend = async (req, res) => {
 
     const average =
       progressTrend.length > 0
-        ? progressTrend.reduce((sum, p) => sum + p.percentage, 0) /
-          progressTrend.length
+        ? progressTrend.reduce((sum, p) => sum + p.percentage, 0) / progressTrend.length
         : 0;
 
     res.json({
@@ -1559,14 +1711,8 @@ exports.generateReportCard = async (req, res) => {
   try {
     const { studentId, academicYearId } = req.params;
 
-    const student = await Student.findById(studentId).populate(
-      "classId",
-      "name section displayName",
-    );
-
-    if (!student) {
-      return res.status(404).json({ message: "Student not found" });
-    }
+    const student = await Student.findById(studentId).populate("classId", "name section displayName");
+    if (!student) return res.status(404).json({ message: "Student not found" });
 
     let academicYear = null;
     if (academicYearId) {
@@ -1582,14 +1728,8 @@ exports.generateReportCard = async (req, res) => {
 
     const examResults = [];
     for (const exam of exams) {
-      const marks = await Mark.findOne({
-        studentId,
-        examId: exam._id,
-      });
-
-      if (marks) {
-        examResults.push({ exam, marks });
-      }
+      const marks = await Mark.findOne({ studentId, examId: exam._id });
+      if (marks) examResults.push({ exam, marks });
     }
 
     const attendance = await Attendance.aggregate([
@@ -1598,21 +1738,13 @@ exports.generateReportCard = async (req, res) => {
         $group: {
           _id: null,
           totalDays: { $sum: 1 },
-          presentDays: {
-            $sum: { $cond: [{ $eq: ["$status", "present"] }, 1, 0] },
-          },
-          absentDays: {
-            $sum: { $cond: [{ $eq: ["$status", "absent"] }, 1, 0] },
-          },
+          presentDays: { $sum: { $cond: [{ $eq: ["$status", "present"] }, 1, 0] } },
+          absentDays: { $sum: { $cond: [{ $eq: ["$status", "absent"] }, 1, 0] } },
         },
       },
     ]);
 
-    const attendanceStats = attendance[0] || {
-      totalDays: 0,
-      presentDays: 0,
-      absentDays: 0,
-    };
+    const attendanceStats = attendance[0] || { totalDays: 0, presentDays: 0, absentDays: 0 };
 
     const reportData = {
       schoolName: "PPM HSS KOTTUKKARA",
@@ -1622,19 +1754,14 @@ exports.generateReportCard = async (req, res) => {
         name: student.fullName,
         admissionNo: student.admissionNo,
         rollNumber: student.rollNumber,
-        class:
-          student.classId?.displayName ||
-          `${student.className || ""} ${student.division || ""}`.trim(),
-        dob: student.dateOfBirth
-          ? new Date(student.dateOfBirth).toLocaleDateString()
-          : "",
+        class: student.classId?.displayName || `${student.className || ""} ${student.division || ""}`.trim(),
+        dob: student.dateOfBirth ? new Date(student.dateOfBirth).toLocaleDateString() : "",
         gender: student.gender,
         caste: student.casteName,
         religion: student.religion,
         fatherName: student.fatherFullName,
         motherName: student.motherFullName,
-        address:
-          `${student.houseName || ""} ${student.streetName || ""} ${student.postOffice || ""}`.trim(),
+        address: `${student.houseName || ""} ${student.streetName || ""} ${student.postOffice || ""}`.trim(),
         phone: student.phoneNumber,
         photoUrl: student.photoUrl,
       },
@@ -1642,13 +1769,8 @@ exports.generateReportCard = async (req, res) => {
         totalDays: attendanceStats.totalDays,
         presentDays: attendanceStats.presentDays,
         absentDays: attendanceStats.absentDays,
-        percentage:
-          attendanceStats.totalDays > 0
-            ? (
-                (attendanceStats.presentDays / attendanceStats.totalDays) *
-                100
-              ).toFixed(1)
-            : 0,
+        percentage: attendanceStats.totalDays > 0
+          ? ((attendanceStats.presentDays / attendanceStats.totalDays) * 100).toFixed(1) : 0,
       },
       exams: [],
     };
@@ -1678,10 +1800,7 @@ exports.generateReportCard = async (req, res) => {
       reportData.exams.push(examData);
     }
 
-    res.json({
-      success: true,
-      data: reportData,
-    });
+    res.json({ success: true, data: reportData });
   } catch (error) {
     console.error("Report card generation error:", error);
     res.status(500).json({ message: error.message });
@@ -1694,16 +1813,8 @@ exports.generateClassReportCards = async (req, res) => {
   try {
     const { classId, academicYearId } = req.params;
 
-    const students = await Student.find({ classId, status: 'active' }).sort({
-      rollNumber: 1,
-      fullName: 1,
-    });
-
-    if (students.length === 0) {
-      return res
-        .status(404)
-        .json({ message: "No students found in this class" });
-    }
+    const students = await Student.find({ classId, status: 'active' }).sort({ rollNumber: 1, fullName: 1 });
+    if (students.length === 0) return res.status(404).json({ message: "No students found in this class" });
 
     const academicYear = await AcademicYear.findById(academicYearId);
     const classItem = await Class.findById(classId);
@@ -1711,20 +1822,11 @@ exports.generateClassReportCards = async (req, res) => {
     const allReportData = [];
 
     for (const student of students) {
-      const exams = await Exam.find({
-        academicYearId,
-        classIds: classId,
-      }).sort({ term: 1 });
-
+      const exams = await Exam.find({ academicYearId, classIds: classId }).sort({ term: 1 });
       const examResults = [];
       for (const exam of exams) {
-        const marks = await Mark.findOne({
-          studentId: student._id,
-          examId: exam._id,
-        });
-        if (marks) {
-          examResults.push({ exam, marks });
-        }
+        const marks = await Mark.findOne({ studentId: student._id, examId: exam._id });
+        if (marks) examResults.push({ exam, marks });
       }
 
       const attendance = await Attendance.aggregate([
@@ -1733,9 +1835,7 @@ exports.generateClassReportCards = async (req, res) => {
           $group: {
             _id: null,
             totalDays: { $sum: 1 },
-            presentDays: {
-              $sum: { $cond: [{ $eq: ["$status", "present"] }, 1, 0] },
-            },
+            presentDays: { $sum: { $cond: [{ $eq: ["$status", "present"] }, 1, 0] } },
           },
         },
       ]);
@@ -1751,13 +1851,8 @@ exports.generateClassReportCards = async (req, res) => {
         attendance: {
           totalDays: attendanceStats.totalDays,
           presentDays: attendanceStats.presentDays,
-          percentage:
-            attendanceStats.totalDays > 0
-              ? (
-                  (attendanceStats.presentDays / attendanceStats.totalDays) *
-                  100
-                ).toFixed(1)
-              : 0,
+          percentage: attendanceStats.totalDays > 0
+            ? ((attendanceStats.presentDays / attendanceStats.totalDays) * 100).toFixed(1) : 0,
         },
       };
 
@@ -1806,34 +1901,20 @@ exports.generateReportCardPDF = async (req, res) => {
   try {
     const { studentId, academicYearId } = req.params;
 
-    // First get the report data
     const student = await Student.findById(studentId).populate("classId", "name section displayName");
-    if (!student) {
-      return res.status(404).json({ message: "Student not found" });
-    }
+    if (!student) return res.status(404).json({ message: "Student not found" });
 
     let academicYear = null;
     if (academicYearId && academicYearId.match(/^[0-9a-fA-F]{24}$/)) {
       academicYear = await AcademicYear.findById(academicYearId);
     }
-    if (!academicYear) {
-      academicYear = await AcademicYear.findOne({ isCurrent: true });
-    }
+    if (!academicYear) academicYear = await AcademicYear.findOne({ isCurrent: true });
 
-    const exams = await Exam.find({
-      academicYearId: academicYear?._id,
-      classIds: student.classId,
-    }).sort({ term: 1 });
-
+    const exams = await Exam.find({ academicYearId: academicYear?._id, classIds: student.classId }).sort({ term: 1 });
     const examResults = [];
     for (const exam of exams) {
-      const marks = await Mark.findOne({
-        studentId,
-        examId: exam._id,
-      });
-      if (marks) {
-        examResults.push({ exam, marks });
-      }
+      const marks = await Mark.findOne({ studentId, examId: exam._id });
+      if (marks) examResults.push({ exam, marks });
     }
 
     const attendance = await Attendance.aggregate([
@@ -1849,23 +1930,17 @@ exports.generateReportCardPDF = async (req, res) => {
 
     const attendanceStats = attendance[0] || { totalDays: 0, presentDays: 0 };
 
-    // For now, return JSON. PDF generation can be added later
     res.json({
       success: true,
-      message: "PDF generation not implemented yet. Use /api/analytics/report-card/:studentId for JSON data.",
+      message: "PDF generation not implemented yet.",
       data: {
-        student: {
-          name: student.fullName,
-          admissionNo: student.admissionNo,
-          rollNumber: student.rollNumber,
-        },
+        student: { name: student.fullName, admissionNo: student.admissionNo, rollNumber: student.rollNumber },
         academicYear: academicYear?.year,
         attendance: {
           totalDays: attendanceStats.totalDays,
           presentDays: attendanceStats.presentDays,
-          percentage: attendanceStats.totalDays > 0 
-            ? ((attendanceStats.presentDays / attendanceStats.totalDays) * 100).toFixed(1) 
-            : 0,
+          percentage: attendanceStats.totalDays > 0
+            ? ((attendanceStats.presentDays / attendanceStats.totalDays) * 100).toFixed(1) : 0,
         },
         exams: examResults.map(({ exam, marks }) => ({
           examName: exam.displayName || exam.name,
@@ -1883,7 +1958,6 @@ exports.generateReportCardPDF = async (req, res) => {
 exports.generateClassReportCardsPDF = async (req, res) => {
   try {
     const { classId, academicYearId } = req.params;
-
     const students = await Student.find({ classId, status: 'active' }).limit(5);
     const classItem = await Class.findById(classId);
     const academicYear = await AcademicYear.findById(academicYearId);
@@ -1928,11 +2002,7 @@ exports.getRecentActivities = async (req, res) => {
     res.json({
       success: true,
       data: activities,
-      pagination: {
-        total,
-        limit: parseInt(limit),
-        returned: activities.length
-      }
+      pagination: { total, limit: parseInt(limit), returned: activities.length }
     });
   } catch (error) {
     console.error("Error in getRecentActivities:", error);
@@ -1955,9 +2025,7 @@ exports.subscribeDashboard = async (req, res) => {
     const totalStaff = await Staff.countDocuments({ isActive: true });
     const totalClasses = await Class.countDocuments({ isActive: true });
     const currentYear = await AcademicYear.findOne({ isCurrent: true });
-    const currentExams = await Exam.countDocuments({
-      academicYearId: currentYear?._id,
-    });
+    const currentExams = await Exam.countDocuments({ academicYearId: currentYear?._id });
 
     res.json({
       success: true,

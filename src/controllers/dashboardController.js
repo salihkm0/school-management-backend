@@ -14,141 +14,176 @@ const Notification = require('../models/Notification');
 const { RecentActivity } = require('../models/RecentActivity');
 const StaffAssignment = require('../models/StaffAssignment');
 const Subject = require('../models/Subject');
+const mongoose = require('mongoose');
 const { broadcastToRole, broadcastToUser } = require('../config/socket');
+const { getCache, setCache } = require('../config/redis');
 
 // ==================== ADMIN DASHBOARD ====================
 
 exports.getAdminDashboard = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const currentYear = await AcademicYear.findOne({ isCurrent: true });
-    
-    // Basic Stats
-    const totalStudents = await Student.countDocuments({ status: 'active' });
-    const totalStaff = await Staff.countDocuments({ isActive: true });
-    const totalClasses = await Class.countDocuments({ isActive: true });
-    const totalParents = await Parent.countDocuments({ isActive: true });
-    
-    // Exam Stats
-    const currentExams = await Exam.countDocuments({
-      academicYearId: currentYear?._id,
-      isActive: true
-    });
-    
-    const publishedExams = await Exam.countDocuments({
-      academicYearId: currentYear?._id,
-      resultsPublished: true
-    });
-    
-    // Today's Attendance
+    const currentYear = await AcademicYear.findOne({ isCurrent: true }).lean();
+    const currentYearId = currentYear?._id;
+
+    // 1. Check Redis Cache for instantaneous response
+    const cacheKey = `dashboard:admin:${currentYearId ? currentYearId.toString() : 'current'}`;
+    const cachedDashboard = await getCache(cacheKey);
+    if (cachedDashboard) {
+      return res.json({
+        success: true,
+        data: cachedDashboard
+      });
+    }
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    const attendanceRecords = await Attendance.find({
-      createdAt: { $gte: today, $lt: tomorrow }
-    });
-    
-    const attendanceToday = attendanceRecords.reduce((sum, a) => sum + a.presentDays, 0);
-    const totalAttendanceToday = attendanceRecords.reduce((sum, a) => sum + a.totalWorkingDays, 0);
-    
+
+    const currentYearStart = currentYear?.startDate || new Date(new Date().getFullYear(), 0, 1);
+
+    // 2. Parallelize all independent database operations
+    const [
+      totalStudents,
+      totalStaff,
+      totalClasses,
+      totalParents,
+      currentExams,
+      publishedExams,
+      attendanceRecords,
+      recentResults,
+      studentDemographicsAgg,
+      monthlyEnrollment,
+      recentActivities,
+      pendingExams,
+      pendingDuties,
+      upcomingEvents,
+      examPerformance,
+      dutyDistribution,
+      topClasses,
+      subjectPerformance,
+      classDistribution,
+      gradeDistribution,
+      performanceTrends
+    ] = await Promise.all([
+      Student.countDocuments({ status: 'active' }),
+      Staff.countDocuments({ isActive: true }),
+      Class.countDocuments({ isActive: true }),
+      Parent.countDocuments({ isActive: true }),
+      Exam.countDocuments({
+        academicYearId: currentYearId,
+        isActive: true
+      }),
+      Exam.countDocuments({
+        academicYearId: currentYearId,
+        resultsPublished: true
+      }),
+      Attendance.find({
+        createdAt: { $gte: today, $lt: tomorrow }
+      }).lean(),
+      ExamResult.find({ isPublished: true })
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .lean(),
+      Student.aggregate([
+        { $match: { status: "active" } },
+        { $group: {
+            _id: {
+              className: { $ifNull: ["$className", "Unknown"] },
+              category: { $ifNull: ["$category", "General"] },
+              gender: { $ifNull: ["$gender", "Unknown"] }
+            },
+            count: { $sum: 1 }
+        } }
+      ]),
+      Student.aggregate([
+        { 
+          $match: { 
+            status: "active",
+            createdAt: { $gte: currentYearStart }
+          } 
+        },
+        {
+          $group: {
+            _id: { $month: "$createdAt" },
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { _id: 1 } }
+      ]),
+      RecentActivity.find()
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .populate('performedBy', 'name role')
+        .lean(),
+      Exam.countDocuments({ 
+        overallStatus: { $in: ['draft', 'submitted'] },
+        isActive: true,
+        academicYearId: currentYearId
+      }),
+      StaffDuty.countDocuments({ status: 'assigned' }),
+      getUpcomingEvents(7),
+      getExamPerformanceStats(currentYearId),
+      getDutyDistributionStats(),
+      getTopPerformingClasses(currentYearId, 5),
+      getSubjectPerformanceStats(currentYearId),
+      getClassDistributionStats(currentYearId),
+      getGradeDistributionStats(currentYearId),
+      getPerformanceTrends(currentYearId)
+    ]);
+
+    // Attendance calculation
+    const attendanceToday = attendanceRecords.reduce((sum, a) => sum + (a.presentDays || 0), 0);
+    const totalAttendanceToday = attendanceRecords.reduce((sum, a) => sum + (a.totalWorkingDays || 0), 0);
     const attendancePercentage = totalAttendanceToday > 0 
       ? (attendanceToday / totalAttendanceToday) * 100 
       : 0;
-    
-    // Recent Exam Results for A+ count
-    const recentResults = await ExamResult.find({ isPublished: true })
-      .sort({ createdAt: -1 })
-      .limit(100);
-    
+
+    // Full A+ count from recent results
     const fullAPlusCount = recentResults.filter((r) => {
       return r.grade === "A+" || (r.percentage >= 90);
     }).length;
-    
-    // Gender Distribution
-    const genderDistribution = await Student.aggregate([
-      { $match: { status: "active" } },
-      { $group: { _id: "$gender", count: { $sum: 1 } } }
-    ]);
-    
-    const maleCount = genderDistribution.find(g => g._id === "M")?.count || 0;
-    const femaleCount = genderDistribution.find(g => g._id === "F")?.count || 0;
-    const otherCount = genderDistribution.find(g => g._id === "Other")?.count || 0;
-    
-    // Category Distribution with Gender Breakdown
-    const categoryAgg = await Student.aggregate([
-      { $match: { status: "active", category: { $exists: true, $ne: "" } } },
-      { $group: { 
-          _id: { category: "$category", gender: "$gender" }, 
-          count: { $sum: 1 } 
-      } }
-    ]);
-    
+
+    // Process consolidated demographics in memory (<1ms)
+    let maleCount = 0;
+    let femaleCount = 0;
+    let otherCount = 0;
     const categoryMap = {};
-    for (const item of categoryAgg) {
-      const cat = item._id.category || 'General';
-      const gender = item._id.gender || 'Unknown';
-      if (!categoryMap[cat]) {
-        categoryMap[cat] = { _id: cat, count: 0, male: 0, female: 0, other: 0 };
-      }
-      categoryMap[cat].count += item.count;
-      if (gender === 'M') categoryMap[cat].male += item.count;
-      else if (gender === 'F') categoryMap[cat].female += item.count;
-      else categoryMap[cat].other += item.count;
-    }
-    const categoryDistribution = Object.values(categoryMap).sort((a, b) => b.count - a.count);
-
-    // Standard-wise Gender Distribution
-    const standardGenderDistribution = await Student.aggregate([
-      { $match: { status: "active" } },
-      { $group: {
-          _id: { className: "$className", gender: "$gender" },
-          count: { $sum: 1 }
-      } }
-    ]);
-    
     const standardGenderMap = {};
-    for (const item of standardGenderDistribution) {
-      const className = item._id.className || 'Unknown';
-      const gender = item._id.gender || 'Unknown';
-      if (!standardGenderMap[className]) {
-        standardGenderMap[className] = { className, male: 0, female: 0, other: 0, total: 0 };
-      }
-      if (gender === 'M') standardGenderMap[className].male = item.count;
-      else if (gender === 'F') standardGenderMap[className].female = item.count;
-      else standardGenderMap[className].other = item.count;
-      standardGenderMap[className].total += item.count;
-    }
-    const standardGender = Object.values(standardGenderMap).sort((a, b) => {
-      const aNum = parseInt(a.className);
-      const bNum = parseInt(b.className);
-      if (!isNaN(aNum) && !isNaN(bNum)) {
-        return aNum - bNum;
-      }
-      return a.className.localeCompare(b.className, undefined, { numeric: true, sensitivity: 'base' });
-    });
-
-    // Standard-wise Category & Gender Distribution
-    const standardCategoryDistribution = await Student.aggregate([
-      { $match: { status: "active" } },
-      { $group: {
-          _id: { 
-            className: "$className", 
-            category: "$category", 
-            gender: "$gender" 
-          },
-          count: { $sum: 1 }
-      } }
-    ]);
-
     const standardCategoryMap = {};
-    for (const item of standardCategoryDistribution) {
+
+    for (const item of studentDemographicsAgg) {
       const className = item._id.className || 'Unknown';
       const category = item._id.category || 'General';
       const gender = item._id.gender || 'Unknown';
       const count = item.count || 0;
 
+      // Gender totals
+      if (gender === 'M') maleCount += count;
+      else if (gender === 'F') femaleCount += count;
+      else otherCount += count;
+
+      // Category breakdown
+      if (category) {
+        if (!categoryMap[category]) {
+          categoryMap[category] = { _id: category, count: 0, male: 0, female: 0, other: 0 };
+        }
+        categoryMap[category].count += count;
+        if (gender === 'M') categoryMap[category].male += count;
+        else if (gender === 'F') categoryMap[category].female += count;
+        else categoryMap[category].other += count;
+      }
+
+      // Standard-wise gender
+      if (!standardGenderMap[className]) {
+        standardGenderMap[className] = { className, male: 0, female: 0, other: 0, total: 0 };
+      }
+      if (gender === 'M') standardGenderMap[className].male += count;
+      else if (gender === 'F') standardGenderMap[className].female += count;
+      else standardGenderMap[className].other += count;
+      standardGenderMap[className].total += count;
+
+      // Standard-wise category
       if (!standardCategoryMap[className]) {
         standardCategoryMap[className] = { 
           className, 
@@ -160,62 +195,48 @@ exports.getAdminDashboard = async (req, res) => {
           total: 0 
         };
       }
-      const categoryLabel = category || 'General';
+      const catLabel = category || 'General';
+      standardCategoryMap[className].categories[catLabel] = (standardCategoryMap[className].categories[catLabel] || 0) + count;
 
-      // Keep legacy count in categories map
-      standardCategoryMap[className].categories[categoryLabel] = (standardCategoryMap[className].categories[categoryLabel] || 0) + count;
-      
-      // Detailed breakdown per category
-      if (!standardCategoryMap[className].categoryDetails[categoryLabel]) {
-        standardCategoryMap[className].categoryDetails[categoryLabel] = {
+      if (!standardCategoryMap[className].categoryDetails[catLabel]) {
+        standardCategoryMap[className].categoryDetails[catLabel] = {
           total: 0,
           male: 0,
           female: 0,
           other: 0
         };
       }
-
-      standardCategoryMap[className].categoryDetails[categoryLabel].total += count;
+      standardCategoryMap[className].categoryDetails[catLabel].total += count;
       if (gender === 'M') {
-        standardCategoryMap[className].categoryDetails[categoryLabel].male += count;
+        standardCategoryMap[className].categoryDetails[catLabel].male += count;
         standardCategoryMap[className].male += count;
       } else if (gender === 'F') {
-        standardCategoryMap[className].categoryDetails[categoryLabel].female += count;
+        standardCategoryMap[className].categoryDetails[catLabel].female += count;
         standardCategoryMap[className].female += count;
       } else {
-        standardCategoryMap[className].categoryDetails[categoryLabel].other += count;
+        standardCategoryMap[className].categoryDetails[catLabel].other += count;
         standardCategoryMap[className].other += count;
       }
-
       standardCategoryMap[className].total += count;
     }
+
+    const categoryDistribution = Object.values(categoryMap).sort((a, b) => b.count - a.count);
+
+    const standardGender = Object.values(standardGenderMap).sort((a, b) => {
+      const aNum = parseInt(a.className);
+      const bNum = parseInt(b.className);
+      if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+      return a.className.localeCompare(b.className, undefined, { numeric: true, sensitivity: 'base' });
+    });
+
     const standardCategory = Object.values(standardCategoryMap).sort((a, b) => {
       const aNum = parseInt(a.className);
       const bNum = parseInt(b.className);
-      if (!isNaN(aNum) && !isNaN(bNum)) {
-        return aNum - bNum;
-      }
+      if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
       return a.className.localeCompare(b.className, undefined, { numeric: true, sensitivity: 'base' });
     });
-    
-    // Monthly Enrollment Trend (current academic year)
-    const currentYearStart = currentYear?.startDate || new Date(new Date().getFullYear(), 0, 1);
-    const monthlyEnrollment = await Student.aggregate([
-      { 
-        $match: { 
-          status: "active",
-          createdAt: { $gte: currentYearStart }
-        } 
-      },
-      {
-        $group: {
-          _id: { $month: "$createdAt" },
-          count: { $sum: 1 }
-        }
-      },
-      { $sort: { _id: 1 } }
-    ]);
-    
+
+    // Monthly enrollment
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const enrollmentTrend = [];
     for (let i = 1; i <= 12; i++) {
@@ -225,13 +246,8 @@ exports.getAdminDashboard = async (req, res) => {
         count: found?.count || 0
       });
     }
-    
-    // Recent Activities - FIXED: Get proper recent activities with all fields
-    const recentActivities = await RecentActivity.find()
-      .sort({ createdAt: -1 })
-      .limit(10)
-      .populate('performedBy', 'name role');
-    
+
+    // Formatted activities
     const formattedActivities = recentActivities.map(a => ({
       id: a._id,
       title: a.title,
@@ -242,86 +258,56 @@ exports.getAdminDashboard = async (req, res) => {
       performedBy: a.performedBy?.name || a.performedByName,
       performedByRole: a.performedByRole
     }));
-    
-    // Default activities removed (no mock data)
-    
-    // Pending Tasks
-    const pendingExams = await Exam.countDocuments({ 
-      overallStatus: { $in: ['draft', 'submitted'] },
-      isActive: true,
-      academicYearId: currentYear?._id
-    });
-    
-    const pendingDuties = await StaffDuty.countDocuments({ status: 'assigned' });
-    
-    const pendingAttendance = attendanceRecords.filter(a => a.presentDays < a.totalWorkingDays).length;
-    
-    // Upcoming Events - Enhanced with more realistic data
-    const upcomingEvents = await getUpcomingEvents(7);
-    
-    // Exam Performance Metrics
-    const examPerformance = await getExamPerformanceStats(currentYear?._id);
-    
-    // Duty Distribution Stats
-    const dutyDistribution = await getDutyDistributionStats();
-    
-    // Top Performing Classes
-    const topClasses = await getTopPerformingClasses(currentYear?._id, 5);
-    
-    // Subject Performance Data for charts
-    const subjectPerformance = await getSubjectPerformanceStats(currentYear?._id);
-    
-    // Class Distribution for pie chart
-    const classDistribution = await getClassDistributionStats(currentYear?._id);
-    
-    // Grade Distribution for chart
-    const gradeDistribution = await getGradeDistributionStats(currentYear?._id);
-    
-    // Performance Trends over months
-    const performanceTrends = await getPerformanceTrends(currentYear?._id);
-    
+
+    const pendingAttendance = attendanceRecords.filter(a => (a.presentDays || 0) < (a.totalWorkingDays || 0)).length;
+
+    const responseData = {
+      summary: {
+        totalStudents,
+        totalStaff,
+        totalClasses,
+        totalParents,
+        currentExams,
+        publishedExams,
+        attendanceToday,
+        attendancePercentage: attendancePercentage.toFixed(1),
+        fullAPlusCount
+      },
+      demographics: {
+        gender: { male: maleCount, female: femaleCount, other: otherCount },
+        category: categoryDistribution,
+        standardGender,
+        standardCategory
+      },
+      enrollmentTrend,
+      recentActivities: formattedActivities,
+      pendingTasks: {
+        exams: pendingExams,
+        duties: pendingDuties,
+        attendance: pendingAttendance
+      },
+      upcomingEvents,
+      examPerformance,
+      dutyDistribution,
+      topClasses,
+      subjectPerformance,
+      classDistribution,
+      gradeDistribution,
+      performanceTrends,
+      academicYear: currentYear ? {
+        id: currentYear._id,
+        name: currentYear.name,
+        year: currentYear.year,
+        isCurrent: true
+      } : null
+    };
+
+    // Cache in Redis for 60 seconds
+    await setCache(cacheKey, responseData, 60);
+
     res.json({
       success: true,
-      data: {
-        summary: {
-          totalStudents,
-          totalStaff,
-          totalClasses,
-          totalParents,
-          currentExams,
-          publishedExams,
-          attendanceToday,
-          attendancePercentage: attendancePercentage.toFixed(1),
-          fullAPlusCount
-        },
-        demographics: {
-          gender: { male: maleCount, female: femaleCount, other: otherCount },
-          category: categoryDistribution,
-          standardGender,
-          standardCategory
-        },
-        enrollmentTrend,
-        recentActivities: formattedActivities,
-        pendingTasks: {
-          exams: pendingExams,
-          duties: pendingDuties,
-          attendance: pendingAttendance
-        },
-        upcomingEvents,
-        examPerformance,
-        dutyDistribution,
-        topClasses,
-        subjectPerformance,
-        classDistribution,
-        gradeDistribution,
-        performanceTrends,
-        academicYear: currentYear ? {
-          id: currentYear._id,
-          name: currentYear.name,
-          year: currentYear.year,
-          isCurrent: true
-        } : null
-      }
+      data: responseData
     });
   } catch (error) {
     console.error('Error in getAdminDashboard:', error);
@@ -839,19 +825,19 @@ async function getDutyDistributionStats() {
   
   const duties = await StaffDuty.find({
     assignedAt: { $gte: thirtyDaysAgo }
-  });
+  }).lean();
   
   const dutyTypes = {};
   const perStaff = {};
   
   for (const duty of duties) {
-    dutyTypes[duty.dutyType] = (dutyTypes[duty.dutyType] || 0) + duty.totalDuties;
-    const staffId = duty.staffId.toString();
-    perStaff[staffId] = (perStaff[staffId] || 0) + duty.totalDuties;
+    dutyTypes[duty.dutyType] = (dutyTypes[duty.dutyType] || 0) + (duty.totalDuties || 0);
+    const staffId = duty.staffId ? duty.staffId.toString() : 'unknown';
+    perStaff[staffId] = (perStaff[staffId] || 0) + (duty.totalDuties || 0);
   }
   
   const staffCount = Object.keys(perStaff).length;
-  const totalDuties = duties.reduce((sum, d) => sum + d.totalDuties, 0);
+  const totalDuties = duties.reduce((sum, d) => sum + (d.totalDuties || 0), 0);
   
   return {
     byType: dutyTypes,
@@ -862,126 +848,155 @@ async function getDutyDistributionStats() {
 }
 
 async function getTopPerformingClasses(academicYearId, limit = 5) {
-  const classes = await Class.find({ academicYearId, isActive: true });
-  const classPerformance = [];
-  
-  for (const classItem of classes) {
-    const students = await Student.find({ classId: classItem._id, status: 'active' });
-    if (students.length === 0) continue;
-    
-    const studentIds = students.map(s => s._id);
-    const marks = await Mark.find({ 
-      studentId: { $in: studentIds },
-      isFinalized: true
-    });
-    
-    if (marks.length === 0) continue;
-    
-    let totalMarks = 0;
-    let totalMaxMarks = 0;
-    let studentCount = 0;
-    
-    // Group by student to avoid double counting
-    const studentMarks = new Map();
-    for (const mark of marks) {
-      const studentId = mark.studentId.toString();
-      if (!studentMarks.has(studentId)) {
-        studentMarks.set(studentId, { total: 0, max: 0 });
-        studentCount++;
+  const classPerfAgg = await Mark.aggregate([
+    {
+      $match: {
+        ...(academicYearId ? { academicYearId: new mongoose.Types.ObjectId(academicYearId) } : {}),
+        isFinalized: true,
+        totalMaxMarks: { $gt: 0 }
       }
-      const current = studentMarks.get(studentId);
-      current.total += mark.totalScore || 0;
-      current.max += mark.totalMaxMarks || 100;
-      studentMarks.set(studentId, current);
+    },
+    {
+      $group: {
+        _id: "$classId",
+        totalMarks: { $sum: "$totalMarks" },
+        totalMaxMarks: { $sum: "$totalMaxMarks" },
+        students: { $addToSet: "$studentId" }
+      }
+    },
+    {
+      $project: {
+        classId: "$_id",
+        studentCount: { $size: "$students" },
+        averagePercentage: {
+          $multiply: [
+            { $divide: ["$totalMarks", "$totalMaxMarks"] },
+            100
+          ]
+        }
+      }
+    },
+    { $sort: { averagePercentage: -1 } },
+    { $limit: limit },
+    {
+      $lookup: {
+        from: "classes",
+        localField: "classId",
+        foreignField: "_id",
+        as: "classDoc"
+      }
+    },
+    {
+      $addFields: {
+        classInfo: { $arrayElemAt: ["$classDoc", 0] }
+      }
     }
-    
-    for (const [_, marks] of studentMarks) {
-      totalMarks += marks.total;
-      totalMaxMarks += marks.max;
+  ]);
+
+  return classPerfAgg.map(c => {
+    const cls = c.classInfo;
+    let className = "Class";
+    if (cls) {
+      className = cls.displayName || `${cls.name}${cls.section ? `-${cls.section}` : ''}`;
     }
-    
-    const averagePercentage = totalMaxMarks > 0 ? (totalMarks / totalMaxMarks) * 100 : 0;
-    
-    classPerformance.push({
-      classId: classItem._id,
-      className: classItem.displayName || `${classItem.name}${classItem.section ? `-${classItem.section}` : ''}`,
-      studentCount: students.length,
-      averagePercentage: averagePercentage.toFixed(1)
-    });
-  }
-  
-  return classPerformance
-    .sort((a, b) => parseFloat(b.averagePercentage) - parseFloat(a.averagePercentage))
-    .slice(0, limit);
+    return {
+      classId: c.classId,
+      className,
+      studentCount: c.studentCount,
+      averagePercentage: c.averagePercentage ? c.averagePercentage.toFixed(1) : "0.0"
+    };
+  });
 }
 
 async function getSubjectPerformanceStats(academicYearId) {
-  const subjects = await Subject.find({ isActive: true });
-  const subjectPerformance = [];
-  
-  for (const subject of subjects) {
-    const marks = await Mark.find({ 
-      'subjects.subjectId': subject._id,
-      isFinalized: true 
-    });
-    
-    if (marks.length === 0) continue;
-    
-    let totalScore = 0;
-    let totalMax = 0;
-    
-    for (const mark of marks) {
-      const subjectMark = mark.subjects.find(s => s.subjectId.toString() === subject._id.toString());
-      if (subjectMark) {
-        totalScore += subjectMark.totalScore || 0;
-        totalMax += subjectMark.maxMarks || 100;
+  const subjectPerfAgg = await Mark.aggregate([
+    {
+      $match: {
+        ...(academicYearId ? { academicYearId: new mongoose.Types.ObjectId(academicYearId) } : {}),
+        isFinalized: true
       }
-    }
-    
-    const averageScore = totalMax > 0 ? (totalScore / totalMax) * 100 : 0;
-    
-    subjectPerformance.push({
-      subjectId: subject._id,
-      subjectName: subject.name,
-      subjectCode: subject.code,
-      averageScore: averageScore.toFixed(1)
-    });
-  }
-  
-  return subjectPerformance
-    .sort((a, b) => parseFloat(b.averageScore) - parseFloat(a.averageScore))
-    .slice(0, 10);
+    },
+    { $unwind: "$subjects" },
+    {
+      $group: {
+        _id: "$subjects.subjectId",
+        subjectName: { $first: "$subjects.subjectName" },
+        subjectCode: { $first: "$subjects.subjectCode" },
+        totalScore: { $sum: { $ifNull: ["$subjects.totalScore", 0] } },
+        totalMax: { $sum: { $ifNull: ["$subjects.maxMarks", 100] } }
+      }
+    },
+    {
+      $match: { totalMax: { $gt: 0 } }
+    },
+    {
+      $project: {
+        subjectId: "$_id",
+        subjectName: 1,
+        subjectCode: 1,
+        averageScore: {
+          $multiply: [
+            { $divide: ["$totalScore", "$totalMax"] },
+            100
+          ]
+        }
+      }
+    },
+    { $sort: { averageScore: -1 } },
+    { $limit: 10 }
+  ]);
+
+  return subjectPerfAgg.map(s => ({
+    subjectId: s.subjectId,
+    subjectName: s.subjectName,
+    subjectCode: s.subjectCode,
+    averageScore: s.averageScore ? s.averageScore.toFixed(1) : "0.0"
+  }));
 }
 
 async function getClassDistributionStats(academicYearId) {
-  const classes = await Class.find({ academicYearId, isActive: true });
+  const [classes, studentCounts] = await Promise.all([
+    Class.find({
+      ...(academicYearId ? { academicYearId } : {}),
+      isActive: true
+    }).select('displayName name section').lean(),
+    Student.aggregate([
+      { $match: { status: 'active' } },
+      { $group: { _id: '$classId', count: { $sum: 1 } } }
+    ])
+  ]);
+
+  const countMap = new Map();
   let totalStudents = 0;
-  
-  const distribution = [];
-  for (const classItem of classes) {
-    const studentCount = await Student.countDocuments({ classId: classItem._id, status: 'active' });
-    totalStudents += studentCount;
-    distribution.push({
+  for (const sc of studentCounts) {
+    if (sc._id) {
+      countMap.set(sc._id.toString(), sc.count);
+      totalStudents += sc.count;
+    }
+  }
+
+  const distribution = classes.map(classItem => {
+    const studentCount = countMap.get(classItem._id.toString()) || 0;
+    return {
       classId: classItem._id,
       className: classItem.displayName || `${classItem.name}${classItem.section ? `-${classItem.section}` : ''}`,
       studentCount,
-      percentage: 0 // Will calculate after total
-    });
-  }
-  
-  // Calculate percentages
+      percentage: 0
+    };
+  });
+
   for (const item of distribution) {
-    item.percentage = totalStudents > 0 ? ((item.studentCount / totalStudents) * 100).toFixed(1) : 0;
+    item.percentage = totalStudents > 0 ? ((item.studentCount / totalStudents) * 100).toFixed(1) : "0";
   }
-  
+
   return distribution;
 }
 
 async function getGradeDistributionStats(academicYearId) {
   const results = await ExamResult.find({ 
     isPublished: true,
-    academicYearId
-  }).limit(1000);
+    ...(academicYearId ? { academicYearId } : {})
+  }).limit(1000).lean();
   
   const gradeCounts = {
     'A+': 0, 'A': 0, 'B+': 0, 'B': 0, 'C+': 0, 'C': 0, 'D': 0, 'F': 0
@@ -1007,44 +1022,58 @@ async function getGradeDistributionStats(academicYearId) {
 }
 
 async function getPerformanceTrends(academicYearId) {
-  const months = [];
   const today = new Date();
+  const sixMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 5, 1);
   
-  // Get last 6 months
+  const exams = await Exam.find({
+    academicYearId,
+    startDate: { $gte: sixMonthsAgo },
+    resultsPublished: true
+  }).select('_id startDate').lean();
+
+  const examIds = exams.map(e => e._id);
+  const results = examIds.length > 0 
+    ? await ExamResult.find({ examId: { $in: examIds }, isPublished: true }).select('examId percentage').lean()
+    : [];
+
+  const examResultMap = new Map();
+  for (const r of results) {
+    const eid = r.examId.toString();
+    if (!examResultMap.has(eid)) examResultMap.set(eid, []);
+    examResultMap.get(eid).push(r.percentage || 0);
+  }
+
+  const months = [];
   for (let i = 5; i >= 0; i--) {
     const monthDate = new Date(today.getFullYear(), today.getMonth() - i, 1);
     const monthName = monthDate.toLocaleDateString('en-US', { month: 'short' });
-    
-    // Get exams in this month
-    const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-    const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
-    
-    const exams = await Exam.find({
-      academicYearId,
-      startDate: { $gte: monthStart, $lte: monthEnd },
-      resultsPublished: true
+    const mYear = monthDate.getFullYear();
+    const mMonth = monthDate.getMonth();
+
+    const monthExams = exams.filter(e => {
+      if (!e.startDate) return false;
+      const d = new Date(e.startDate);
+      return d.getFullYear() === mYear && d.getMonth() === mMonth;
     });
-    
-    let avgScore = 0;
-    let examCount = 0;
-    
-    for (const exam of exams) {
-      const results = await ExamResult.find({ examId: exam._id, isPublished: true });
-      if (results.length > 0) {
-        const examAvg = results.reduce((sum, r) => sum + (r.percentage || 0), 0) / results.length;
-        avgScore += examAvg;
-        examCount++;
+
+    let totalScore = 0;
+    let count = 0;
+    for (const me of monthExams) {
+      const scores = examResultMap.get(me._id.toString()) || [];
+      for (const s of scores) {
+        totalScore += s;
+        count++;
       }
     }
-    
+
     months.push({
       month: monthName,
-      avgScore: examCount > 0 ? (avgScore / examCount).toFixed(1) : 0,
-      attendance: 0, // Would need attendance trends
+      avgScore: count > 0 ? (totalScore / count).toFixed(1) : 0,
+      attendance: 0,
       target: 75
     });
   }
-  
+
   return months;
 }
 

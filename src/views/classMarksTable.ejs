@@ -305,7 +305,9 @@ td.text-left {
                         <%= viewMode === 'te' ? 'TE Total' : (viewMode === 'both' ? 'Total (TE/Tot)' : 'Total') %>
                     </th>
                     <% if (viewMode === 'te') { %>
-                        <th class="col-header" style="width: 10%">Signature</th>
+                        <th class="col-header" style="width: 5%">TE %</th>
+                        <th class="col-header" style="width: 5%">TE Rank</th>
+                        <th class="col-header" style="width: 8%">Signature</th>
                     <% } else { %>
                         <th class="col-header" style="width: 5%"><%= viewMode === 'both' ? 'TE % / Tot %' : '%' %></th>
                         <th class="col-header" style="width: 4%">Rank</th>
@@ -383,6 +385,12 @@ td.text-left {
                             <td class="bold" style="background-color: #F2F2F2;">
                                 <%= student.teTotalObtained !== undefined ? student.teTotalObtained : student.totalObtained %> / <%= student.teTotalMax !== undefined ? student.teTotalMax : student.totalMax %>
                             </td>
+                            <td class="bold" style="background-color: #F2F2F2;">
+                                <%= (student.tePercentage !== undefined ? student.tePercentage : (student.percentage || 0)).toFixed(1) %>%
+                            </td>
+                            <td class="bold" style="background-color: #F8FAFC; font-size: 8.5px;">
+                                <%= (student.teRank || student.rank) ? '#' + (student.teRank || student.rank) : '-' %>
+                            </td>
                             <td style="background-color: #FFFFFF;"></td>
                         <% } else if (viewMode === 'both') { %>
                             <td class="bold" style="background-color: #F2F2F2; font-size: 8px;">
@@ -412,7 +420,7 @@ td.text-left {
             </tbody>
             <tfoot>
                 <tr>
-                    <td class="footer-cell" colspan="<%= viewMode === 'te' ? subjects.length + 4 : subjects.length + 5 %>">
+                    <td class="footer-cell" colspan="<%= viewMode === 'te' ? subjects.length + 6 : subjects.length + 5 %>">
                         Generated on <%= new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) %> | PPM Higher Secondary School
                     </td>
                 </tr>

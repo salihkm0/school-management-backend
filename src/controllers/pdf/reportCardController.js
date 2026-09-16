@@ -49,30 +49,29 @@ const getGrade = (percentage) => {
 // Helper to identify co-curricular subjects that do not have TE theory exams
 const isNonTeSubject = (subject) => {
   if (!subject) return false;
-  const name = (
+  const rawName = (
     subject.displayName ||
     subject.subjectName ||
     subject.name ||
     subject.title ||
     ''
   ).toLowerCase().trim();
-  const code = (
+  const rawCode = (
     subject.subjectCode ||
     subject.code ||
     ''
   ).toLowerCase().trim();
+
+  const name = rawName.replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+  const code = rawCode.replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
 
   // Physical Education
   if (
     name.includes('physical education') ||
     name.includes('phys educ') ||
     name.includes('physical ed') ||
-    name === 'pe' ||
-    name === 'pet' ||
-    name === 'ped' ||
-    code === 'pet' ||
-    code === 'pe' ||
-    code === 'ped'
+    name === 'pe' || name === 'pet' || name === 'ped' || name === 'phe' ||
+    code === 'pet' || code === 'pe' || code === 'ped' || code === 'phe'
   ) {
     return true;
   }
@@ -82,10 +81,8 @@ const isNonTeSubject = (subject) => {
     name.includes('work education') ||
     name.includes('work exp') ||
     name.includes('work experience') ||
-    name === 'we' ||
-    name === 'wed' ||
-    code === 'we' ||
-    code === 'wed'
+    name === 'we' || name === 'wed' ||
+    code === 'we' || code === 'wed'
   ) {
     return true;
   }
@@ -94,14 +91,10 @@ const isNonTeSubject = (subject) => {
   if (
     name.includes('drawing') ||
     name.includes('art education') ||
-    name.includes('art & culture') ||
+    name.includes('art culture') ||
     name.includes('art and culture') ||
-    name === 'art' ||
-    name === 'ae' ||
-    name === 'draw' ||
-    code === 'draw' ||
-    code === 'ae' ||
-    code === 'art'
+    name === 'art' || name === 'ae' || name === 'draw' ||
+    code === 'draw' || code === 'ae' || code === 'art'
   ) {
     return true;
   }
@@ -1115,14 +1108,42 @@ exports.downloadClassMarksTablePDF = async (req, res) => {
 
     const sortBy = (req.query.sortBy || req.query.sort || 'rollNo').toLowerCase();
 
-    const rankedStudents = [...formattedStudents]
-      .sort((a, b) => {
-        if (mode === 'te') {
-          return b.tePercentage - a.tePercentage;
+    const sortedForRank = [...formattedStudents].sort((a, b) => {
+      if (mode === 'te') {
+        if ((b.tePercentage || 0) !== (a.tePercentage || 0)) {
+          return (b.tePercentage || 0) - (a.tePercentage || 0);
         }
-        return b.percentage - a.percentage;
-      })
-      .map((s, idx) => ({ ...s, rank: idx + 1 }));
+        return (b.teTotalObtained || 0) - (a.teTotalObtained || 0);
+      }
+      if ((b.percentage || 0) !== (a.percentage || 0)) {
+        return (b.percentage || 0) - (a.percentage || 0);
+      }
+      return (b.totalObtained || 0) - (a.totalObtained || 0);
+    });
+
+    let currentRank = 1;
+    for (let i = 0; i < sortedForRank.length; i++) {
+      if (mode === 'te') {
+        if (
+          i > 0 &&
+          ((sortedForRank[i].tePercentage || 0) < (sortedForRank[i - 1].tePercentage || 0) ||
+           (sortedForRank[i].teTotalObtained || 0) < (sortedForRank[i - 1].teTotalObtained || 0))
+        ) {
+          currentRank = i + 1;
+        }
+      } else {
+        if (
+          i > 0 &&
+          ((sortedForRank[i].percentage || 0) < (sortedForRank[i - 1].percentage || 0) ||
+           (sortedForRank[i].totalObtained || 0) < (sortedForRank[i - 1].totalObtained || 0))
+        ) {
+          currentRank = i + 1;
+        }
+      }
+      sortedForRank[i].teRank = currentRank;
+      sortedForRank[i].rank = currentRank;
+    }
+    const rankedStudents = sortedForRank;
 
     let finalSortedStudents;
     if (sortBy === 'rank') {
@@ -1220,7 +1241,7 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
       return res.status(500).json({ message: "Failed to fetch marks data from controller" });
     }
 
-    const mode = (req.query.mode || req.query.view || 'total').toLowerCase();
+    const mode = (req.query.mode || req.query.view || 'both').toLowerCase();
     let { subjects, students, examName } = marksData.data;
     if (mode === 'te') {
       subjects = (subjects || []).filter(s => !isNonTeSubject(s));
@@ -1232,8 +1253,42 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Class Marks');
 
-    // Calculate total columns
-    const totalCols = (subjects || []).length + 7;
+    // Table Headers
+    const headers = ['Roll No', 'Admn No', 'Student Name'];
+    (subjects || []).forEach(subj => {
+      const subjTitle = subj.displayName || subj.subjectName || 'Subject';
+      const teMax = subj.termMaxMarks || subj.theoryMaxMarks || (subj.ceMaxMarks && subj.maxMarks ? subj.maxMarks - subj.ceMaxMarks : (subj.maxMarks || 80));
+      const ceMax = subj.ceMaxMarks || (subj.maxMarks && teMax ? subj.maxMarks - teMax : 20);
+      const totalMax = subj.maxMarks || (teMax + ceMax);
+
+      if (mode === 'both') {
+        headers.push(`${subjTitle} TE (/${teMax})`);
+        headers.push(`${subjTitle} CE (/${ceMax})`);
+        headers.push(`${subjTitle} Tot (/${totalMax})`);
+        headers.push(`${subjTitle} Grade`);
+      } else if (mode === 'te') {
+        headers.push(`${subjTitle} TE (/${teMax})`);
+        headers.push(`${subjTitle} Grade`);
+      } else {
+        headers.push(`${subjTitle} (/${totalMax})`);
+        headers.push(`${subjTitle} Grade`);
+      }
+    });
+
+    let summaryColsCount = 4;
+    if (mode === 'both') {
+      headers.push('TE Total', 'CE Total', 'Grand Total', 'TE %', 'Total %', 'Grade', 'TE Rank');
+      summaryColsCount = 7;
+    } else if (mode === 'te') {
+      headers.push('TE Total', 'TE %', 'TE Grade', 'TE Rank');
+      summaryColsCount = 4;
+    } else {
+      headers.push('Total Score', 'Percentage', 'Grade', 'Rank');
+      summaryColsCount = 4;
+    }
+
+    // Calculate total columns dynamically from headers length
+    const totalCols = headers.length;
 
     // Convert column number (1-based) to letter (A, B, C... Z, AA, AB...)
     const getColLetter = (colIdx) => {
@@ -1269,7 +1324,7 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
     // Title Row 3: Report Title
     worksheet.mergeCells(`A3:${lastColLetter}3`);
     const r3Cell = worksheet.getCell('A3');
-    const titleSuffix = mode === 'te' ? ' (TE MARKS & GRADE)' : (mode === 'both' ? ' (TE & TE+CE MARKS & GRADE)' : ' (TE+CE TOTAL MARKS & GRADE)');
+    const titleSuffix = mode === 'te' ? ' (TE MARKS & GRADE)' : (mode === 'both' ? ' (ALL SUBJECTS CE & TE MARKS)' : ' (TOTAL MARKS & GRADE)');
     r3Cell.value = `CLASS MARKS OVERVIEW${titleSuffix}`;
     r3Cell.font = { name: 'Arial', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
     r3Cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
@@ -1288,27 +1343,6 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
     // Spacer
     worksheet.addRow([]);
     worksheet.getRow(5).height = 8;
-
-    // Table Headers
-    const headers = ['Roll No', 'Admn No', 'Student Name'];
-    (subjects || []).forEach(subj => {
-      const subjTitle = subj.displayName || subj.subjectName || 'Subject';
-      const teMax = subj.termMaxMarks || subj.theoryMaxMarks || (subj.ceMaxMarks && subj.maxMarks ? subj.maxMarks - subj.ceMaxMarks : (subj.maxMarks || 100));
-      const totalMax = subj.maxMarks || (teMax + (subj.ceMaxMarks || 0));
-      if (mode === 'te') {
-        headers.push(`${subjTitle} (TE /${teMax})`);
-      } else if (mode === 'both') {
-        headers.push(`${subjTitle} (TE:${teMax}/Tot:${totalMax})`);
-      } else {
-        headers.push(`${subjTitle} (/${totalMax})`);
-      }
-    });
-    headers.push(
-      mode === 'te' ? 'TE Total' : (mode === 'both' ? 'Total (TE/Tot)' : 'Total Score'),
-      mode === 'te' ? 'TE %' : 'Percentage',
-      mode === 'te' ? 'TE Grade' : 'Grade',
-      'Rank'
-    );
 
     const headerRow = worksheet.addRow(headers);
     worksheet.getRow(6).height = 26;
@@ -1392,12 +1426,42 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
 
     const sortBy = (req.query.sortBy || req.query.sort || 'rollNo').toLowerCase();
 
-    const rankedStudents = [...formattedStudents]
-      .sort((a, b) => {
-        if (mode === 'te') return b.tePercentage - a.tePercentage;
-        return b.percentage - a.percentage;
-      })
-      .map((s, idx) => ({ ...s, rank: idx + 1 }));
+    const sortedForRank = [...formattedStudents].sort((a, b) => {
+      if (mode === 'te') {
+        if ((b.tePercentage || 0) !== (a.tePercentage || 0)) {
+          return (b.tePercentage || 0) - (a.tePercentage || 0);
+        }
+        return (b.teTotalObtained || 0) - (a.teTotalObtained || 0);
+      }
+      if ((b.percentage || 0) !== (a.percentage || 0)) {
+        return (b.percentage || 0) - (a.percentage || 0);
+      }
+      return (b.totalObtained || 0) - (a.totalObtained || 0);
+    });
+
+    let currentRank = 1;
+    for (let i = 0; i < sortedForRank.length; i++) {
+      if (mode === 'te') {
+        if (
+          i > 0 &&
+          ((sortedForRank[i].tePercentage || 0) < (sortedForRank[i - 1].tePercentage || 0) ||
+           (sortedForRank[i].teTotalObtained || 0) < (sortedForRank[i - 1].teTotalObtained || 0))
+        ) {
+          currentRank = i + 1;
+        }
+      } else {
+        if (
+          i > 0 &&
+          ((sortedForRank[i].percentage || 0) < (sortedForRank[i - 1].percentage || 0) ||
+           (sortedForRank[i].totalObtained || 0) < (sortedForRank[i - 1].totalObtained || 0))
+        ) {
+          currentRank = i + 1;
+        }
+      }
+      sortedForRank[i].teRank = currentRank;
+      sortedForRank[i].rank = currentRank;
+    }
+    const rankedStudents = sortedForRank;
 
     let finalSortedStudents;
     if (sortBy === 'rank') {
@@ -1433,6 +1497,7 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
 
         const teMax = sm.termMaxMarks || sm.theoryMaxMarks || subj.termMaxMarks || subj.theoryMaxMarks || 80;
         const totalMax = sm.maxMarks || subj.maxMarks || 100;
+        const ceMax = sm.ceMaxMarks || subj.ceMaxMarks || (totalMax - teMax > 0 ? totalMax - teMax : 20);
         const isAbsent = Boolean(sm.isAbsent);
         const teMarks = isAbsent ? 0 : (sm.theoryScore !== undefined ? sm.theoryScore : 0);
         const ceMarks = sm.ceMarks !== undefined ? sm.ceMarks : (sm.ceScore || 0);
@@ -1440,53 +1505,55 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
         const teGrade = isAbsent ? 'AB' : getGrade(teMax > 0 ? (teMarks / teMax) * 100 : 0);
         const totalGrade = (isAbsent && totalMarks === 0) ? 'AB' : getGrade(totalMax > 0 ? (totalMarks / totalMax) * 100 : 0);
 
-        if (isAbsent) {
-          if (mode === 'te') {
-            rowData.push('AB');
-          } else if (mode === 'both') {
-            if (totalMarks > 0) {
-              rowData.push(`TE: AB | Tot: ${totalMarks} (${totalGrade})`);
-            } else {
-              rowData.push('AB');
-            }
+        if (mode === 'both') {
+          if (isAbsent) {
+            rowData.push('AB', ceMarks, totalMarks, totalMarks > 0 ? totalGrade : 'AB');
+          } else if (sm.isEntered || sm.totalScore !== undefined || sm.total !== undefined || sm.theoryScore !== undefined) {
+            rowData.push(teMarks, ceMarks, totalMarks, totalGrade);
           } else {
-            if (totalMarks > 0) {
-              rowData.push(`${totalMarks} (${totalGrade})`);
-            } else {
-              rowData.push('AB');
-            }
+            rowData.push('—', '—', '—', '—');
           }
-        } else if (sm.isEntered || sm.totalScore !== undefined || sm.total !== undefined) {
-          if (mode === 'te') {
-            rowData.push(`${teMarks} (${teGrade})`);
-          } else if (mode === 'both') {
-            rowData.push(`TE: ${teMarks} (${teGrade}) | Tot: ${totalMarks} (${totalGrade})`);
+        } else if (mode === 'te') {
+          if (isAbsent) {
+            rowData.push('AB', 'AB');
+          } else if (sm.isEntered || sm.theoryScore !== undefined) {
+            rowData.push(teMarks, teGrade);
           } else {
-            rowData.push(`${totalMarks} (${totalGrade})`);
+            rowData.push('—', '—');
           }
         } else {
-          rowData.push('—');
+          if (isAbsent) {
+            rowData.push(totalMarks > 0 ? totalMarks : 'AB', totalMarks > 0 ? totalGrade : 'AB');
+          } else if (sm.isEntered || sm.totalScore !== undefined) {
+            rowData.push(totalMarks, totalGrade);
+          } else {
+            rowData.push('—', '—');
+          }
         }
       });
 
-      if (mode === 'te') {
+      if (mode === 'both') {
+        const ceTotalObtained = Math.max(0, st.totalObtained - st.teTotalObtained);
         rowData.push(
-          `${st.teTotalObtained} / ${st.teTotalMax}`,
-          `${st.tePercentage.toFixed(1)}%`,
-          st.teGrade || '-',
-          st.rank || '-'
+          st.teTotalObtained,
+          ceTotalObtained,
+          st.totalObtained,
+          Number(st.tePercentage.toFixed(1)),
+          Number(st.percentage.toFixed(1)),
+          st.grade || '-',
+          st.teRank || st.rank || '-'
         );
-      } else if (mode === 'both') {
+      } else if (mode === 'te') {
         rowData.push(
-          `TE: ${st.teTotalObtained}/${st.teTotalMax} | Tot: ${st.totalObtained}/${st.totalMax}`,
-          `${st.percentage.toFixed(1)}% (TE: ${st.tePercentage.toFixed(1)}%)`,
-          `TE: ${st.teGrade} | Tot: ${st.grade}`,
-          st.rank || '-'
+          st.teTotalObtained,
+          Number(st.tePercentage.toFixed(1)),
+          st.teGrade || '-',
+          st.teRank || st.rank || '-'
         );
       } else {
         rowData.push(
-          `${st.totalObtained} / ${st.totalMax}`,
-          `${st.percentage.toFixed(1)}%`,
+          st.totalObtained,
+          Number(st.percentage.toFixed(1)),
           st.grade || '-',
           st.rank || '-'
         );
@@ -1497,13 +1564,14 @@ exports.downloadClassMarksTableExcel = async (req, res) => {
 
       const isEven = idx % 2 === 0;
       const bgArgb = isEven ? 'FFFFFFFF' : 'FFF8FAFC';
+      const summaryStartCol = headers.length - summaryColsCount + 1;
 
       row.eachCell((cell, colNum) => {
         cell.font = { name: 'Arial', size: 9.5 };
         cell.alignment = { vertical: 'middle', horizontal: colNum === 3 ? 'left' : 'center' };
         
         // Background
-        if (colNum > (subjects || []).length + 3) {
+        if (colNum >= summaryStartCol) {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
           cell.font = { name: 'Arial', size: 9.5, bold: true };
         } else {

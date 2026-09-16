@@ -40,27 +40,32 @@ function countAPlusGrades(subjectResults) {
 // Helper to identify co-curricular subjects that do not have TE theory exams
 function isNonTeSubject(subject) {
   if (!subject) return false;
-  const name = (
+  const rawName = (
     subject.displayName ||
     subject.subjectName ||
     subject.name ||
     subject.title ||
     ''
   ).toLowerCase().trim();
-  const code = (
+  const rawCode = (
     subject.subjectCode ||
     subject.code ||
     ''
   ).toLowerCase().trim();
 
+  const name = rawName.replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+  const code = rawCode.replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+
+  // Physical Education
   if (
     name.includes('physical education') ||
     name.includes('phys educ') ||
     name.includes('physical ed') ||
-    name === 'pe' || name === 'pet' || name === 'ped' ||
-    code === 'pet' || code === 'pe' || code === 'ped'
+    name === 'pe' || name === 'pet' || name === 'ped' || name === 'phe' ||
+    code === 'pet' || code === 'pe' || code === 'ped' || code === 'phe'
   ) return true;
 
+  // Work Education
   if (
     name.includes('work education') ||
     name.includes('work exp') ||
@@ -69,10 +74,11 @@ function isNonTeSubject(subject) {
     code === 'we' || code === 'wed'
   ) return true;
 
+  // Drawing / Art Education
   if (
     name.includes('drawing') ||
     name.includes('art education') ||
-    name.includes('art & culture') ||
+    name.includes('art culture') ||
     name.includes('art and culture') ||
     name === 'art' || name === 'ae' || name === 'draw' ||
     code === 'draw' || code === 'ae' || code === 'art'
@@ -427,6 +433,8 @@ exports.getGradeAnalysis = async (req, res) => {
       // Rank-specific totals (exclude non-TE subjects like PE / WE / Drawing)
       let rankTeTotal = 0;
       let rankTeMax = 0;
+      let rankCeTotal = 0;
+      let rankCeMax = 0;
       let rankTotalObtained = 0;
       let rankTotalMax = 0;
 
@@ -492,6 +500,8 @@ exports.getGradeAnalysis = async (req, res) => {
         if (!isNonTe) {
           rankTeTotal += theory;
           rankTeMax += teMax;
+          rankCeTotal += (ce + practical);
+          rankCeMax += ceMax;
           rankTotalObtained += totalScore;
           rankTotalMax += totalMax;
         }
@@ -517,6 +527,10 @@ exports.getGradeAnalysis = async (req, res) => {
       const totalMaxMarks = mark.totalMaxMarks || 0;
       const finalPercentage = mark.percentage || (totalMaxMarks > 0 ? (finalTotalMarks / totalMaxMarks) * 100 : 0);
 
+      const academicSubjects = subjectResults.filter(s => !s.isNonTe);
+      const academicAplusCount = countAPlusGrades(academicSubjects);
+      const academicTotalSubjects = academicSubjects.length;
+
       const studentInfo = {
         studentId: mark.studentId?._id || mark.studentId,
         studentName: mark.studentName || mark.studentId?.fullName || "Unknown",
@@ -537,10 +551,14 @@ exports.getGradeAnalysis = async (req, res) => {
         totalSubjects: subjects.length,
         rankTeTotal,
         rankTeMax,
+        rankCeTotal,
+        rankCeMax,
         rankTotalObtained,
         rankTotalMax,
         rankTePercentage: rankTeMax > 0 ? (rankTeTotal / rankTeMax) * 100 : 0,
         rankTotalPercentage: rankTotalMax > 0 ? (rankTotalObtained / rankTotalMax) * 100 : 0,
+        academicAplusCount,
+        academicTotalSubjects,
       };
 
       studentResults.push(studentInfo);
@@ -608,8 +626,12 @@ exports.getGradeAnalysis = async (req, res) => {
     };
 
     for (const student of studentResults) {
-      const totalSubjects = student.totalSubjects;
-      const aplusCount = student.aplusCount;
+      const totalSubjects = (student.academicTotalSubjects && student.academicTotalSubjects > 0)
+        ? student.academicTotalSubjects
+        : student.totalSubjects;
+      const aplusCount = (student.academicTotalSubjects && student.academicTotalSubjects > 0)
+        ? student.academicAplusCount
+        : student.aplusCount;
 
       if (totalSubjects === 0) continue;
 
@@ -635,6 +657,7 @@ exports.getGradeAnalysis = async (req, res) => {
 
       if ((aplusCount === totalSubjects - 1 || aplusCount === 9) && totalSubjects > 1) {
         const nonAPlusSubject = student.subjectResults.find(s => {
+          if (s.isNonTe) return false;
           if (s.isAbsent) return true;
           if (s.grade === "A+" || s.grade === "A1") return false;
           if (s.maxMarks > 0 && ((s.obtainedMarks || 0) / s.maxMarks) >= 0.90) return false;
@@ -701,7 +724,12 @@ exports.getGradeAnalysis = async (req, res) => {
 
     let currentTeRank = 1;
     for (let i = 0; i < sortedByTe.length; i++) {
-      if (i > 0 && (sortedByTe[i].rankTeTotal || 0) < (sortedByTe[i - 1].rankTeTotal || 0)) {
+      if (
+        i > 0 &&
+        ((sortedByTe[i].rankTeTotal || 0) < (sortedByTe[i - 1].rankTeTotal || 0) ||
+         (sortedByTe[i].rankTePercentage || 0) < (sortedByTe[i - 1].rankTePercentage || 0) ||
+         (sortedByTe[i].rankTotalObtained || 0) < (sortedByTe[i - 1].rankTotalObtained || 0))
+      ) {
         currentTeRank = i + 1;
       }
       sortedByTe[i].teRank = currentTeRank;
@@ -720,7 +748,12 @@ exports.getGradeAnalysis = async (req, res) => {
 
     let currentTeCeRank = 1;
     for (let i = 0; i < sortedByTeCe.length; i++) {
-      if (i > 0 && (sortedByTeCe[i].rankTotalObtained || 0) < (sortedByTeCe[i - 1].rankTotalObtained || 0)) {
+      if (
+        i > 0 &&
+        ((sortedByTeCe[i].rankTotalObtained || 0) < (sortedByTeCe[i - 1].rankTotalObtained || 0) ||
+         (sortedByTeCe[i].rankTotalPercentage || 0) < (sortedByTeCe[i - 1].rankTotalPercentage || 0) ||
+         (sortedByTeCe[i].rankTeTotal || 0) < (sortedByTeCe[i - 1].rankTeTotal || 0))
+      ) {
         currentTeCeRank = i + 1;
       }
       sortedByTeCe[i].teCeRank = currentTeCeRank;
@@ -729,6 +762,9 @@ exports.getGradeAnalysis = async (req, res) => {
     studentResults.sort((a, b) => {
       if (a.teRank !== b.teRank) {
         return (a.teRank || 999999) - (b.teRank || 999999);
+      }
+      if ((b.rankTePercentage || 0) !== (a.rankTePercentage || 0)) {
+        return (b.rankTePercentage || 0) - (a.rankTePercentage || 0);
       }
       return (b.rankTotalPercentage || 0) - (a.rankTotalPercentage || 0);
     });

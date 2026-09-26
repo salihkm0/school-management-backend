@@ -470,13 +470,13 @@ students.forEach(function(student, index) {
                     <td><strong><%= data.totalTE %></strong></td>
                     <td><strong><%= typeof data.overallTeGrade !== 'undefined' ? data.overallTeGrade : data.overallGrade %></strong></td>
                     <td><strong><%= data.grandTotal %></strong></td>
-                    <td><strong><%= typeof data.overallTotalGrade !== 'undefined' ? data.overallTotalGrade : data.overallGrade %></strong></td>
+                    <td><strong><%= typeof data.overallTotalGrade !== 'undefined' ? data.overallTotalGrade : data.overallGrade %><% if (typeof data.overallPercentage !== 'undefined' && data.overallPercentage !== null && data.overallPercentage !== '') { %> (<%= data.overallPercentage %>%)<% } %></strong></td>
                     <% } else { %>
                     <td><strong><%= data.totalTEMax %></strong></td>
                     <td><strong><%= data.totalTE %></strong></td>
                     <td><strong><%= typeof data.overallTeGrade !== 'undefined' ? data.overallTeGrade : data.overallGrade %></strong></td>
                     <td><strong><%= data.grandTotal %></strong></td>
-                    <td><strong><%= typeof data.overallTotalGrade !== 'undefined' ? data.overallTotalGrade : data.overallGrade %></strong></td>
+                    <td><strong><%= typeof data.overallTotalGrade !== 'undefined' ? data.overallTotalGrade : data.overallGrade %><% if (typeof data.overallPercentage !== 'undefined' && data.overallPercentage !== null && data.overallPercentage !== '') { %> (<%= data.overallPercentage %>%)<% } %></strong></td>
                     <% } %>
                 </tr>
                 </tbody>
@@ -539,6 +539,9 @@ students.forEach(function(student, index) {
             <div class="bottom-info-row">
                 <div class="grade-info">
                     Overall Grade: <%= typeof data.overallTotalGrade !== 'undefined' ? data.overallTotalGrade : data.overallGrade %>
+                    <% if (typeof data.overallPercentage !== 'undefined' && data.overallPercentage !== null && data.overallPercentage !== '') { %>
+                    &nbsp;&nbsp;|&nbsp;&nbsp;Total Mark Percentage: <%= data.overallPercentage %>%
+                    <% } %>
                 </div>
                 <div class="generated-info">
                     Generated on: <%= new Date().toLocaleDateString('en-IN') %>

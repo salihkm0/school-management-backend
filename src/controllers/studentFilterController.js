@@ -60,6 +60,15 @@ function buildFilterCriteria(filterType, conditions) {
         includeCE: conditions.includeCE !== false
       };
       
+    case 'total_marks_range':
+      return {
+        type: 'total_marks_range',
+        minTotalMarks: conditions.minTotalMarks !== undefined && conditions.minTotalMarks !== '' && conditions.minTotalMarks !== null ? Number(conditions.minTotalMarks) : null,
+        maxTotalMarks: conditions.maxTotalMarks !== undefined && conditions.maxTotalMarks !== '' && conditions.maxTotalMarks !== null ? Number(conditions.maxTotalMarks) : null,
+        mode: conditions.mode || 'total',
+        includeCE: conditions.includeCE !== false
+      };
+      
     case 'marks_range':
       return {
         type: 'marks',
@@ -381,6 +390,22 @@ async function applyFilters(results, filterType, conditions) {
       return results.filter(result => {
         const percentage = filter.includeCE ? result.percentage : result.theoryOnlyPercentage;
         return percentage >= filter.minPercentage && percentage <= filter.maxPercentage;
+      });
+
+    case 'total_marks_range':
+      return results.filter(result => {
+        const isTeMode = filter.mode === 'te' || filter.includeCE === false;
+        let score = isTeMode 
+          ? (result.theoryTotal !== undefined ? result.theoryTotal : (result.subjectResults || []).reduce((acc, s) => acc + (s.theoryScore || 0), 0))
+          : (result.totalMarks !== undefined ? result.totalMarks : (result.subjectResults || []).reduce((acc, s) => acc + (s.obtainedMarks || 0), 0));
+
+        if (filter.minTotalMarks !== null && !isNaN(filter.minTotalMarks) && score < filter.minTotalMarks) {
+          return false;
+        }
+        if (filter.maxTotalMarks !== null && !isNaN(filter.maxTotalMarks) && score > filter.maxTotalMarks) {
+          return false;
+        }
+        return true;
       });
       
     case 'marks':

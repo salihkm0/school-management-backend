@@ -318,8 +318,9 @@ const prepareStudentReportData = async (student, examId, academicYear, options =
   // Calculate overall percentage & overall TE and Total grades
   const grandTotal = totalCE + totalTE;
   const grandMax = totalCEMax + totalTEMax;
-  const overallPercentage = grandMax > 0 ? Math.round((grandTotal / grandMax) * 100) : 0;
-  const overallTePercentage = totalTEMax > 0 ? Math.round((totalTE / totalTEMax) * 100) : 0;
+  const rawPct = grandMax > 0 ? (grandTotal / grandMax) * 100 : 0;
+  const overallPercentage = Math.round(rawPct * 10) / 10;
+  const overallTePercentage = totalTEMax > 0 ? Math.round((totalTE / totalTEMax) * 10) / 10 : 0;
   const overallTeGrade = getGrade(overallTePercentage);
   const overallTotalGrade = getGrade(overallPercentage);
   const overallGrade = overallTotalGrade;

@@ -475,13 +475,13 @@ html, body {
                     <td><strong><%= totalTE %></strong></td>
                     <td><strong><%= typeof overallTeGrade !== 'undefined' ? overallTeGrade : overallGrade %></strong></td>
                     <td><strong><%= grandTotal %></strong></td>
-                    <td><strong><%= typeof overallTotalGrade !== 'undefined' ? overallTotalGrade : overallGrade %></strong></td>
+                    <td><strong><%= typeof overallTotalGrade !== 'undefined' ? overallTotalGrade : overallGrade %><% if (typeof overallPercentage !== 'undefined' && overallPercentage !== null && overallPercentage !== '') { %> (<%= overallPercentage %>%)<% } %></strong></td>
                     <% } else { %>
                     <td><strong><%= totalTEMax %></strong></td>
                     <td><strong><%= totalTE %></strong></td>
                     <td><strong><%= typeof overallTeGrade !== 'undefined' ? overallTeGrade : overallGrade %></strong></td>
                     <td><strong><%= grandTotal %></strong></td>
-                    <td><strong><%= typeof overallTotalGrade !== 'undefined' ? overallTotalGrade : overallGrade %></strong></td>
+                    <td><strong><%= typeof overallTotalGrade !== 'undefined' ? overallTotalGrade : overallGrade %><% if (typeof overallPercentage !== 'undefined' && overallPercentage !== null && overallPercentage !== '') { %> (<%= overallPercentage %>%)<% } %></strong></td>
                     <% } %>
                 </tr>
                 </tbody>
@@ -544,6 +544,9 @@ html, body {
             <div class="bottom-info-row">
                 <div class="grade-info">
                     Overall Grade: <%= typeof overallTotalGrade !== 'undefined' ? overallTotalGrade : overallGrade %>
+                    <% if (typeof overallPercentage !== 'undefined' && overallPercentage !== null && overallPercentage !== '') { %>
+                    &nbsp;&nbsp;|&nbsp;&nbsp;Total Mark Percentage: <%= overallPercentage %>%
+                    <% } %>
                 </div>
                 <div class="generated-info">
                     Generated on: <%= new Date().toLocaleDateString('en-IN') %>

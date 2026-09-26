@@ -327,19 +327,32 @@ exports.getAttendanceByClass = async (req, res) => {
     const classObj = await Class.findById(classId);
     const sortPreference = classObj?.studentSortPreference || 'alphabetic';
 
-    // Run all 3 independent queries in parallel
-    const [rawStudents, attendanceRecords, template] = await Promise.all([
+    const targetYear = parseInt(year);
+    const targetMonth = parseInt(month);
+
+    // Query previous attendance records for this class before the selected month
+    const prevQuery = {
+      classId,
+      $or: [
+        { year: { $lt: targetYear } },
+        { year: targetYear, month: { $lt: targetMonth } }
+      ]
+    };
+
+    // Run all 4 queries in parallel
+    const [rawStudents, attendanceRecords, prevAttendanceRecords, template] = await Promise.all([
       Student.find({ classId, status: 'active' })
         .select('_id fullName studentCode admissionNo rollNumber gender'),
       Attendance.find({
         classId,
-        year: parseInt(year),
-        month: parseInt(month)
+        year: targetYear,
+        month: targetMonth
       }),
+      Attendance.find(prevQuery),
       AttendanceTemplate.findOne({
         $or: [{ classId: classId }, { classId: null }],
-        year: parseInt(year),
-        month: parseInt(month),
+        year: targetYear,
+        month: targetMonth,
         isActive: true
       }),
     ]);
@@ -360,7 +373,7 @@ exports.getAttendanceByClass = async (req, res) => {
     const workingDays = template?.totalWorkingDays || 25;
     const holidayCount = template?.holidays?.length || 0;
 
-    // Create a map of existing attendance records
+    // Create a map of existing attendance records for the current month
     const attendanceMap = new Map();
     attendanceRecords.forEach(record => {
       attendanceMap.set(record.studentId.toString(), {
@@ -377,10 +390,49 @@ exports.getAttendanceByClass = async (req, res) => {
       });
     });
 
+    // Create a map of previous attendance records accumulated prior to this month
+    const prevAttendanceMap = new Map();
+    (prevAttendanceRecords || []).forEach(record => {
+      if (classObj?.academicYearId && record.academicYearId && record.academicYearId.toString() !== classObj.academicYearId.toString()) {
+        return;
+      }
+      const sId = record.studentId.toString();
+      if (!prevAttendanceMap.has(sId)) {
+        prevAttendanceMap.set(sId, {
+          totalWorkingDays: 0,
+          presentDays: 0,
+          absentDays: 0,
+          monthsCount: 0
+        });
+      }
+      const curr = prevAttendanceMap.get(sId);
+      curr.totalWorkingDays += (record.totalWorkingDays || 0);
+      curr.presentDays += (record.presentDays || 0);
+      curr.absentDays += (record.absentDays || 0);
+      curr.monthsCount += 1;
+    });
+
     // Build complete attendance list with all students
     const completeAttendance = [];
     for (const student of allStudents) {
       const existingRecord = attendanceMap.get(student._id.toString());
+      const prev = prevAttendanceMap.get(student._id.toString()) || {
+        totalWorkingDays: 0,
+        presentDays: 0,
+        absentDays: 0,
+        monthsCount: 0
+      };
+      const prevPercentage = prev.totalWorkingDays > 0
+        ? (prev.presentDays / prev.totalWorkingDays) * 100
+        : 0;
+
+      const previousAttendance = {
+        totalWorkingDays: prev.totalWorkingDays,
+        presentDays: prev.presentDays,
+        absentDays: prev.absentDays,
+        percentage: Math.round(prevPercentage * 10) / 10,
+        monthsCount: prev.monthsCount
+      };
       
       if (existingRecord) {
         // Use actual values from database
@@ -395,8 +447,8 @@ exports.getAttendanceByClass = async (req, res) => {
           studentName: student.fullName,
           classId: classId,
           academicYearId: existingRecord.academicYearId,
-          year: parseInt(year),
-          month: parseInt(month),
+          year: targetYear,
+          month: targetMonth,
           totalWorkingDays: existingRecord.totalWorkingDays,
           totalHolidays: holidayCount,
           presentDays: existingRecord.presentDays,
@@ -404,13 +456,12 @@ exports.getAttendanceByClass = async (req, res) => {
           percentage: existingRecord.percentage,
           templateId: existingRecord.templateId,
           holidays: existingRecord.holidays,
+          previousAttendance,
           createdAt: existingRecord.createdAt,
           updatedAt: existingRecord.updatedAt
         });
       } else {
         // NEW RECORD - SET ABSENT DAYS TO 0, NOT WORKING DAYS
-        // When no attendance record exists, it means no data has been entered yet
-        // So we set presentDays = 0, absentDays = 0 (not entered yet)
         completeAttendance.push({
           _id: null,
           studentId: {
@@ -422,17 +473,18 @@ exports.getAttendanceByClass = async (req, res) => {
           studentName: student.fullName,
           classId: classId,
           academicYearId: template?.academicYearId || null,
-          year: parseInt(year),
-          month: parseInt(month),
+          year: targetYear,
+          month: targetMonth,
           totalWorkingDays: workingDays,
           totalHolidays: holidayCount,
           presentDays: 0,
-          absentDays: 0,  // CHANGE THIS: from workingDays to 0
+          absentDays: 0,
           percentage: 0,
           templateId: template?._id || null,
           holidays: template?.holidays || [],
+          previousAttendance,
           isNewRecord: true,
-          isNotEntered: true  // Flag to indicate no data entered yet
+          isNotEntered: true
         });
       }
     }
@@ -739,31 +791,65 @@ exports.getAttendanceSummary = async (req, res) => {
       });
     }
 
-    // Get template for this class and month
-    const template = await AttendanceTemplate.findOne({
+    const targetYear = parseInt(year);
+    const targetMonth = parseInt(month);
+
+    const prevQuery = {
+      classId,
       $or: [
-        { classId: classId },
-        { classId: null }
-      ],
-      year: parseInt(year),
-      month: parseInt(month),
-      isActive: true
-    });
+        { year: { $lt: targetYear } },
+        { year: targetYear, month: { $lt: targetMonth } }
+      ]
+    };
+
+    // Run parallel queries
+    const [template, attendanceRecords, prevAttendanceRecords] = await Promise.all([
+      AttendanceTemplate.findOne({
+        $or: [
+          { classId: classId },
+          { classId: null }
+        ],
+        year: targetYear,
+        month: targetMonth,
+        isActive: true
+      }),
+      Attendance.find({
+        classId,
+        year: targetYear,
+        month: targetMonth
+      }),
+      Attendance.find(prevQuery)
+    ]);
 
     const workingDays = template?.totalWorkingDays || 25;
     const holidays = template?.holidays || [];
 
-    // Get attendance records for the month
-    const attendanceRecords = await Attendance.find({
-      classId,
-      year: parseInt(year),
-      month: parseInt(month)
-    });
-    
     // Create a map of existing attendance records
     const attendanceMap = new Map();
     attendanceRecords.forEach(record => {
       attendanceMap.set(record.studentId.toString(), record);
+    });
+
+    // Create a map of previous attendance records accumulated prior to this month
+    const prevAttendanceMap = new Map();
+    (prevAttendanceRecords || []).forEach(record => {
+      if (classObj?.academicYearId && record.academicYearId && record.academicYearId.toString() !== classObj.academicYearId.toString()) {
+        return;
+      }
+      const sId = record.studentId.toString();
+      if (!prevAttendanceMap.has(sId)) {
+        prevAttendanceMap.set(sId, {
+          totalWorkingDays: 0,
+          presentDays: 0,
+          absentDays: 0,
+          monthsCount: 0
+        });
+      }
+      const curr = prevAttendanceMap.get(sId);
+      curr.totalWorkingDays += (record.totalWorkingDays || 0);
+      curr.presentDays += (record.presentDays || 0);
+      curr.absentDays += (record.absentDays || 0);
+      curr.monthsCount += 1;
     });
     
     const studentDetails = [];
@@ -775,6 +861,23 @@ exports.getAttendanceSummary = async (req, res) => {
 
     for (const student of allStudents) {
       const record = attendanceMap.get(student._id.toString());
+      const prev = prevAttendanceMap.get(student._id.toString()) || {
+        totalWorkingDays: 0,
+        presentDays: 0,
+        absentDays: 0,
+        monthsCount: 0
+      };
+      const prevPercentage = prev.totalWorkingDays > 0
+        ? (prev.presentDays / prev.totalWorkingDays) * 100
+        : 0;
+
+      const previousAttendance = {
+        totalWorkingDays: prev.totalWorkingDays,
+        presentDays: prev.presentDays,
+        absentDays: prev.absentDays,
+        percentage: Math.round(prevPercentage * 10) / 10,
+        monthsCount: prev.monthsCount
+      };
       
       let presentDays = 0;
       let absentDays = 0;
@@ -811,7 +914,8 @@ exports.getAttendanceSummary = async (req, res) => {
         holidaysCount: holidays.length,
         holidayList: holidays,
         percentage: percentage,
-        status: statusText
+        status: statusText,
+        previousAttendance
       });
     }
 

@@ -320,7 +320,8 @@ const prepareStudentReportData = async (student, examId, academicYear, options =
   const grandMax = totalCEMax + totalTEMax;
   const rawPct = grandMax > 0 ? (grandTotal / grandMax) * 100 : 0;
   const overallPercentage = Math.round(rawPct * 10) / 10;
-  const overallTePercentage = totalTEMax > 0 ? Math.round((totalTE / totalTEMax) * 10) / 10 : 0;
+  const rawTePct = totalTEMax > 0 ? (totalTE / totalTEMax) * 100 : 0;
+  const overallTePercentage = Math.round(rawTePct * 10) / 10;
   const overallTeGrade = getGrade(overallTePercentage);
   const overallTotalGrade = getGrade(overallPercentage);
   const overallGrade = overallTotalGrade;
@@ -410,16 +411,6 @@ const prepareStudentReportData = async (student, examId, academicYear, options =
 
       let mWorkingDays = template?.totalWorkingDays;
 
-      // Fallback: Check if any attendance record has working days for this class/month
-      if (!mWorkingDays) {
-        const sampleAtt = await Attendance.findOne({
-          classId: studentClassId,
-          year: year,
-          month: month
-        });
-        mWorkingDays = sampleAtt?.totalWorkingDays || 25;
-      }
-
       // 2. Get student's present days for this month
       const attRecord = await Attendance.findOne({
         studentId: student._id,
@@ -427,9 +418,29 @@ const prepareStudentReportData = async (student, examId, academicYear, options =
         month: month
       });
 
+      // Fallback: Check if any attendance record has working days for this class/month
+      if (!mWorkingDays) {
+        if (attRecord?.totalWorkingDays) {
+          mWorkingDays = attRecord.totalWorkingDays;
+        } else {
+          const sampleAtt = await Attendance.findOne({
+            classId: studentClassId,
+            year: year,
+            month: month
+          });
+          mWorkingDays = sampleAtt?.totalWorkingDays || 25;
+        }
+      }
+
       let mPresentDays = 0;
       if (attRecord) {
         mPresentDays = attRecord.presentDays ?? (mWorkingDays - (attRecord.absentDays || 0));
+        if (attRecord.totalWorkingDays && attRecord.totalWorkingDays > mWorkingDays) {
+          mWorkingDays = attRecord.totalWorkingDays;
+        }
+        if (mPresentDays > mWorkingDays) {
+          mWorkingDays = mPresentDays;
+        }
       } else {
         mPresentDays = 0;
       }
@@ -475,6 +486,7 @@ const prepareStudentReportData = async (student, examId, academicYear, options =
     grandTotal,
     grandMax,
     overallPercentage,
+    overallTePercentage,
     overallTeGrade,
     overallTotalGrade,
     overallGrade: overallGrade,

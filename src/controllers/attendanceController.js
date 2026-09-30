@@ -310,6 +310,8 @@ exports.getAttendanceByStudent = async (req, res) => {
 
     const attendance = await Attendance.find(query)
       .populate('academicYearId', 'name year')
+      .populate('studentId', 'fullName name admissionNo rollNumber')
+      .populate('classId', 'name section displayName')
       .sort({ year: -1, month: -1 });
 
     res.json(attendance || []);

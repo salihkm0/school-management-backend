@@ -685,6 +685,8 @@ exports.getMarksheetsByClass = async (req, res) => {
         term: exam.term,
         classId,
         className: students[0]?.className || "",
+        isClassTeacher,
+        isAdmin,
         subjects: uniqueSubjects,
         students: studentMarksData,
         languageMapping,

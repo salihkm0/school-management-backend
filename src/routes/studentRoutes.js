@@ -20,11 +20,13 @@ const {
   getStudentMarks,
   getStudentAcademicInfo,
   exportStudents,
-  bulkUpdateRollNumbers
+  bulkUpdateRollNumbers,
+  searchStudents
 } = require('../controllers/studentController');
 
 router.use(protect);
 
+router.get('/search', searchStudents);
 router.get('/', validate(paginationQuery), cacheRoute(1800, 'students'), getStudents);
 router.post('/', authorize('admin'), validate(studentValidation), invalidateCache('students'), createStudent);
 router.post('/import', authorize('admin'), uploadSingle('file'), invalidateCache('students'), importStudents);

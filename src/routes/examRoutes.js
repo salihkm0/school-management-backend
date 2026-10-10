@@ -55,7 +55,7 @@ router.get('/:id', cacheRoute(1800, 'exams'), getExam);
 // Admin only operations
 router.post('/', authorize('admin'), invalidateCache('exams'), createExam);
 router.put('/:id', authorize('admin'), invalidateCache('exams'), updateExam);
-router.delete('/:id', authorize('admin'), invalidateCache('exams'), deleteExam);
+router.delete('/:id', authorize('admin', 'principal', 'staff'), invalidateCache('exams'), deleteExam);
 router.post('/:id/publish', authorize('admin', 'principal'), invalidateCache('exams'), publishExam);
 router.post('/:id/clone', authorize('admin'), invalidateCache('exams'), cloneExam);
 

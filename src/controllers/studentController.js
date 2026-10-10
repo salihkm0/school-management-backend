@@ -49,10 +49,16 @@ exports.getStudents = async (req, res) => {
       query.status = 'active';
     }
     if (search) {
+      const trimmed = search.trim();
+      const escaped = trimmed.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+      const searchRegex = { $regex: escaped, $options: 'i' };
       query.$or = [
-        { fullName: { $regex: search, $options: 'i' } },
-        { studentCode: { $regex: search, $options: 'i' } },
-        { admissionNo: { $regex: search, $options: 'i' } }
+        { fullName: searchRegex },
+        { fullNameMalayalam: searchRegex },
+        { studentCode: searchRegex },
+        { admissionNo: searchRegex },
+        { rollNumber: searchRegex },
+        { phoneNumber: searchRegex }
       ];
     }
 
@@ -910,5 +916,39 @@ exports.bulkUpdateRollNumbers = async (req, res) => {
     res.json({ message: "Roll numbers updated successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+exports.searchStudents = async (req, res) => {
+  try {
+    const q = req.query.q || req.query.search || '';
+    if (!q || !q.trim()) {
+      return res.json({ success: true, data: [] });
+    }
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+    const trimmed = q.trim();
+    const regex = new RegExp(trimmed.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'), 'i');
+
+    const students = await Student.find({
+      isActive: true,
+      $or: [
+        { fullName: regex },
+        { fullNameMalayalam: regex },
+        { studentCode: regex },
+        { admissionNo: regex },
+        { rollNumber: regex },
+        { phoneNumber: regex }
+      ]
+    })
+      .populate('classId', 'name section displayName')
+      .populate('academicYearId', 'name year isCurrent')
+      .select('_id fullName fullNameMalayalam admissionNo studentCode rollNumber className division gender status photoUrl phoneNumber classId academicYearId')
+      .sort({ className: 1, division: 1, rollNumber: 1, fullName: 1 })
+      .limit(limit);
+
+    res.json({ success: true, data: students });
+  } catch (error) {
+    console.error('Error in searchStudents:', error);
+    res.status(500).json({ success: false, message: error.message });
   }
 };

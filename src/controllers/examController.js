@@ -9,6 +9,7 @@ const AcademicYear = require('../models/AcademicYear');
 const Subject = require('../models/Subject');
 const Notification = require('../models/Notification');
 const { broadcastToClass, broadcastToUser, broadcastToRole } = require('../config/socket');
+const { clearCache } = require('../middleware/cacheMiddleware');
 
 // Helper: Send exam notification to class
 async function sendExamNotificationToClass(classId, examId, examName, title, message, type, data) {
@@ -930,17 +931,29 @@ exports.deleteExam = async (req, res) => {
       return res.status(404).json({ message: 'Exam not found' });
     }
 
-    // Access control: Only admin or the creator can delete
-    if (req.user.role !== 'admin' && exam.createdBy.toString() !== req.user.id) {
-      return res.status(403).json({ message: 'Only the creator of the exam or an admin can delete it' });
+    // Access control: Only admin, principal or the creator can delete
+    if (req.user.role !== 'admin' && req.user.role !== 'principal' && exam.createdBy.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Only the creator of the exam, a principal, or an admin can delete it' });
     }
 
+    const isForce = req.query.force === 'true' || req.body?.force === true;
+
     const hasMarks = await Mark.exists({ examId: req.params.id });
-    if (hasMarks) {
+    if (hasMarks && !isForce) {
       return res.status(400).json({ 
-        message: 'Cannot delete exam after marks have been entered. Please archive it instead.' 
+        hasMarks: true,
+        message: 'Cannot delete exam because marks have already been entered. Use force delete to remove the exam and all its marks.' 
       });
     }
+
+    if (isForce || hasMarks) {
+      await Mark.deleteMany({ examId: exam._id });
+    }
+    await ExamResult.deleteMany({ examId: exam._id });
+
+    // Invalidate caches
+    await clearCache('exams');
+    await clearCache('marks');
 
     for (const classId of exam.classIds) {
       await sendExamNotificationToClass(
@@ -960,7 +973,10 @@ exports.deleteExam = async (req, res) => {
     }
 
     await exam.deleteOne();
-    res.json({ message: 'Exam deleted successfully' });
+    res.json({ 
+      message: isForce && hasMarks ? 'Exam and all its marks were deleted successfully' : 'Exam deleted successfully',
+      deletedMarks: isForce && hasMarks 
+    });
   } catch (error) {
     console.error('Error deleting exam:', error);
     res.status(500).json({ message: error.message });

@@ -4,7 +4,9 @@ const Class = require('../models/Class');
 
 exports.globalSearch = async (req, res) => {
   try {
-    const query = req.query.q;
+    const query = req.query.q || req.query.search;
+    const limit = Math.min(parseInt(req.query.limit) || 15, 50);
+    const type = req.query.type; // optional: 'student', 'staff', 'class'
     
     if (!query || query.trim() === '') {
       return res.status(200).json({
@@ -17,43 +19,73 @@ exports.globalSearch = async (req, res) => {
       });
     }
 
-    const regex = new RegExp(query, 'i');
+    const trimmed = query.trim();
+    const regex = new RegExp(trimmed.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'), 'i');
 
-    // Run parallel queries
-    const [students, staff, classes] = await Promise.all([
-      Student.find({
-        status: 'active',
-        $or: [
-          { fullName: regex },
-          { admissionNo: regex },
-          { studentCode: regex }
-        ]
-      })
-      .select('_id fullName admissionNo studentCode photoUrl className')
-      .limit(5),
-      
-      Staff.find({
-        isActive: true,
-        $or: [
-          { name: regex },
-          { staffCode: regex },
-          { email: regex }
-        ]
-      })
-      .select('_id name staffCode email role photoUrl')
-      .limit(5),
-      
-      Class.find({
-        isActive: true,
-        $or: [
-          { name: regex },
-          { displayName: regex },
-          { section: regex }
-        ]
-      })
-      .select('_id name section displayName')
-      .limit(5)
-    ]);
+    const queries = [];
+
+    // Search Students
+    if (!type || type === 'student' || type === 'students') {
+      queries.push(
+        Student.find({
+          isActive: true,
+          $or: [
+            { fullName: regex },
+            { fullNameMalayalam: regex },
+            { admissionNo: regex },
+            { studentCode: regex },
+            { rollNumber: regex },
+            { phoneNumber: regex },
+            { eid: regex }
+          ]
+        })
+        .populate('classId', 'name section displayName')
+        .select('_id fullName fullNameMalayalam admissionNo studentCode rollNumber className division gender status photoUrl phoneNumber classId')
+        .sort({ className: 1, division: 1, rollNumber: 1, fullName: 1 })
+        .limit(limit)
+      );
+    } else {
+      queries.push(Promise.resolve([]));
+    }
+
+    // Search Staff
+    if (!type || type === 'staff') {
+      queries.push(
+        Staff.find({
+          isActive: true,
+          $or: [
+            { name: regex },
+            { staffCode: regex },
+            { email: regex },
+            { phone: regex }
+          ]
+        })
+        .select('_id name staffCode email role photoUrl phone')
+        .limit(limit)
+      );
+    } else {
+      queries.push(Promise.resolve([]));
+    }
+
+    // Search Classes
+    if (!type || type === 'class' || type === 'classes') {
+      queries.push(
+        Class.find({
+          isActive: true,
+          $or: [
+            { name: regex },
+            { displayName: regex },
+            { section: regex }
+          ]
+        })
+        .select('_id name section displayName')
+        .limit(limit)
+      );
+    } else {
+      queries.push(Promise.resolve([]));
+    }
+
+    const [students, staff, classes] = await Promise.all(queries);
 
     res.status(200).json({
       success: true,

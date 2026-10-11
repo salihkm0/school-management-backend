@@ -133,85 +133,121 @@ exports.registerParent = async (req, res) => {
   }
 };
 
-// Connect Student to Parent (using studentCode and dateOfBirth)
+// Connect Student to Parent (using admissionNo/studentCode and dateOfBirth)
 exports.connectStudent = async (req, res) => {
   try {
-    const parentId = req.params.id;
-    const { studentCode: inputCode, dateOfBirth, relation } = req.body;
+    const parentId = req.params.parentId || req.params.id || req.body.parentId;
+    const { studentCode: rawCode, admissionNo: rawAdmNo, dateOfBirth, relation = 'father' } = req.body;
     
-    const parent = await Parent.findById(parentId);
+    let parent;
+    if (req.user.role === 'admin' && parentId) {
+      parent = await Parent.findById(parentId);
+    } else if (req.user.role === 'admin') {
+      parent = await Parent.findById(parentId);
+    } else {
+      parent = await Parent.findOne({ userId: req.user.id });
+    }
+    
     if (!parent) {
       return res.status(404).json({ message: 'Parent not found' });
     }
     
-    const parsedDOB = new Date(dateOfBirth);
+    const inputCode = (rawAdmNo || rawCode || '').toString().trim();
+    if (!inputCode) {
+      return res.status(400).json({ message: 'Admission number is required' });
+    }
     
-    // Find student by studentCode or admissionNo and dateOfBirth (across all years)
+    if (!dateOfBirth) {
+      return res.status(400).json({ message: 'Date of birth is required' });
+    }
+    
+    const parsedDOB = new Date(dateOfBirth);
+    if (isNaN(parsedDOB.getTime())) {
+      return res.status(400).json({ message: 'Valid date of birth is required' });
+    }
+    
+    const startOfDay = new Date(parsedDOB);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(parsedDOB);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    // Find student by admissionNo or studentCode and dateOfBirth
     const student = await Student.findOne({
       $or: [
-        { studentCode: inputCode },
-        { admissionNo: inputCode }
+        { admissionNo: inputCode },
+        { studentCode: inputCode }
       ],
       dateOfBirth: {
-        $gte: new Date(parsedDOB.setHours(0, 0, 0, 0)),
-        $lt: new Date(parsedDOB.setHours(23, 59, 59, 999))
+        $gte: startOfDay,
+        $lte: endOfDay
       }
     }).sort({ academicYearId: -1 });
     
-    // Resolve the actual student code to use for connection
-    const actualStudentCode = student ? student.studentCode : inputCode;
-
+    // Resolve the actual code to store
+    const codeToStore = student ? (student.admissionNo || student.studentCode) : inputCode;
+    
     // Check if already connected
-    if (parent.hasConnection && parent.hasConnection(actualStudentCode)) {
-      return res.status(400).json({ message: 'Student already connected' });
-    }
-    
-    if (!student) {
-      // Store the connection request for future matching
-      if (parent.addStudentConnection) {
-        await parent.addStudentConnection(actualStudentCode, parsedDOB, relation);
-      }
-      
-      return res.status(202).json({ 
-        success: true,
-        message: 'Connection request saved. Student will be connected when data is imported.',
-        pending: true,
-        studentCode: actualStudentCode,
-        relation
-      });
-    }
-    
-    // Student found - add connection
-    if (parent.addStudentConnection) {
-      await parent.addStudentConnection(actualStudentCode, parsedDOB, relation);
-    }
-    
-    // Update cached details immediately
-    const connection = parent.students.find(s => s.studentCode === actualStudentCode);
-    if (connection) {
-      connection.studentName = student.fullName;
-      connection.className = student.className;
-      connection.division = student.division;
-      await parent.save();
-    }
-    
-    // Send notification
-    await sendParentNotification(
-      parent.userId,
-      'Student Connected Successfully',
-      `Your child ${student.fullName} (${studentCode}) has been connected to your account.`,
-      'success',
-      { studentCode, studentName: student.fullName }
+    const isAlreadyConnected = (parent.students || []).some(s => 
+      s.studentCode === inputCode || 
+      s.studentCode === codeToStore ||
+      (student && (s.studentCode === student.studentCode || s.studentCode === student.admissionNo))
     );
+    
+    if (isAlreadyConnected) {
+      return res.status(400).json({ message: 'Student is already connected to this parent' });
+    }
+    
+    const connectionData = {
+      studentCode: codeToStore,
+      dateOfBirth: parsedDOB,
+      relation: (relation || 'father').toLowerCase(),
+      studentFullName: student ? student.fullName : '',
+      className: student ? `${student.className || ''} ${student.division || ''}`.trim() : '',
+      connectedSince: new Date()
+    };
+    
+    if (!parent.students) {
+      parent.students = [];
+    }
+    parent.students.push(connectionData);
+    await parent.save();
+    
+    // Keep bidirectional link on student
+    if (student) {
+      if (!student.parentIds) student.parentIds = [];
+      if (!student.parentIds.some(p => p.toString() === parent._id.toString())) {
+        student.parentIds.push(parent._id);
+        await student.save();
+      }
+    }
+    
+    // Send notification if user account exists
+    if (parent.userId) {
+      try {
+        await sendParentNotification(
+          parent.userId,
+          'Student Connected Successfully',
+          student 
+            ? `Your child ${student.fullName} (Adm No: ${student.admissionNo || student.studentCode}) has been connected to your account.`
+            : `Student connection request (${inputCode}) has been saved.`,
+          'success',
+          { studentCode: codeToStore, studentName: student?.fullName }
+        );
+      } catch (notifyErr) {
+        console.warn('Notification error in connectStudent:', notifyErr.message);
+      }
+    }
     
     res.json({
       success: true,
-      message: 'Student connected successfully',
+      message: student ? 'Student connected successfully' : 'Connection request saved. Student will be connected when data matches.',
+      pending: !student,
       data: {
-        studentCode: student.studentCode,
-        studentName: student.fullName,
-        className: `${student.className || ''} ${student.division || ''}`.trim(),
-        relation: relation || 'father'
+        studentCode: codeToStore,
+        admissionNo: student ? student.admissionNo : codeToStore,
+        studentName: student ? student.fullName : null,
+        className: student ? `${student.className || ''} ${student.division || ''}`.trim() : null,
+        relation: connectionData.relation
       }
     });
   } catch (error) {
@@ -247,7 +283,7 @@ exports.getMyParentProfile = async (req, res) => {
 exports.getParentProfile = async (req, res) => {
   try {
     const parent = await Parent.findById(req.params.id)
-      .populate('userId', 'email phone photoUrl');
+      .populate('userId', 'email phone photoUrl isActive');
     
     if (!parent) {
       return res.status(404).json({ message: 'Parent not found' });
@@ -262,19 +298,35 @@ exports.getParentProfile = async (req, res) => {
       currentStudents = await parent.getCurrentStudentDetails(currentYear?._id);
     }
     
-    // Check which connections have current data
+    // Check which connections have current data and backfill cached info
+    let hasDirtyParent = false;
     const connections = (parent.students || []).map(conn => {
-      const current = currentStudents.find(s => s.studentCode === conn.studentCode);
+      const current = currentStudents.find(s => 
+        s.studentCode === conn.studentCode || 
+        s.admissionNo === conn.studentCode ||
+        String(s.admissionNo) === String(conn.studentCode)
+      );
+      if (current && (!conn.studentFullName || !conn.className)) {
+        conn.studentFullName = current.fullName;
+        conn.className = current.className;
+        hasDirtyParent = true;
+      }
       return {
         studentCode: conn.studentCode,
-        relation: conn.relation,
+        admissionNo: current?.admissionNo || conn.studentCode,
+        relation: conn.relation || 'guardian',
         connectedSince: conn.connectedSince,
-        studentFullName: conn.studentFullName,
-        className: conn.className,
+        studentFullName: current?.fullName || conn.studentFullName,
+        className: current?.className || conn.className,
+        dateOfBirth: conn.dateOfBirth,
         currentDetails: current || null,
         hasCurrentData: !!current
       };
     });
+    
+    if (hasDirtyParent) {
+      await parent.save();
+    }
     
     res.json({
       success: true,
@@ -320,7 +372,10 @@ exports.getMyChildren = async (req, res) => {
     // Get full student details
     const studentCodes = children.map(c => c.studentCode);
     const fullStudents = await Student.find({
-      studentCode: { $in: studentCodes },
+      $or: [
+        { studentCode: { $in: studentCodes } },
+        { admissionNo: { $in: studentCodes } }
+      ],
       academicYearId: currentYear._id
     })
       .populate('classId', 'name section classTeacherName')
@@ -331,7 +386,11 @@ exports.getMyChildren = async (req, res) => {
     
     // Merge with relation info, attendance, and exam performance
     const enrichedChildren = await Promise.all(fullStudents.map(async (student) => {
-      const child = children.find(c => c.studentCode === student.studentCode);
+      const child = children.find(c => 
+        c.studentCode === student.studentCode || 
+        c.studentCode === student.admissionNo ||
+        String(c.studentCode) === String(student.admissionNo)
+      );
       
       // Calculate attendance percentage - aggregate across all months
       let attendancePercentage = 0;
@@ -702,15 +761,56 @@ exports.getParents = async (req, res) => {
 // Remove student connection
 exports.removeStudentConnection = async (req, res) => {
   try {
-    const { parentId, studentCode } = req.params;
+    const studentCode = req.params.studentCode;
+    let parentId = req.params.parentId || req.body?.parentId || req.query?.parentId;
     
-    const parent = await Parent.findById(parentId);
+    let parent;
+    if (req.user.role === 'admin') {
+      if (parentId) {
+        parent = await Parent.findById(parentId);
+      } else {
+        parent = await Parent.findOne({
+          $or: [
+            { 'students.studentCode': studentCode },
+            { 'students.studentCode': String(studentCode) }
+          ]
+        });
+      }
+    } else {
+      parent = await Parent.findOne({ userId: req.user.id });
+    }
+    
     if (!parent) {
       return res.status(404).json({ message: 'Parent not found' });
     }
     
     if (parent.removeStudentConnection) {
       await parent.removeStudentConnection(studentCode);
+    } else {
+      parent.students = (parent.students || []).filter(
+        s => s.studentCode !== studentCode && String(s.studentCode) !== String(studentCode)
+      );
+      await parent.save();
+    }
+    
+    // Also remove parent from student.parentIds if exists
+    try {
+      const students = await Student.find({
+        $or: [
+          { studentCode: studentCode },
+          { admissionNo: studentCode }
+        ]
+      });
+      for (const st of students) {
+        if (st.parentIds && st.parentIds.length > 0) {
+          st.parentIds = st.parentIds.filter(
+            id => id.toString() !== parent._id.toString()
+          );
+          await st.save();
+        }
+      }
+    } catch (unlinkErr) {
+      console.warn('Could not unlink student parentIds:', unlinkErr.message);
     }
     
     res.json({
@@ -748,15 +848,22 @@ exports.getParentStudents = async (req, res) => {
     // Get full student details
     const studentCodes = students.map(s => s.studentCode);
     const fullStudents = await Student.find({
-      studentCode: { $in: studentCodes },
+      $or: [
+        { studentCode: { $in: studentCodes } },
+        { admissionNo: { $in: studentCodes } }
+      ],
       academicYearId: yearId
     })
       .populate('classId', 'name section displayName')
-      .select('studentCode fullName className division gender dateOfBirth status');
+      .select('studentCode admissionNo fullName className division gender dateOfBirth status');
     
     // Merge with relation info
     const enrichedStudents = fullStudents.map(student => {
-      const connection = (parent.students || []).find(c => c.studentCode === student.studentCode);
+      const connection = (parent.students || []).find(c => 
+        c.studentCode === student.studentCode || 
+        c.studentCode === student.admissionNo ||
+        String(c.studentCode) === String(student.admissionNo)
+      );
       return {
         ...student.toObject(),
         relation: connection?.relation || 'guardian',
@@ -766,7 +873,11 @@ exports.getParentStudents = async (req, res) => {
     
     // Also include connections without current student data
     const missingStudentCodes = (parent.students || [])
-      .filter(c => !fullStudents.find(s => s.studentCode === c.studentCode))
+      .filter(c => !fullStudents.find(s => 
+        s.studentCode === c.studentCode || 
+        s.admissionNo === c.studentCode ||
+        String(s.admissionNo) === String(c.studentCode)
+      ))
       .map(c => ({
         studentCode: c.studentCode,
         relation: c.relation,
@@ -815,42 +926,181 @@ exports.getParentByUserId = async (req, res) => {
 
 exports.updateParent = async (req, res) => {
   try {
-    const { fullName, email, phone, alternatePhone, address, occupation, password } = req.body;
+    const parentId = req.params.parentId || req.params.id;
+    const { 
+      fullName, 
+      email, 
+      phone, 
+      alternatePhone, 
+      address, 
+      occupation, 
+      password,
+      isActive,
+      students,
+      relation,
+      studentCode
+    } = req.body;
     
-    const parent = await Parent.findById(req.params.id);
+    const parent = await Parent.findById(parentId);
     if (!parent) {
       return res.status(404).json({ message: 'Parent not found' });
     }
     
-    // Update User model name/phone/email/password if they are changed
-    if (fullName || phone || email || password) {
+    // Update User model name/phone/email/password/isActive if changed
+    if (parent.userId) {
       const userToUpdate = await User.findById(parent.userId);
       if (userToUpdate) {
-        if (fullName) userToUpdate.name = fullName;
-        if (phone) userToUpdate.phone = phone;
-        if (email) userToUpdate.email = email;
-        if (password) userToUpdate.password = password;
+        if (fullName) userToUpdate.name = fullName.trim();
+        if (phone) userToUpdate.phone = phone.trim();
+        if (email !== undefined) userToUpdate.email = email ? email.trim().toLowerCase() : null;
+        if (typeof isActive === 'boolean') userToUpdate.isActive = isActive;
+        if (password && typeof password === 'string' && password.trim().length >= 6) {
+          userToUpdate.password = password.trim();
+        }
         await userToUpdate.save();
       }
     }
     
-    // Update parent
-    parent.fullName = fullName || parent.fullName;
-    parent.email = email !== undefined ? email : parent.email;
-    parent.phone = phone || parent.phone;
-    parent.alternatePhone = alternatePhone !== undefined ? alternatePhone : parent.alternatePhone;
-    parent.occupation = occupation !== undefined ? occupation : parent.occupation;
+    // Update parent basic fields
+    if (fullName) parent.fullName = fullName.trim();
+    if (email !== undefined) parent.email = email ? email.trim().toLowerCase() : null;
+    if (phone) parent.phone = phone.trim();
+    if (alternatePhone !== undefined) parent.alternatePhone = alternatePhone ? alternatePhone.trim() : '';
+    if (occupation !== undefined) parent.occupation = occupation ? occupation.trim() : '';
+    if (typeof isActive === 'boolean') parent.isActive = isActive;
     
-    if (address) {
-      parent.address = typeof address === 'string' ? { street: address } : address;
+    // Update address (string or structured object)
+    if (address !== undefined) {
+      if (typeof address === 'string') {
+        parent.address = { street: address.trim() };
+      } else if (typeof address === 'object' && address !== null) {
+        parent.address = {
+          street: address.street || '',
+          city: address.city || '',
+          district: address.district || '',
+          state: address.state || '',
+          pincode: address.pincode || ''
+        };
+      }
+    }
+    
+    // Single student relation update (e.g. from inline dropdown or param)
+    const targetStudentCode = req.params.studentCode || studentCode;
+    if (targetStudentCode && relation) {
+      const connection = (parent.students || []).find(s => 
+        s.studentCode === targetStudentCode || 
+        String(s.studentCode) === String(targetStudentCode)
+      );
+      if (connection) {
+        connection.relation = relation.toLowerCase();
+      }
+    }
+    
+    // Full students array update (from Edit Parent form)
+    if (Array.isArray(students)) {
+      if (!parent.students) parent.students = [];
+      
+      const updatedList = [];
+      for (const item of students) {
+        if (!item || !item.studentCode) continue;
+        const code = item.studentCode.toString().trim();
+        const existing = parent.students.find(s => 
+          s.studentCode === code || String(s.studentCode) === code
+        );
+        
+        if (existing) {
+          if (item.relation) existing.relation = item.relation.toLowerCase();
+          if (item.dateOfBirth) existing.dateOfBirth = new Date(item.dateOfBirth);
+          if (item.studentFullName) existing.studentFullName = item.studentFullName;
+          if (item.className) existing.className = item.className;
+          updatedList.push(existing);
+        } else {
+          // New student added via edit form
+          const studentDoc = await Student.findOne({
+            $or: [
+              { admissionNo: code },
+              { studentCode: code }
+            ]
+          }).sort({ academicYearId: -1 });
+          
+          const newConn = {
+            studentCode: code,
+            dateOfBirth: item.dateOfBirth ? new Date(item.dateOfBirth) : (studentDoc?.dateOfBirth || new Date()),
+            relation: (item.relation || 'guardian').toLowerCase(),
+            studentFullName: studentDoc?.fullName || item.studentFullName || '',
+            className: studentDoc ? `${studentDoc.className || ''} ${studentDoc.division || ''}`.trim() : (item.className || ''),
+            connectedSince: new Date()
+          };
+          updatedList.push(newConn);
+          
+          if (studentDoc) {
+            if (!studentDoc.parentIds) studentDoc.parentIds = [];
+            if (!studentDoc.parentIds.some(p => p.toString() === parent._id.toString())) {
+              studentDoc.parentIds.push(parent._id);
+              await studentDoc.save();
+            }
+          }
+        }
+      }
+      
+      // Check if any old students were removed
+      const currentCodes = new Set(updatedList.map(s => String(s.studentCode)));
+      const removedStudents = parent.students.filter(s => !currentCodes.has(String(s.studentCode)));
+      for (const rem of removedStudents) {
+        try {
+          const stDocs = await Student.find({
+            $or: [{ studentCode: rem.studentCode }, { admissionNo: rem.studentCode }]
+          });
+          for (const st of stDocs) {
+            if (st.parentIds && st.parentIds.length > 0) {
+              st.parentIds = st.parentIds.filter(p => p.toString() !== parent._id.toString());
+              await st.save();
+            }
+          }
+        } catch (e) {
+          console.warn('Error unlinking removed student:', e.message);
+        }
+      }
+      
+      parent.students = updatedList;
     }
     
     await parent.save();
     
+    // Get updated profile details to return
+    const currentYear = await AcademicYear.findOne({ isCurrent: true });
+    let currentStudents = [];
+    if (parent.getCurrentStudentDetails) {
+      currentStudents = await parent.getCurrentStudentDetails(currentYear?._id);
+    }
+    
+    const connections = (parent.students || []).map(conn => {
+      const current = currentStudents.find(s => 
+        s.studentCode === conn.studentCode || 
+        s.admissionNo === conn.studentCode ||
+        String(s.admissionNo) === String(conn.studentCode)
+      );
+      return {
+        studentCode: conn.studentCode,
+        admissionNo: current?.admissionNo || conn.studentCode,
+        relation: conn.relation,
+        connectedSince: conn.connectedSince,
+        studentFullName: current?.fullName || conn.studentFullName,
+        className: current?.className || conn.className,
+        dateOfBirth: conn.dateOfBirth,
+        currentDetails: current || null,
+        hasCurrentData: !!current
+      };
+    });
+    
     res.json({
       success: true,
       message: 'Parent updated successfully',
-      data: parent
+      data: {
+        ...parent.toObject(),
+        connections,
+        currentStudents
+      }
     });
   } catch (error) {
     console.error('Update parent error:', error);

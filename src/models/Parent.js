@@ -108,28 +108,39 @@ ParentSchema.virtual('connectedStudents', {
 
 // Method to get current student details
 ParentSchema.methods.getCurrentStudentDetails = async function(academicYearId = null) {
-  const Student = mongoose.model('Student');  // ← Also add this line to get the model inside the method
+  const Student = mongoose.model('Student');
   
-  const studentCodes = this.students.map(s => s.studentCode);
+  const studentCodes = (this.students || []).map(s => s.studentCode);
   
-  const query = { studentCode: { $in: studentCodes } };
+  const query = {
+    $or: [
+      { studentCode: { $in: studentCodes } },
+      { admissionNo: { $in: studentCodes } }
+    ]
+  };
   if (academicYearId) {
     query.academicYearId = academicYearId;
   }
   
   const students = await Student.find(query)
-    .select('studentCode fullName className division classId')
+    .select('studentCode admissionNo fullName className division classId')
     .populate('classId', 'name section')
     .sort({ academicYearId: -1 }); // Most recent first
   
   // Map to unique student codes (latest academic year)
   const studentMap = new Map();
   students.forEach(s => {
-    if (!studentMap.has(s.studentCode)) {
-      const connection = this.students.find(c => c.studentCode === s.studentCode);
-      studentMap.set(s.studentCode, {
+    const connection = (this.students || []).find(c => 
+      c.studentCode === s.studentCode || 
+      c.studentCode === s.admissionNo ||
+      String(c.studentCode) === String(s.admissionNo)
+    );
+    const key = connection ? connection.studentCode : (s.admissionNo || s.studentCode);
+    if (!studentMap.has(key)) {
+      studentMap.set(key, {
         _id: s._id,
         studentCode: s.studentCode,
+        admissionNo: s.admissionNo || s.studentCode,
         fullName: s.fullName,
         className: `${s.className || ''} ${s.division || ''}`.trim(),
         classId: s.classId,
@@ -166,18 +177,25 @@ ParentSchema.methods.addStudentConnection = async function(studentCode, dateOfBi
 
 // Method to remove student connection
 ParentSchema.methods.removeStudentConnection = function(studentCode) {
-  this.students = this.students.filter(s => s.studentCode !== studentCode);
+  this.students = (this.students || []).filter(
+    s => s.studentCode !== studentCode && String(s.studentCode) !== String(studentCode)
+  );
   return this.save();
 };
 
 // Static method to find parent by student code
 ParentSchema.statics.findByStudentCode = function(studentCode) {
-  return this.find({ 'students.studentCode': studentCode });
+  return this.find({
+    $or: [
+      { 'students.studentCode': studentCode },
+      { 'students.studentCode': String(studentCode) }
+    ]
+  });
 };
 
 // Static method to update cached student details after import
 ParentSchema.statics.updateCachedStudentDetails = async function(academicYearId = null) {
-  const Student = mongoose.model('Student');  // ← Also add this line
+  const Student = mongoose.model('Student');
   
   const parents = await this.find({ 'students.0': { $exists: true } });
   
@@ -188,7 +206,11 @@ ParentSchema.statics.updateCachedStudentDetails = async function(academicYearId 
     
     let needsUpdate = false;
     for (const student of currentStudents) {
-      const connection = parent.students.find(s => s.studentCode === student.studentCode);
+      const connection = parent.students.find(s => 
+        s.studentCode === student.studentCode || 
+        s.studentCode === student.admissionNo ||
+        String(s.studentCode) === String(student.admissionNo)
+      );
       if (connection) {
         if (connection.studentFullName !== student.fullName || 
             connection.className !== student.className) {

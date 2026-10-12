@@ -1107,3 +1107,56 @@ exports.updateParent = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// Delete parent (Admin only)
+exports.deleteParent = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const parent = await Parent.findById(id);
+    if (!parent) {
+      return res.status(404).json({ message: 'Parent not found' });
+    }
+    
+    // 1. Remove parent reference from all students
+    try {
+      const studentCodes = (parent.students || []).map(s => s.studentCode);
+      const connectedStudents = await Student.find({
+        $or: [
+          { parentIds: parent._id },
+          { studentCode: { $in: studentCodes } },
+          { admissionNo: { $in: studentCodes } }
+        ]
+      });
+      
+      for (const st of connectedStudents) {
+        if (st.parentIds && st.parentIds.length > 0) {
+          st.parentIds = st.parentIds.filter(pId => pId.toString() !== parent._id.toString());
+          await st.save();
+        }
+      }
+    } catch (studentErr) {
+      console.warn('Error unlinking parent from students:', studentErr.message);
+    }
+    
+    // 2. Delete associated User account if it exists
+    if (parent.userId) {
+      try {
+        await User.findByIdAndDelete(parent.userId);
+      } catch (userErr) {
+        console.warn('Error deleting associated user:', userErr.message);
+      }
+    }
+    
+    // 3. Delete Parent document
+    await Parent.findByIdAndDelete(id);
+    
+    res.json({
+      success: true,
+      message: 'Parent and associated account removed successfully'
+    });
+  } catch (error) {
+    console.error('Error in deleteParent:', error);
+    res.status(500).json({ message: error.message });
+  }
+};

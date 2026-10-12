@@ -13,7 +13,8 @@ const {
   getParentStudents,
   getParentByUserId,
   getMyParentProfile,
-  updateParent
+  updateParent,
+  deleteParent
 } = require('../controllers/parentController');
 
 // Public route - Parent registration (no authentication required)
@@ -34,6 +35,7 @@ router.get('/me', getParentByUserId);
 router.get('/', authorize('admin'), validate(paginationQuery), getParents);
 router.get('/:id', authorize('admin'), validate([idParam]), getParentProfile);
 router.put('/:id', authorize('admin'), validate([idParam]), updateParent);
+router.delete('/:id', authorize('admin'), validate([idParam]), deleteParent);
 router.get('/:parentId/students', authorize('admin'), getParentStudents);
 router.post('/:parentId/connect-student', authorize('admin'), connectStudent);
 router.delete('/:parentId/student/:studentCode', authorize('admin'), removeStudentConnection);

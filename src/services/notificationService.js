@@ -43,11 +43,11 @@ class NotificationService {
   
   // Send notification to all parents of a student
   static async sendToStudentParents(studentId, title, message, type = 'info', data = {}) {
-    const Student = require('../models/Student');
-    const student = await Student.findById(studentId).select('parentIds');
-    if (!student) return [];
+    const { getParentUsersByStudent } = require('../utils/parentResolver');
+    const userIds = await getParentUsersByStudent(studentId);
+    if (!userIds || userIds.length === 0) return [];
     
-    return await this.sendToMultipleUsers(student.parentIds, title, message, type, {
+    return await this.sendToMultipleUsers(userIds, title, message, type, {
       ...data,
       studentId
     });
@@ -55,18 +55,18 @@ class NotificationService {
   
   // Send notification to entire class
   static async sendToClass(classId, title, message, type = 'info', data = {}) {
-    const Student = require('../models/Student');
+    const { getParentUsersByClass } = require('../utils/parentResolver');
     const Class = require('../models/Class');
     
-    const students = await Student.find({ classId }).select('parentIds');
-    const parentIds = [...new Set(students.flatMap(s => s.parentIds))];
+    const { parentUserIds } = await getParentUsersByClass(classId);
+    const parentIdSet = new Set((parentUserIds || []).map(id => id.toString()));
     
     const classItem = await Class.findById(classId).select('classTeacherId');
     if (classItem?.classTeacherId) {
-      parentIds.push(classItem.classTeacherId);
+      parentIdSet.add(classItem.classTeacherId.toString());
     }
     
-    const notifications = await this.sendToMultipleUsers(parentIds, title, message, type, {
+    const notifications = await this.sendToMultipleUsers(Array.from(parentIdSet), title, message, type, {
       ...data,
       classId
     });

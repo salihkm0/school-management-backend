@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Staff = require('../models/Staff');
 const Student = require('../models/Student');
 const Class = require('../models/Class');
+const { getParentUsersByClass } = require('../utils/parentResolver');
 
 // Get all users with pagination and search (Admin only)
 exports.getAllUsers = async (req, res) => {
@@ -125,38 +126,9 @@ exports.getParentsByClass = async (req, res) => {
       return res.status(404).json({ message: 'Class not found' });
     }
     
-    // Get all students in this class
-    const students = await Student.find({ classId })
-      .populate('parentIds', '_id name email phone role');
-    
-    // Collect unique connected parents
-    const parentsMap = new Map();
-    students.forEach(student => {
-      if (student.parentIds && student.parentIds.length > 0) {
-        student.parentIds.forEach(parent => {
-          if (parent) {
-            const pId = parent._id.toString();
-            if (!parentsMap.has(pId)) {
-              parentsMap.set(pId, {
-                _id: parent._id,
-                name: parent.name,
-                email: parent.email,
-                phone: parent.phone,
-                role: parent.role,
-                studentNames: [student.fullName],
-              });
-            } else {
-              const existing = parentsMap.get(pId);
-              if (!existing.studentNames.includes(student.fullName)) {
-                existing.studentNames.push(student.fullName);
-              }
-            }
-          }
-        });
-      }
-    });
-    
-    let parents = Array.from(parentsMap.values());
+    // Resolve all parents connected to students in this class
+    const { parentsList } = await getParentUsersByClass(classId);
+    let parents = parentsList;
     
     // Apply search filter
     if (search) {
@@ -164,7 +136,9 @@ exports.getParentsByClass = async (req, res) => {
       parents = parents.filter(parent => 
         parent.name?.toLowerCase().includes(q) ||
         parent.email?.toLowerCase().includes(q) ||
-        parent.studentNames.some(s => s.toLowerCase().includes(q))
+        parent.phone?.toLowerCase().includes(q) ||
+        (parent.studentNames || []).some(s => s.toLowerCase().includes(q)) ||
+        (parent.studentAdmissionNos || []).some(adm => adm.toLowerCase().includes(q))
       );
     }
     

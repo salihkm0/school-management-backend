@@ -4,6 +4,7 @@ const Student = require('../models/Student');
 const Class = require('../models/Class');
 const { broadcastToUser, broadcastToClass, broadcastToRole } = require('../config/socket');
 const fcmService = require('../services/fcmService');
+const { getParentUsersByClass, getParentUsersByStudent } = require('../utils/parentResolver');
 
 // Helper function
 function getGrade(percentage) {
@@ -263,16 +264,18 @@ exports.sendToClass = async (req, res) => {
     const { classId } = req.params;
     const { title, message, type, data } = req.body;
     
-    const students = await Student.find({ classId }).select('parentIds');
-    const parentIds = [...new Set(students.flatMap(s => s.parentIds))];
+    // Resolve all parent user accounts for this class
+    const { parentUserIds } = await getParentUsersByClass(classId);
+    const parentIdSet = new Set(parentUserIds.map(id => id.toString()));
     
     const classItem = await Class.findById(classId).select('classTeacherId');
     if (classItem && classItem.classTeacherId) {
-      parentIds.push(classItem.classTeacherId);
+      parentIdSet.add(classItem.classTeacherId.toString());
     }
     
+    const recipientIds = Array.from(parentIdSet);
     const notifications = [];
-    for (const userId of parentIds) {
+    for (const userId of recipientIds) {
       const notification = await Notification.create({
       senderId: req.user.id,
         userId,
@@ -442,13 +445,17 @@ exports.sendExamNotification = async (req, res) => {
   try {
     const { examId, examName, classIds, message, type } = req.body;
     
-    const students = await Student.find({ classId: { $in: classIds } }).select('parentIds');
-    const parentIds = [...new Set(students.flatMap(s => s.parentIds))];
+    const parentIdSet = new Set();
+    for (const cId of (classIds || [])) {
+      const { parentUserIds } = await getParentUsersByClass(cId);
+      parentUserIds.forEach(id => parentIdSet.add(id.toString()));
+    }
     
     const classes = await Class.find({ _id: { $in: classIds } }).select('classTeacherId');
     const teacherIds = [...new Set(classes.map(c => c.classTeacherId).filter(Boolean))];
+    teacherIds.forEach(id => parentIdSet.add(id.toString()));
     
-    const allUserIds = [...new Set([...parentIds, ...teacherIds])];
+    const allUserIds = Array.from(parentIdSet);
     
     const notifications = [];
     for (const userId of allUserIds) {
@@ -501,7 +508,11 @@ exports.sendExamNotification = async (req, res) => {
 // @access  Private/Staff
 exports.sendMarksNotification = async (req, res) => {
   try {
-    const { studentId, studentName, examId, examName, subjectName, marksObtained, maxMarks, parentIds } = req.body;
+    let { studentId, studentName, examId, examName, subjectName, marksObtained, maxMarks, parentIds } = req.body;
+    
+    if (!parentIds || !Array.isArray(parentIds) || parentIds.length === 0) {
+      parentIds = await getParentUsersByStudent(studentId);
+    }
     
     const percentage = (marksObtained / maxMarks) * 100;
     const grade = getGrade(percentage);
@@ -569,7 +580,11 @@ exports.sendMarksNotification = async (req, res) => {
 // @access  Private/Staff
 exports.sendAttendanceNotification = async (req, res) => {
   try {
-    const { studentId, studentName, month, year, attendancePercentage, classId, parentIds } = req.body;
+    let { studentId, studentName, month, year, attendancePercentage, classId, parentIds } = req.body;
+    
+    if (!parentIds || !Array.isArray(parentIds) || parentIds.length === 0) {
+      parentIds = await getParentUsersByStudent(studentId);
+    }
     
     const monthName = new Date(year, month - 1).toLocaleString('default', { month: 'long' });
     const status = attendancePercentage >= 75 ? 'Good' : (attendancePercentage >= 60 ? 'Average' : 'Needs Improvement');

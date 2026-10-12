@@ -166,22 +166,31 @@ exports.connectStudent = async (req, res) => {
       return res.status(400).json({ message: 'Valid date of birth is required' });
     }
     
-    const startOfDay = new Date(parsedDOB);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(parsedDOB);
-    endOfDay.setHours(23, 59, 59, 999);
+    // Buffer to handle timezone shifts between UTC and local time (e.g. IST +/- 5.5 hours)
+    const bufferStart = new Date(parsedDOB.getTime() - 30 * 60 * 60 * 1000);
+    const bufferEnd = new Date(parsedDOB.getTime() + 30 * 60 * 60 * 1000);
     
     // Find student by admissionNo or studentCode and dateOfBirth
-    const student = await Student.findOne({
+    let student = await Student.findOne({
       $or: [
         { admissionNo: inputCode },
         { studentCode: inputCode }
       ],
       dateOfBirth: {
-        $gte: startOfDay,
-        $lte: endOfDay
+        $gte: bufferStart,
+        $lte: bufferEnd
       }
     }).sort({ academicYearId: -1 });
+
+    // Fallback: If admin is connecting, try matching by code directly
+    if (!student && req.user.role === 'admin') {
+      student = await Student.findOne({
+        $or: [
+          { admissionNo: inputCode },
+          { studentCode: inputCode }
+        ]
+      }).sort({ academicYearId: -1 });
+    }
     
     // Resolve the actual code to store
     const codeToStore = student ? (student.admissionNo || student.studentCode) : inputCode;
@@ -215,10 +224,17 @@ exports.connectStudent = async (req, res) => {
     // Keep bidirectional link on student
     if (student) {
       if (!student.parentIds) student.parentIds = [];
-      if (!student.parentIds.some(p => p.toString() === parent._id.toString())) {
+      const pidStr = parent._id.toString();
+      if (!student.parentIds.some(p => p.toString() === pidStr)) {
         student.parentIds.push(parent._id);
-        await student.save();
       }
+      if (parent.userId) {
+        const uidStr = parent.userId.toString();
+        if (!student.parentIds.some(p => p.toString() === uidStr)) {
+          student.parentIds.push(parent.userId);
+        }
+      }
+      await student.save();
     }
     
     // Send notification if user account exists
@@ -1035,10 +1051,17 @@ exports.updateParent = async (req, res) => {
           
           if (studentDoc) {
             if (!studentDoc.parentIds) studentDoc.parentIds = [];
-            if (!studentDoc.parentIds.some(p => p.toString() === parent._id.toString())) {
+            const pidStr = parent._id.toString();
+            if (!studentDoc.parentIds.some(p => p.toString() === pidStr)) {
               studentDoc.parentIds.push(parent._id);
-              await studentDoc.save();
             }
+            if (parent.userId) {
+              const uidStr = parent.userId.toString();
+              if (!studentDoc.parentIds.some(p => p.toString() === uidStr)) {
+                studentDoc.parentIds.push(parent.userId);
+              }
+            }
+            await studentDoc.save();
           }
         }
       }

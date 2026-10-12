@@ -4,12 +4,14 @@ const Class = require('../models/Class');
 const AcademicYear = require('../models/AcademicYear');
 const User = require('../models/User');
 const Mark = require('../models/Mark');
+const Exam = require('../models/Exam');
 const Attendance = require('../models/Attendance');
 const Notification = require('../models/Notification');
 const SamboornaImportService = require('../services/samboornaImportService');
 const { broadcastToClass, broadcastToUser, broadcastToRole } = require('../config/socket');
 const { parseCSV, parseExcel } = require('../services/excelService');
 const { sortStudents } = require('../utils/studentSorter');
+const { calculateGradeFromPercentage } = require('../services/gradingService');
 const path = require('path');
 const fs = require('fs');
 
@@ -949,6 +951,385 @@ exports.searchStudents = async (req, res) => {
     res.json({ success: true, data: students });
   } catch (error) {
     console.error('Error in searchStudents:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.getOutsourceRecords = async (req, res) => {
+  try {
+    let {
+      academicYearId,
+      standard,
+      classId,
+      search,
+      grade,
+      markMode = 'both', // 'te', 'total', 'both'
+      minPercentage,
+      maxPercentage,
+      status = 'active',
+      rollNumber,
+      gender,
+      page = 1,
+      limit = 50,
+      sortBy = 'standard', // 'rollNumber', 'admissionNo', 'name', 'standard', 'percentage'
+      sortOrder = 'asc'
+    } = req.query;
+
+    // 1. Resolve academic year
+    let currentYear = null;
+    if (academicYearId) {
+      currentYear = await AcademicYear.findById(academicYearId).lean();
+    }
+    if (!currentYear) {
+      currentYear = await AcademicYear.findOne({ isCurrent: true }).lean();
+      if (!currentYear) {
+        currentYear = await AcademicYear.findOne().sort({ createdAt: -1 }).lean();
+      }
+    }
+
+    const yearId = currentYear ? currentYear._id : null;
+
+    // 2. Fetch all exams in this academic year
+    const examsQuery = { isActive: true };
+    if (yearId) {
+      examsQuery.academicYearId = yearId;
+    }
+    const exams = await Exam.find(examsQuery)
+      .select('_id name examType term startDate')
+      .sort({ startDate: 1, createdAt: 1 })
+      .lean();
+
+    // 3. Fetch all classes in this academic year
+    const classesQuery = { isActive: true };
+    if (yearId) {
+      classesQuery.academicYearId = yearId;
+    }
+    const classes = await Class.find(classesQuery)
+      .select('_id name section displayName')
+      .sort({ name: 1, section: 1 })
+      .lean();
+
+    const distinctStandards = [...new Set(classes.map(c => c.name).filter(Boolean))].sort((a, b) => {
+      const numA = parseInt(a, 10);
+      const numB = parseInt(b, 10);
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      return a.localeCompare(b);
+    });
+
+    // 4. Build student query
+    const studentQuery = { isActive: true };
+    if (yearId) {
+      studentQuery.academicYearId = yearId;
+    }
+    if (status && status !== 'all') {
+      studentQuery.status = status;
+    }
+    if (classId && classId !== 'all') {
+      studentQuery.classId = classId;
+    }
+    if (standard && standard !== 'all') {
+      studentQuery.className = standard;
+    }
+    if (gender && gender !== 'all') {
+      studentQuery.gender = gender;
+    }
+    if (rollNumber && rollNumber.trim()) {
+      studentQuery.rollNumber = rollNumber.trim();
+    }
+    if (search && search.trim()) {
+      const trimmed = search.trim();
+      const escaped = trimmed.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+      const searchRegex = { $regex: escaped, $options: 'i' };
+      studentQuery.$or = [
+        { fullName: searchRegex },
+        { admissionNo: searchRegex },
+        { rollNumber: searchRegex },
+        { studentCode: searchRegex },
+        { phoneNumber: searchRegex }
+      ];
+    }
+
+    // 5. Query students
+    const students = await Student.find(studentQuery)
+      .populate('classId', 'name section displayName')
+      .populate('academicYearId', 'year name')
+      .lean();
+
+    if (students.length === 0) {
+      return res.json({
+        success: true,
+        data: [],
+        total: 0,
+        page: 1,
+        limit: limit === 'all' ? 0 : Number(limit),
+        pages: 0,
+        metadata: {
+          exams,
+          standards: distinctStandards,
+          classes,
+          academicYear: currentYear
+        }
+      });
+    }
+
+    // 6. Batch fetch all marks for these students in this academic year
+    const studentIds = students.map(s => s._id);
+    const marksQuery = {
+      studentId: { $in: studentIds }
+    };
+    if (yearId) {
+      marksQuery.academicYearId = yearId;
+    }
+
+    const marks = await Mark.find(marksQuery)
+      .select('studentId examId totalMarks totalMaxMarks percentage grade subjects')
+      .lean();
+
+    // Map marks by studentId -> examId
+    const marksByStudent = {};
+    for (const m of marks) {
+      if (!m.studentId || !m.examId) continue;
+      const sId = m.studentId.toString();
+      const eId = m.examId.toString();
+      if (!marksByStudent[sId]) marksByStudent[sId] = {};
+
+      let teScore = 0;
+      let teMax = 0;
+      let ceScore = 0;
+      let totalScore = m.totalMarks || 0;
+      let totalMax = m.totalMaxMarks || 0;
+
+      if (m.subjects && Array.isArray(m.subjects) && m.subjects.length > 0) {
+        let computedTe = 0;
+        let computedTeMax = 0;
+        let computedCe = 0;
+        let computedTotal = 0;
+        let computedTotalMax = 0;
+
+        for (const subj of m.subjects) {
+          const th = Number(subj.theoryScore) || 0;
+          const ce = Number(subj.ceScore || subj.ceMarks) || 0;
+          const practical = Number(subj.practicalScore) || 0;
+          const tot = Number(subj.totalScore) || (th + ce + practical);
+          const max = Number(subj.maxMarks) || 100;
+
+          computedTe += th;
+          const teMaxSubj = Number(subj.theoryMaxMarks) || (subj.ceMaxMarks && max > subj.ceMaxMarks ? (max - subj.ceMaxMarks) : max);
+          computedTeMax += teMaxSubj;
+
+          computedCe += ce;
+          computedTotal += tot;
+          computedTotalMax += max;
+        }
+
+        teScore = computedTe;
+        teMax = computedTeMax > 0 ? computedTeMax : computedTotalMax;
+        ceScore = computedCe;
+        if (!totalMax || totalMax === 0) {
+          totalScore = computedTotal;
+          totalMax = computedTotalMax;
+        }
+      }
+
+      const tePct = teMax > 0 ? (teScore / teMax) * 100 : null;
+      const totPct = totalMax > 0 ? (totalScore / totalMax) * 100 : (m.percentage || null);
+
+      marksByStudent[sId][eId] = {
+        examId: eId,
+        teScore,
+        teMax,
+        tePercentage: tePct !== null ? Number(tePct.toFixed(1)) : null,
+        teGrade: calculateGradeFromPercentage(tePct),
+        ceScore,
+        totalScore,
+        totalMax,
+        totalPercentage: totPct !== null ? Number(totPct.toFixed(1)) : null,
+        totalGrade: calculateGradeFromPercentage(totPct),
+        grade: m.grade || calculateGradeFromPercentage(totPct)
+      };
+    }
+
+    // 7. Assemble unified student records
+    let records = students.map(student => {
+      const sId = student._id.toString();
+      const sMarks = marksByStudent[sId] || {};
+
+      let cumTeScore = 0;
+      let cumTeMax = 0;
+      let cumTotalScore = 0;
+      let cumTotalMax = 0;
+      let examsAppeared = 0;
+
+      const examMarksMap = {};
+      for (const ex of exams) {
+        const eId = ex._id.toString();
+        const em = sMarks[eId];
+        if (em) {
+          examMarksMap[eId] = em;
+          cumTeScore += em.teScore || 0;
+          cumTeMax += em.teMax || 0;
+          cumTotalScore += em.totalScore || 0;
+          cumTotalMax += em.totalMax || 0;
+          examsAppeared++;
+        } else {
+          examMarksMap[eId] = null;
+        }
+      }
+
+      const overallTePct = cumTeMax > 0 ? Number(((cumTeScore / cumTeMax) * 100).toFixed(1)) : null;
+      const overallTotalPct = cumTotalMax > 0 ? Number(((cumTotalScore / cumTotalMax) * 100).toFixed(1)) : null;
+      const overallGrade = calculateGradeFromPercentage(overallTotalPct);
+      const overallTeGrade = calculateGradeFromPercentage(overallTePct);
+
+      return {
+        _id: student._id,
+        studentCode: student.studentCode || '',
+        admissionNo: student.admissionNo || '-',
+        rollNumber: student.rollNumber || '-',
+        fullName: student.fullName,
+        fullNameMalayalam: student.fullNameMalayalam || '',
+        gender: student.gender || '-',
+        dateOfBirth: student.dateOfBirth ? new Date(student.dateOfBirth).toISOString().split('T')[0] : '-',
+        className: student.className || student.classId?.name || '-',
+        division: student.division || student.classId?.section || '-',
+        classDisplay: `${student.className || student.classId?.name || ''} ${student.division || student.classId?.section || ''}`.trim(),
+        phoneNumber: student.phoneNumber || '-',
+        fatherName: student.fatherName || '',
+        motherName: student.motherName || '',
+        guardianName: student.guardianName || '',
+        parentName: student.fatherName || student.motherName || student.guardianName || '-',
+        bloodGroup: student.bloodGroup || '-',
+        category: student.category || '-',
+        casteName: student.casteName || '-',
+        religion: student.religion || '-',
+        houseName: student.houseName || '',
+        postOffice: student.postOffice || '',
+        pincode: student.pincode || '',
+        address: [student.houseName, student.postOffice, student.pincode].filter(Boolean).join(', ') || '-',
+        status: student.status || 'active',
+
+        // Exam Marks map
+        examMarks: examMarksMap,
+
+        // Cumulative Totals
+        cumTeScore,
+        cumTeMax,
+        overallTePercentage: overallTePct,
+        overallTeGrade,
+
+        cumTotalScore,
+        cumTotalMax,
+        overallTotalPercentage: overallTotalPct,
+        overallGrade,
+        examsAppeared
+      };
+    });
+
+    // 8. Filter by grade (if specified)
+    if (grade && grade !== 'all') {
+      records = records.filter(r => {
+        if (markMode === 'te') {
+          return r.overallTeGrade === grade;
+        }
+        return r.overallGrade === grade;
+      });
+    }
+
+    // 9. Filter by percentage range (if specified)
+    if (minPercentage !== undefined && minPercentage !== '') {
+      const min = Number(minPercentage);
+      if (!isNaN(min)) {
+        records = records.filter(r => {
+          const val = markMode === 'te' ? r.overallTePercentage : r.overallTotalPercentage;
+          return val !== null && val >= min;
+        });
+      }
+    }
+
+    if (maxPercentage !== undefined && maxPercentage !== '') {
+      const max = Number(maxPercentage);
+      if (!isNaN(max)) {
+        records = records.filter(r => {
+          const val = markMode === 'te' ? r.overallTePercentage : r.overallTotalPercentage;
+          return val !== null && val <= max;
+        });
+      }
+    }
+
+    // 10. Sorting
+    records.sort((a, b) => {
+      let comparison = 0;
+      if (sortBy === 'rollNumber') {
+        const rollA = parseInt(a.rollNumber, 10);
+        const rollB = parseInt(b.rollNumber, 10);
+        if (!isNaN(rollA) && !isNaN(rollB)) {
+          comparison = rollA - rollB;
+        } else {
+          comparison = (a.rollNumber || '').localeCompare(b.rollNumber || '');
+        }
+      } else if (sortBy === 'admissionNo') {
+        const admA = parseInt(a.admissionNo, 10);
+        const admB = parseInt(b.admissionNo, 10);
+        if (!isNaN(admA) && !isNaN(admB)) {
+          comparison = admA - admB;
+        } else {
+          comparison = (a.admissionNo || '').localeCompare(b.admissionNo || '');
+        }
+      } else if (sortBy === 'name') {
+        comparison = (a.fullName || '').localeCompare(b.fullName || '');
+      } else if (sortBy === 'percentage') {
+        const pctA = markMode === 'te' ? (a.overallTePercentage || 0) : (a.overallTotalPercentage || 0);
+        const pctB = markMode === 'te' ? (b.overallTePercentage || 0) : (b.overallTotalPercentage || 0);
+        comparison = pctB - pctA; // Default desc for percentage
+        return sortOrder === 'asc' ? -comparison : comparison;
+      } else {
+        // Default: Sort by standard -> division -> rollNumber -> name
+        const stdA = parseInt(a.className, 10);
+        const stdB = parseInt(b.className, 10);
+        if (!isNaN(stdA) && !isNaN(stdB) && stdA !== stdB) {
+          comparison = stdA - stdB;
+        } else if (a.className !== b.className) {
+          comparison = (a.className || '').localeCompare(b.className || '');
+        } else if (a.division !== b.division) {
+          comparison = (a.division || '').localeCompare(b.division || '');
+        } else {
+          const rollA = parseInt(a.rollNumber, 10);
+          const rollB = parseInt(b.rollNumber, 10);
+          if (!isNaN(rollA) && !isNaN(rollB)) {
+            comparison = rollA - rollB;
+          } else {
+            comparison = (a.fullName || '').localeCompare(b.fullName || '');
+          }
+        }
+      }
+      return sortOrder === 'desc' ? -comparison : comparison;
+    });
+
+    const total = records.length;
+    const isAll = limit === 'all' || parseInt(limit, 10) >= 10000;
+    const parsedLimit = isAll ? total : parseInt(limit, 10) || 50;
+    const parsedPage = isAll ? 1 : parseInt(page, 10) || 1;
+
+    const paginatedRecords = isAll
+      ? records
+      : records.slice((parsedPage - 1) * parsedLimit, parsedPage * parsedLimit);
+
+    res.json({
+      success: true,
+      data: paginatedRecords,
+      total,
+      page: parsedPage,
+      limit: isAll ? total : parsedLimit,
+      pages: isAll ? 1 : Math.ceil(total / parsedLimit),
+      metadata: {
+        exams,
+        standards: distinctStandards,
+        classes,
+        academicYear: currentYear
+      }
+    });
+  } catch (error) {
+    console.error('Error in getOutsourceRecords:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

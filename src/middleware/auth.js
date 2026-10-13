@@ -15,9 +15,9 @@ const protect = async (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    // Handle Open Dashboard virtual user
-    if (decoded.role === 'open') {
-      req.user = { id: decoded.id, role: 'open', email: decoded.email };
+    // Handle Open Dashboard and Outsource Portal virtual users
+    if (decoded.role === 'open' || decoded.role === 'outsource') {
+      req.user = { id: decoded.id, role: decoded.role, email: decoded.email };
       return next();
     }
 

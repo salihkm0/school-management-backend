@@ -181,6 +181,29 @@ exports.login = async (req, res) => {
       });
     }
 
+    // Handle Outsource Portal static login
+    if (
+      (email === 'outsource@gmail.com' || email === 'outsourcing@gmail.com') && 
+      (password === 'ppmhss@001' || password === 'ppmhss@outsource')
+    ) {
+      const token = jwt.sign(
+        { id: 'outsource-portal-user', role: 'outsource', email },
+        process.env.JWT_SECRET,
+        { expiresIn: '30d' }
+      );
+      return res.json({
+        success: true,
+        token,
+        user: { 
+          id: 'outsource-portal-user', 
+          email, 
+          name: 'Student Outsourcing Portal', 
+          role: 'outsource', 
+          photoUrl: null 
+        }
+      });
+    }
+
     let query = {};
     if (email) {
       query.email = email.trim().toLowerCase();
@@ -480,6 +503,21 @@ exports.getMe = async (req, res) => {
           email: req.user.email,
           name: 'Open Dashboard',
           role: 'open',
+          photoUrl: null,
+          preferences: { notificationsEnabled: true, biometricEnabled: false }
+        }
+      });
+    }
+
+    // Handle Outsource Portal virtual user
+    if (req.user && req.user.role === 'outsource') {
+      return res.json({
+        success: true,
+        user: {
+          id: req.user.id,
+          email: req.user.email,
+          name: 'Student Outsourcing Portal',
+          role: 'outsource',
           photoUrl: null,
           preferences: { notificationsEnabled: true, biometricEnabled: false }
         }

@@ -989,17 +989,7 @@ exports.getOutsourceRecords = async (req, res) => {
 
     const yearId = currentYear ? currentYear._id : null;
 
-    // 2. Fetch all exams in this academic year
-    const examsQuery = { isActive: true };
-    if (yearId) {
-      examsQuery.academicYearId = yearId;
-    }
-    const exams = await Exam.find(examsQuery)
-      .select('_id name examType term startDate')
-      .sort({ startDate: 1, createdAt: 1 })
-      .lean();
-
-    // 3. Fetch all classes in this academic year
+    // 2. Fetch all classes in this academic year
     const classesQuery = { isActive: true };
     if (yearId) {
       classesQuery.academicYearId = yearId;
@@ -1020,6 +1010,86 @@ exports.getOutsourceRecords = async (req, res) => {
       if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
       return a.localeCompare(b);
     });
+
+    // 3. Fetch all exams in this academic year (with classDetails and classIds)
+    const examsQuery = { isActive: true };
+    if (yearId) {
+      examsQuery.academicYearId = yearId;
+    }
+    const allExams = await Exam.find(examsQuery)
+      .select('_id name examType term startDate classDetails classIds')
+      .sort({ startDate: 1, createdAt: 1 })
+      .lean();
+
+    // Map all exams to attach their target standards & clean human-readable names
+    const mappedExams = allExams.map(e => {
+      const stdSet = new Set((e.classDetails || []).map(c => c.className).filter(Boolean));
+      if (stdSet.size === 0 && e.classIds && e.classIds.length > 0) {
+        e.classIds.forEach(cId => {
+          const cls = classMap.get(cId.toString());
+          if (cls && cls.name) stdSet.add(cls.name);
+        });
+      }
+      const examStandards = Array.from(stdSet).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+      const stdText = examStandards.length > 0 ? ` (Std ${examStandards.join(', ')})` : '';
+
+      let cleanName = (e.name || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      const lower = cleanName.toLowerCase();
+      if (lower.includes('first mid term')) cleanName = 'First Mid Term Exam';
+      else if (lower.includes('first term')) cleanName = 'First Term Exam';
+      else if (lower.includes('second mid term')) cleanName = 'Second Mid Term Exam';
+      else if (lower.includes('second term')) cleanName = 'Second Term Exam';
+      else if (lower.includes('unit test 2') || lower.includes('unit_test_2')) cleanName = 'Unit Test 2';
+      else if (lower.includes('unit test 1') || lower.includes('unit_test_1')) cleanName = 'Unit Test 1';
+      else if (lower.includes('model')) cleanName = 'Model Exam';
+      else if (lower.includes('annual')) cleanName = 'Annual Exam';
+
+      return {
+        _id: e._id,
+        name: e.name,
+        cleanName,
+        displayName: `${cleanName}${stdText}`,
+        examType: e.examType,
+        term: e.term,
+        startDate: e.startDate,
+        standards: examStandards,
+        standardText: examStandards.join(', ')
+      };
+    });
+
+    // Filter exams by selected standard or classId
+    let exams = mappedExams;
+    if (standard && standard !== 'all') {
+      exams = mappedExams.filter(ex => ex.standards.length === 0 || ex.standards.includes(standard));
+    } else if (classId && classId !== 'all') {
+      const targetClass = classMap.get(classId.toString());
+      if (targetClass && targetClass.name) {
+        exams = mappedExams.filter(ex => ex.standards.length === 0 || ex.standards.includes(targetClass.name));
+      }
+    }
+
+    // Calculate standards summary for standard-wise dashboard
+    const standardsSummary = await Promise.all(
+      distinctStandards.map(async (std) => {
+        const studentCount = await Student.countDocuments({ className: std, isActive: true });
+        const stdClasses = classes.filter(c => c.name === std);
+        const stdExams = mappedExams.filter(ex => ex.standards.length === 0 || ex.standards.includes(std));
+        return {
+          standard: std,
+          name: `Standard ${std}`,
+          studentCount,
+          divisionsCount: stdClasses.length,
+          divisions: stdClasses
+            .map(c => c.section)
+            .filter(Boolean)
+            .sort((a, b) => {
+              if (a.length !== b.length) return a.length - b.length;
+              return a.localeCompare(b);
+            }),
+          exams: stdExams
+        };
+      })
+    );
 
     // 4. Build student query
     const studentQuery = { isActive: true };
@@ -1069,9 +1139,11 @@ exports.getOutsourceRecords = async (req, res) => {
         pages: 0,
         metadata: {
           exams,
+          allExams: mappedExams,
           standards: distinctStandards,
           classes,
-          academicYear: currentYear
+          academicYear: currentYear,
+          standardsSummary
         }
       });
     }
@@ -1147,6 +1219,10 @@ exports.getOutsourceRecords = async (req, res) => {
     };
     if (yearId) {
       marksQuery.academicYearId = yearId;
+    }
+    const applicableExamIds = exams.map(e => e._id);
+    if (applicableExamIds.length > 0) {
+      marksQuery.examId = { $in: applicableExamIds };
     }
 
     const marks = await Mark.find(marksQuery)
@@ -1363,9 +1439,11 @@ exports.getOutsourceRecords = async (req, res) => {
         pages: isAll ? 1 : Math.ceil(totalFiltered / parsedLimit),
         metadata: {
           exams,
+          allExams: mappedExams,
           standards: distinctStandards,
           classes,
-          academicYear: currentYear
+          academicYear: currentYear,
+          standardsSummary
         }
       });
     }
@@ -1381,9 +1459,11 @@ exports.getOutsourceRecords = async (req, res) => {
       pages: isAll ? 1 : Math.ceil(total / parsedLimit),
       metadata: {
         exams,
+        allExams: mappedExams,
         standards: distinctStandards,
         classes,
-        academicYear: currentYear
+        academicYear: currentYear,
+        standardsSummary
       }
     });
   } catch (error) {

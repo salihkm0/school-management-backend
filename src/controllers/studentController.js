@@ -4,7 +4,7 @@ const Class = require('../models/Class');
 const AcademicYear = require('../models/AcademicYear');
 const User = require('../models/User');
 const Mark = require('../models/Mark');
-const Exam = require('../models/Exam');
+const { Exam } = require('../models/Exam');
 const Attendance = require('../models/Attendance');
 const Notification = require('../models/Notification');
 const SamboornaImportService = require('../services/samboornaImportService');
@@ -1009,6 +1009,11 @@ exports.getOutsourceRecords = async (req, res) => {
       .sort({ name: 1, section: 1 })
       .lean();
 
+    const classMap = new Map();
+    classes.forEach(c => {
+      if (c._id) classMap.set(c._id.toString(), c);
+    });
+
     const distinctStandards = [...new Set(classes.map(c => c.name).filter(Boolean))].sort((a, b) => {
       const numA = parseInt(a, 10);
       const numB = parseInt(b, 10);
@@ -1018,8 +1023,8 @@ exports.getOutsourceRecords = async (req, res) => {
 
     // 4. Build student query
     const studentQuery = { isActive: true };
-    if (yearId) {
-      studentQuery.academicYearId = yearId;
+    if (academicYearId) {
+      studentQuery.academicYearId = academicYearId;
     }
     if (status && status !== 'all') {
       studentQuery.status = status;
@@ -1049,10 +1054,9 @@ exports.getOutsourceRecords = async (req, res) => {
       ];
     }
 
-    // 5. Query students
+    // 5. Query students with only needed fields (no heavy populates)
     const students = await Student.find(studentQuery)
-      .populate('classId', 'name section displayName')
-      .populate('academicYearId', 'year name')
+      .select('admissionNo rollNumber fullName fullNameMalayalam gender dateOfBirth phoneNumber fatherName motherName guardianName bloodGroup category casteName religion houseName postOffice pincode status classId className division')
       .lean();
 
     if (students.length === 0) {
@@ -1072,17 +1076,81 @@ exports.getOutsourceRecords = async (req, res) => {
       });
     }
 
-    // 6. Batch fetch all marks for these students in this academic year
-    const studentIds = students.map(s => s._id);
+    // Helper: Sort students array by non-mark fields
+    const sortStudentsList = (list) => {
+      list.sort((a, b) => {
+        let comparison = 0;
+        if (sortBy === 'rollNumber') {
+          const rollA = parseInt(a.rollNumber, 10);
+          const rollB = parseInt(b.rollNumber, 10);
+          if (!isNaN(rollA) && !isNaN(rollB)) {
+            comparison = rollA - rollB;
+          } else {
+            comparison = (a.rollNumber || '').localeCompare(b.rollNumber || '');
+          }
+        } else if (sortBy === 'admissionNo') {
+          const admA = parseInt(a.admissionNo, 10);
+          const admB = parseInt(b.admissionNo, 10);
+          if (!isNaN(admA) && !isNaN(admB)) {
+            comparison = admA - admB;
+          } else {
+            comparison = (a.admissionNo || '').localeCompare(b.admissionNo || '');
+          }
+        } else if (sortBy === 'name') {
+          comparison = (a.fullName || '').localeCompare(b.fullName || '');
+        } else {
+          // Default: Sort by standard -> division -> rollNumber -> name
+          const stdA = parseInt(a.className, 10);
+          const stdB = parseInt(b.className, 10);
+          if (!isNaN(stdA) && !isNaN(stdB) && stdA !== stdB) {
+            comparison = stdA - stdB;
+          } else if (a.className !== b.className) {
+            comparison = (a.className || '').localeCompare(b.className || '');
+          } else if (a.division !== b.division) {
+            comparison = (a.division || '').localeCompare(b.division || '');
+          } else {
+            const rollA = parseInt(a.rollNumber, 10);
+            const rollB = parseInt(b.rollNumber, 10);
+            if (!isNaN(rollA) && !isNaN(rollB)) {
+              comparison = rollA - rollB;
+            } else {
+              comparison = (a.fullName || '').localeCompare(b.fullName || '');
+            }
+          }
+        }
+        return sortOrder === 'desc' ? -comparison : comparison;
+      });
+    };
+
+    const needsMarkFilterOrSort = 
+      (grade && grade !== 'all') || 
+      (minPercentage !== undefined && minPercentage !== '') || 
+      (maxPercentage !== undefined && maxPercentage !== '') || 
+      (sortBy === 'percentage');
+
+    const isAll = limit === 'all' || parseInt(limit, 10) >= 10000;
+    const parsedLimit = isAll ? students.length : parseInt(limit, 10) || 50;
+    const parsedPage = isAll ? 1 : parseInt(page, 10) || 1;
+
+    let targetStudents = students;
+
+    // Fast path: If no mark filter or mark sorting and not export-all, paginate students BEFORE querying marks
+    if (!needsMarkFilterOrSort && !isAll) {
+      sortStudentsList(students);
+      targetStudents = students.slice((parsedPage - 1) * parsedLimit, parsedPage * parsedLimit);
+    }
+
+    // 6. Batch fetch marks for the targeted students
+    const targetStudentIds = targetStudents.map(s => s._id);
     const marksQuery = {
-      studentId: { $in: studentIds }
+      studentId: { $in: targetStudentIds }
     };
     if (yearId) {
       marksQuery.academicYearId = yearId;
     }
 
     const marks = await Mark.find(marksQuery)
-      .select('studentId examId totalMarks totalMaxMarks percentage grade subjects')
+      .select('studentId examId totalMarks totalMaxMarks percentage grade subjects.theoryScore subjects.ceScore subjects.ceMarks subjects.practicalScore subjects.totalScore subjects.maxMarks subjects.theoryMaxMarks subjects.ceMaxMarks')
       .lean();
 
     // Map marks by studentId -> examId
@@ -1150,7 +1218,7 @@ exports.getOutsourceRecords = async (req, res) => {
     }
 
     // 7. Assemble unified student records
-    let records = students.map(student => {
+    let records = targetStudents.map(student => {
       const sId = student._id.toString();
       const sMarks = marksByStudent[sId] || {};
 
@@ -1181,6 +1249,20 @@ exports.getOutsourceRecords = async (req, res) => {
       const overallGrade = calculateGradeFromPercentage(overallTotalPct);
       const overallTeGrade = calculateGradeFromPercentage(overallTePct);
 
+      const cls = student.classId ? classMap.get(student.classId.toString()) : null;
+      const stdName = student.className || cls?.name || '-';
+      const divName = student.division || cls?.section || '-';
+
+      let dobStr = '-';
+      if (student.dateOfBirth) {
+        try {
+          const d = new Date(student.dateOfBirth);
+          dobStr = !isNaN(d.getTime()) ? d.toISOString().split('T')[0] : String(student.dateOfBirth);
+        } catch (_) {
+          dobStr = String(student.dateOfBirth);
+        }
+      }
+
       return {
         _id: student._id,
         studentCode: student.studentCode || '',
@@ -1189,10 +1271,10 @@ exports.getOutsourceRecords = async (req, res) => {
         fullName: student.fullName,
         fullNameMalayalam: student.fullNameMalayalam || '',
         gender: student.gender || '-',
-        dateOfBirth: student.dateOfBirth ? new Date(student.dateOfBirth).toISOString().split('T')[0] : '-',
-        className: student.className || student.classId?.name || '-',
-        division: student.division || student.classId?.section || '-',
-        classDisplay: `${student.className || student.classId?.name || ''} ${student.division || student.classId?.section || ''}`.trim(),
+        dateOfBirth: dobStr,
+        className: stdName,
+        division: divName,
+        classDisplay: `${stdName} ${divName}`.trim(),
         phoneNumber: student.phoneNumber || '-',
         fatherName: student.fatherName || '',
         motherName: student.motherName || '',
@@ -1225,98 +1307,74 @@ exports.getOutsourceRecords = async (req, res) => {
       };
     });
 
-    // 8. Filter by grade (if specified)
-    if (grade && grade !== 'all') {
-      records = records.filter(r => {
-        if (markMode === 'te') {
-          return r.overallTeGrade === grade;
+    // 8. If mark filters or mark sorting were requested, filter & sort now
+    if (needsMarkFilterOrSort) {
+      if (grade && grade !== 'all') {
+        records = records.filter(r => {
+          if (markMode === 'te') {
+            return r.overallTeGrade === grade;
+          }
+          return r.overallGrade === grade;
+        });
+      }
+
+      if (minPercentage !== undefined && minPercentage !== '') {
+        const min = Number(minPercentage);
+        if (!isNaN(min)) {
+          records = records.filter(r => {
+            const val = markMode === 'te' ? r.overallTePercentage : r.overallTotalPercentage;
+            return val !== null && val >= min;
+          });
         }
-        return r.overallGrade === grade;
+      }
+
+      if (maxPercentage !== undefined && maxPercentage !== '') {
+        const max = Number(maxPercentage);
+        if (!isNaN(max)) {
+          records = records.filter(r => {
+            const val = markMode === 'te' ? r.overallTePercentage : r.overallTotalPercentage;
+            return val !== null && val <= max;
+          });
+        }
+      }
+
+      if (sortBy === 'percentage') {
+        records.sort((a, b) => {
+          const pctA = markMode === 'te' ? (a.overallTePercentage || 0) : (a.overallTotalPercentage || 0);
+          const pctB = markMode === 'te' ? (b.overallTePercentage || 0) : (b.overallTotalPercentage || 0);
+          const comp = pctB - pctA;
+          return sortOrder === 'asc' ? -comp : comp;
+        });
+      } else {
+        sortStudentsList(records);
+      }
+
+      const totalFiltered = records.length;
+      const paginatedRecords = isAll
+        ? records
+        : records.slice((parsedPage - 1) * parsedLimit, parsedPage * parsedLimit);
+
+      return res.json({
+        success: true,
+        data: paginatedRecords,
+        total: totalFiltered,
+        page: parsedPage,
+        limit: isAll ? totalFiltered : parsedLimit,
+        pages: isAll ? 1 : Math.ceil(totalFiltered / parsedLimit),
+        metadata: {
+          exams,
+          standards: distinctStandards,
+          classes,
+          academicYear: currentYear
+        }
       });
     }
 
-    // 9. Filter by percentage range (if specified)
-    if (minPercentage !== undefined && minPercentage !== '') {
-      const min = Number(minPercentage);
-      if (!isNaN(min)) {
-        records = records.filter(r => {
-          const val = markMode === 'te' ? r.overallTePercentage : r.overallTotalPercentage;
-          return val !== null && val >= min;
-        });
-      }
-    }
-
-    if (maxPercentage !== undefined && maxPercentage !== '') {
-      const max = Number(maxPercentage);
-      if (!isNaN(max)) {
-        records = records.filter(r => {
-          const val = markMode === 'te' ? r.overallTePercentage : r.overallTotalPercentage;
-          return val !== null && val <= max;
-        });
-      }
-    }
-
-    // 10. Sorting
-    records.sort((a, b) => {
-      let comparison = 0;
-      if (sortBy === 'rollNumber') {
-        const rollA = parseInt(a.rollNumber, 10);
-        const rollB = parseInt(b.rollNumber, 10);
-        if (!isNaN(rollA) && !isNaN(rollB)) {
-          comparison = rollA - rollB;
-        } else {
-          comparison = (a.rollNumber || '').localeCompare(b.rollNumber || '');
-        }
-      } else if (sortBy === 'admissionNo') {
-        const admA = parseInt(a.admissionNo, 10);
-        const admB = parseInt(b.admissionNo, 10);
-        if (!isNaN(admA) && !isNaN(admB)) {
-          comparison = admA - admB;
-        } else {
-          comparison = (a.admissionNo || '').localeCompare(b.admissionNo || '');
-        }
-      } else if (sortBy === 'name') {
-        comparison = (a.fullName || '').localeCompare(b.fullName || '');
-      } else if (sortBy === 'percentage') {
-        const pctA = markMode === 'te' ? (a.overallTePercentage || 0) : (a.overallTotalPercentage || 0);
-        const pctB = markMode === 'te' ? (b.overallTePercentage || 0) : (b.overallTotalPercentage || 0);
-        comparison = pctB - pctA; // Default desc for percentage
-        return sortOrder === 'asc' ? -comparison : comparison;
-      } else {
-        // Default: Sort by standard -> division -> rollNumber -> name
-        const stdA = parseInt(a.className, 10);
-        const stdB = parseInt(b.className, 10);
-        if (!isNaN(stdA) && !isNaN(stdB) && stdA !== stdB) {
-          comparison = stdA - stdB;
-        } else if (a.className !== b.className) {
-          comparison = (a.className || '').localeCompare(b.className || '');
-        } else if (a.division !== b.division) {
-          comparison = (a.division || '').localeCompare(b.division || '');
-        } else {
-          const rollA = parseInt(a.rollNumber, 10);
-          const rollB = parseInt(b.rollNumber, 10);
-          if (!isNaN(rollA) && !isNaN(rollB)) {
-            comparison = rollA - rollB;
-          } else {
-            comparison = (a.fullName || '').localeCompare(b.fullName || '');
-          }
-        }
-      }
-      return sortOrder === 'desc' ? -comparison : comparison;
-    });
-
-    const total = records.length;
-    const isAll = limit === 'all' || parseInt(limit, 10) >= 10000;
-    const parsedLimit = isAll ? total : parseInt(limit, 10) || 50;
-    const parsedPage = isAll ? 1 : parseInt(page, 10) || 1;
-
-    const paginatedRecords = isAll
-      ? records
-      : records.slice((parsedPage - 1) * parsedLimit, parsedPage * parsedLimit);
-
+    // Standard fast response
+    const total = students.length;
     res.json({
       success: true,
-      data: paginatedRecords,
+      data: records,
       total,
       page: parsedPage,
       limit: isAll ? total : parsedLimit,

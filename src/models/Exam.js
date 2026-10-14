@@ -471,9 +471,11 @@ ExamSchema.index({ overallStatus: 1 });
 ExamSchema.index({ startDate: 1, endDate: 1 });
 ExamSchema.index({ 'classSubmissionStatus.classId': 1 });
 
-module.exports = {
-  Exam: mongoose.models.Exam || mongoose.model('Exam', ExamSchema),
-  EXAM_TYPES,
-  SESSION_TIMES,
-  SUBMISSION_STATUS
-};
+const ExamModel = mongoose.models.Exam || mongoose.model('Exam', ExamSchema);
+
+ExamModel.Exam = ExamModel;
+ExamModel.EXAM_TYPES = EXAM_TYPES;
+ExamModel.SESSION_TIMES = SESSION_TIMES;
+ExamModel.SUBMISSION_STATUS = SUBMISSION_STATUS;
+
+module.exports = ExamModel;

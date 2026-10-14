@@ -132,6 +132,11 @@ const sendToDevices = async (tokens, title, body, data = {}) => {
  */
 const sendToUser = async (userId, title, body, data = {}) => {
   try {
+    const mongoose = require('mongoose');
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return { success: false, sent: 0, message: 'Non-ObjectId user' };
+    }
+
     const User = require('../models/User');
     const user = await User.findById(userId);
     
@@ -184,6 +189,11 @@ const sendToUsers = async (userIds, title, body, data = {}) => {
  */
 const registerToken = async (userId, token, deviceInfo = {}) => {
   try {
+    const mongoose = require('mongoose');
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return { success: true, tokens: [] };
+    }
+
     const User = require('../models/User');
     const user = await User.findById(userId);
     
@@ -205,6 +215,11 @@ const registerToken = async (userId, token, deviceInfo = {}) => {
  */
 const unregisterToken = async (userId, token) => {
   try {
+    const mongoose = require('mongoose');
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return { success: true };
+    }
+
     const User = require('../models/User');
     const user = await User.findById(userId);
     

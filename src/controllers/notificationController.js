@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
 const Student = require('../models/Student');
@@ -30,6 +31,11 @@ exports.registerFcmToken = async (req, res) => {
     if (!token) {
       return res.status(400).json({ message: 'FCM token is required' });
     }
+
+    // Virtual users (outsource, open, etc.) do not have MongoDB User records
+    if (req.user?.role === 'outsource' || req.user?.role === 'open' || !mongoose.Types.ObjectId.isValid(req.user?.id)) {
+      return res.json({ success: true, message: 'FCM token registration bypassed for virtual user' });
+    }
     
     const result = await fcmService.registerToken(req.user.id, token, deviceInfo);
     
@@ -53,6 +59,11 @@ exports.unregisterFcmToken = async (req, res) => {
     
     if (!token) {
       return res.status(400).json({ message: 'FCM token is required' });
+    }
+
+    // Virtual users (outsource, open, etc.) do not have MongoDB User records
+    if (req.user?.role === 'outsource' || req.user?.role === 'open' || !mongoose.Types.ObjectId.isValid(req.user?.id)) {
+      return res.json({ success: true, message: 'FCM token unregistration bypassed for virtual user' });
     }
     
     const result = await fcmService.unregisterToken(req.user.id, token);

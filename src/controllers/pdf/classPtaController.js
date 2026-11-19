@@ -106,7 +106,7 @@ async function fetchClassPtaData(req) {
       status: 'active'
     };
 
-    const rawStudents = await Student.find(studentQuery);
+    const rawStudents = await Student.find(studentQuery).lean();
     let studentList = formatStudents(rawStudents);
 
     if (studentList.length === 0) {
@@ -154,14 +154,31 @@ async function fetchClassPtaData(req) {
       return (a.section || '').localeCompare(b.section || '');
     });
 
-    for (const cls of sortedClasses) {
-      const studentQuery = {
-        classId: cls._id,
-        isActive: { $ne: false },
-        status: 'active'
-      };
+    // Efficient single batch query for all active students instead of 80+ sequential queries
+    const studentQuery = {
+      isActive: { $ne: false },
+      status: 'active'
+    };
+    if (academicYearObjectId) {
+      studentQuery.academicYearId = academicYearObjectId;
+    } else {
+      studentQuery.classId = { $in: sortedClasses.map(c => c._id) };
+    }
 
-      const rawStudents = await Student.find(studentQuery);
+    const allStudents = await Student.find(studentQuery).lean();
+
+    // Group students by classId
+    const studentsByClass = {};
+    for (const student of allStudents) {
+      const cid = student.classId?.toString();
+      if (cid) {
+        if (!studentsByClass[cid]) studentsByClass[cid] = [];
+        studentsByClass[cid].push(student);
+      }
+    }
+
+    for (const cls of sortedClasses) {
+      const rawStudents = studentsByClass[cls._id.toString()] || [];
       const studentList = formatStudents(rawStudents);
 
       classesList.push({

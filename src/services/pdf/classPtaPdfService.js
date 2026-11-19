@@ -1,7 +1,7 @@
 // services/classPtaPdfService.js
 const ejs = require('ejs');
 const path = require('path');
-const { getBrowser } = require('./browserHelper');
+const { getBrowser, closeBrowser } = require('./browserHelper');
 
 const generateClassPtaPDF = async (data) => {
   let page;
@@ -16,8 +16,8 @@ const generateClassPtaPDF = async (data) => {
     page = await browser.newPage();
 
     await page.setContent(html, {
-      waitUntil: 'networkidle0',
-      timeout: 120000
+      waitUntil: 'domcontentloaded',
+      timeout: 60000
     });
 
     await page.emulateMediaType('screen');
@@ -35,15 +35,14 @@ const generateClassPtaPDF = async (data) => {
       }
     });
 
-    await page.close();
-    if (browser) await browser.close();
-
     return pdfBuffer;
 
   } catch (error) {
-    if (page) await page.close().catch(() => {});
-    if (browser) await browser.close().catch(() => {});
+    console.error('Class PTA PDF generation error in service:', error);
     throw error;
+  } finally {
+    if (page) await page.close().catch(() => {});
+    if (browser) await closeBrowser(browser);
   }
 };
 

@@ -16,7 +16,8 @@ const generateClassPtaPDF = async (data) => {
     page = await browser.newPage();
 
     await page.setContent(html, {
-      waitUntil: 'networkidle0'
+      waitUntil: 'networkidle0',
+      timeout: 120000
     });
 
     await page.emulateMediaType('screen');

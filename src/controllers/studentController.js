@@ -720,8 +720,9 @@ exports.getStudentMarks = async (req, res) => {
         const examName = mark.examName || mark.examId?.name || 'Unknown Exam';
         if (!analytics.examWise[examId]) {
           analytics.examWise[examId] = {
+            examId: examId,
             examName: examName,
-            examType: mark.examType || mark.examId?.examType,
+            examType: mark.examType || mark.examId?.examType || 'regular',
             term: term,
             totalMarks: 0,
             totalMaxMarks: 0,
@@ -733,13 +734,19 @@ exports.getStudentMarks = async (req, res) => {
         analytics.examWise[examId].totalMaxMarks += mark.maxMarks || 0;
         analytics.examWise[examId].count++;
         analytics.examWise[examId].subjects.push({
+          subjectId: mark.subjectId,
           subjectName: subjectName,
-          theoryScore: mark.theoryScore || 0,
-          practicalScore: mark.practicalScore || 0,
-          totalScore: mark.totalScore || 0,
+          subjectCode: mark.subjectCode || '',
+          theoryScore: mark.theoryScore !== undefined && mark.theoryScore !== null ? mark.theoryScore : 0,
+          practicalScore: mark.practicalScore !== undefined && mark.practicalScore !== null ? mark.practicalScore : 0,
+          ceScore: mark.ceScore !== undefined && mark.ceScore !== null ? mark.ceScore : 0,
+          totalScore: mark.totalScore !== undefined && mark.totalScore !== null ? mark.totalScore : 0,
           maxMarks: mark.maxMarks || 0,
-          percentage: mark.percentage || ((mark.totalScore / mark.maxMarks) * 100),
-          grade: mark.grade
+          passingMarks: mark.passingMarks || 40,
+          percentage: mark.percentage !== undefined && mark.percentage !== null ? mark.percentage : (mark.maxMarks > 0 ? ((mark.totalScore / mark.maxMarks) * 100) : 0),
+          grade: mark.grade || 'E',
+          remarks: mark.remarks || '',
+          isAbsent: mark.isAbsent || false
         });
       }
       
@@ -768,6 +775,15 @@ exports.getStudentMarks = async (req, res) => {
       const termData = analytics.termWise[term];
       if (termData.totalMaxMarks > 0) {
         termData.averagePercentage = (termData.totalMarks / termData.totalMaxMarks) * 100;
+      }
+    });
+
+    Object.keys(analytics.examWise).forEach(examId => {
+      const examData = analytics.examWise[examId];
+      if (examData.totalMaxMarks > 0) {
+        examData.percentage = parseFloat(((examData.totalMarks / examData.totalMaxMarks) * 100).toFixed(2));
+      } else {
+        examData.percentage = 0;
       }
     });
 

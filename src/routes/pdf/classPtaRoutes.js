@@ -7,9 +7,11 @@ const { protect } = require('../../middleware/auth');
 router.use(protect);
 
 // View/Print PDF
+router.get('/view', classPtaController.generateClassPtaPDF);
 router.get('/view/:classId?/:academicYearId?', classPtaController.generateClassPtaPDF);
 
 // Download PDF
+router.get('/download', classPtaController.downloadClassPtaPDF);
 router.get('/download/:classId?/:academicYearId?', classPtaController.downloadClassPtaPDF);
 
 module.exports = router;

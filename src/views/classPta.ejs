@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Class PTA - <%= className %> <%= academicYear %></title>
+<title>Class PTA - <%= typeof className !== 'undefined' ? className : 'All Classes' %> <%= typeof academicYear !== 'undefined' ? academicYear : '' %></title>
 
 <style>
 @page {
@@ -256,6 +256,11 @@ html, body {
         page-break-inside: avoid;
     }
     
+    .page-container:last-child {
+        page-break-after: auto;
+        margin-bottom: 0;
+    }
+    
     .logo-watermark img {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
@@ -268,66 +273,75 @@ html, body {
 
 <%
 const studentsPerPage = 25;
+const schoolLogo = typeof schoolLogoUrl !== 'undefined' ? schoolLogoUrl : 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
+const displayAcademicYear = typeof academicYear !== 'undefined' ? academicYear : '2025-2026';
 
-// Sort roll number wise numerically
-const sortedStudents = [...students].sort((a, b) => {
-    const getRoll = (s) => {
-        if (!s) return null;
-        const raw = s.rollNumber ?? s.rollNo ?? s.slNo;
-        if (raw === null || raw === undefined || raw === '') return null;
-        const parsed = parseInt(String(raw).trim(), 10);
-        return isNaN(parsed) ? String(raw).trim() : parsed;
-    };
+const classesToRender = (typeof classesList !== 'undefined' && Array.isArray(classesList) && classesList.length > 0)
+    ? classesList
+    : [{
+        className: typeof className !== 'undefined' ? className : '10 A',
+        students: typeof students !== 'undefined' ? students : []
+    }];
 
-    const rollA = getRoll(a);
-    const rollB = getRoll(b);
+classesToRender.forEach(function(classItem) {
+    const classStudents = classItem.students || [];
+    const displayClassName = classItem.className || '10 A';
 
-    const hasRollA = rollA !== null && rollA !== '';
-    const hasRollB = rollB !== null && rollB !== '';
+    // Sort roll number wise numerically
+    const sortedStudents = [...classStudents].sort((a, b) => {
+        const getRoll = (s) => {
+            if (!s) return null;
+            const raw = s.rollNumber ?? s.rollNo ?? s.slNo;
+            if (raw === null || raw === undefined || raw === '') return null;
+            const parsed = parseInt(String(raw).trim(), 10);
+            return isNaN(parsed) ? String(raw).trim() : parsed;
+        };
 
-    if (hasRollA && hasRollB) {
-        if (typeof rollA === 'number' && typeof rollB === 'number') {
-            if (rollA !== rollB) return rollA - rollB;
-        } else {
-            const comp = String(rollA).localeCompare(String(rollB), undefined, { numeric: true, sensitivity: 'base' });
-            if (comp !== 0) return comp;
+        const rollA = getRoll(a);
+        const rollB = getRoll(b);
+
+        const hasRollA = rollA !== null && rollA !== '';
+        const hasRollB = rollB !== null && rollB !== '';
+
+        if (hasRollA && hasRollB) {
+            if (typeof rollA === 'number' && typeof rollB === 'number') {
+                if (rollA !== rollB) return rollA - rollB;
+            } else {
+                const comp = String(rollA).localeCompare(String(rollB), undefined, { numeric: true, sensitivity: 'base' });
+                if (comp !== 0) return comp;
+            }
+        } else if (hasRollA && !hasRollB) {
+            return -1;
+        } else if (!hasRollA && hasRollB) {
+            return 1;
         }
-    } else if (hasRollA && !hasRollB) {
-        return -1;
-    } else if (!hasRollA && hasRollB) {
-        return 1;
+
+        const nameA = a.name || a.fullName || '';
+        const nameB = b.name || b.fullName || '';
+        return nameA.localeCompare(nameB);
+    });
+
+    // Single continuous list of pages for this class
+    const pagesData = [];
+    const totalStudentsCount = sortedStudents.length;
+    const totalPages = Math.max(1, Math.ceil(totalStudentsCount / studentsPerPage));
+
+    for (let p = 0; p < totalPages; p++) {
+        const start = p * studentsPerPage;
+        const pageStudents = sortedStudents.slice(start, start + studentsPerPage).map((s, idx) => {
+            const autoRoll = start + idx + 1;
+            const displayRoll = s.rollNumber || s.rollNo || s.slNo || autoRoll;
+            return {
+                ...s,
+                displayRollNo: displayRoll
+            };
+        });
+        pagesData.push(pageStudents);
     }
 
-    const nameA = a.name || a.fullName || '';
-    const nameB = b.name || b.fullName || '';
-    return nameA.localeCompare(nameB);
-});
-
-// Single continuous list of pages - do not separate boys and girls
-const pagesData = [];
-const totalStudentsCount = sortedStudents.length;
-const totalPages = Math.max(1, Math.ceil(totalStudentsCount / studentsPerPage));
-
-for (let p = 0; p < totalPages; p++) {
-    const start = p * studentsPerPage;
-    const pageStudents = sortedStudents.slice(start, start + studentsPerPage).map((s, idx) => {
-        const autoRoll = start + idx + 1;
-        const displayRoll = s.rollNumber || s.rollNo || s.slNo || autoRoll;
-        return {
-            ...s,
-            displayRollNo: displayRoll
-        };
-    });
-    pagesData.push(pageStudents);
-}
-
-const displayAcademicYear = typeof academicYear !== 'undefined' ? academicYear : '2025-2026';
-const displayClassName = typeof className !== 'undefined' ? className : '10 A';
-const schoolLogo = typeof schoolLogoUrl !== 'undefined' ? schoolLogoUrl : 'https://res.cloudinary.com/dmjqgjcut/image/upload/v1769946977/school-logo_uugskb.jpg';
-
-for (let page = 0; page < totalPages; page++) {
-    const pageStudents = pagesData[page];
-    const isLastPage = page === totalPages - 1;
+    for (let page = 0; page < totalPages; page++) {
+        const pageStudents = pagesData[page];
+        const isLastPage = page === totalPages - 1;
 %>
 
 <div class="page-container">
@@ -411,7 +425,10 @@ for (let page = 0; page < totalPages; page++) {
     </div>
 </div>
 
-<% } %>
+<% 
+    } // end page loop
+}); // end classesToRender loop
+%>
 
 </body>
 </html>

@@ -46,6 +46,24 @@ const DUMMY_STUDENTS = [
 async function fetchClassPtaData(req) {
   let classId = (req.params.classId || req.query.classId || '').trim();
   let academicYearId = (req.params.academicYearId || req.query.academicYearId || '').trim();
+  let standard = (req.query.standard || req.params.standard || '').trim();
+
+  // If classId represents a standard (e.g. std-8, standard-8, standard:8, or standard number like '8')
+  if (!standard && classId) {
+    if (classId.startsWith('std-')) {
+      standard = classId.replace(/^std-/, '').trim();
+      classId = '';
+    } else if (classId.startsWith('standard-')) {
+      standard = classId.replace(/^standard-/, '').trim();
+      classId = '';
+    } else if (classId.startsWith('standard:')) {
+      standard = classId.replace(/^standard:/, '').trim();
+      classId = '';
+    } else if (/^\d{1,2}$/.test(classId)) {
+      standard = classId;
+      classId = '';
+    }
+  }
 
   let isAllClasses = !classId || classId.toLowerCase() === 'all';
 
@@ -127,12 +145,16 @@ async function fetchClassPtaData(req) {
       students: studentList
     });
   } else {
-    // All classes requested
+    // Standard-wise or All classes requested
     let classQuery = { isActive: true };
+    if (standard) {
+      classQuery.name = standard;
+    }
     if (academicYearObjectId) {
       const countWithYear = await Class.countDocuments({
         academicYearId: academicYearObjectId,
-        isActive: true
+        isActive: true,
+        ...(standard ? { name: standard } : {})
       });
       if (countWithYear > 0) {
         classQuery.academicYearId = academicYearObjectId;
@@ -210,13 +232,19 @@ async function fetchClassPtaData(req) {
   const templateData = {
     schoolLogoUrl: getSchoolLogoDataUri(),
     academicYear: academicYearString,
-    className: classesList[0]?.className || '10 A',
+    className: isSingleClass
+      ? singleClassName
+      : standard
+      ? `Standard ${standard}`
+      : (classesList[0]?.className || '10 A'),
     students: classesList[0]?.students || [],
     classesList: classesList
   };
 
   const filename = isSingleClass
     ? `Class_PTA_${singleClassName.replace(/\s+/g, '_')}_${academicYearString}.pdf`
+    : standard
+    ? `Class_PTA_Standard_${standard}_${academicYearString}.pdf`
     : `Class_PTA_All_Classes_${academicYearString}.pdf`;
 
   return { templateData, filename };
